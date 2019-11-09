@@ -8,18 +8,20 @@ type TooltipState = enum
   tsOff, tsShowDelay, tsShow, tsFadeOutDelay, tsFadeOut
 
 const
-  TooltipShowDelay       = 0.2
+  TooltipShowDelay       = 0.5
   TooltipFadeOutDelay    = 0.2
-  TooltipFadeOutDuration = 0.3
+  TooltipFadeOutDuration = 0.5
 
 type UIState = object
-  mx:         float
-  my:         float
-  mbLeft:     bool
-  mbRight:    bool
-  mbMid:      bool
-  hotItem:    int
-  activeItem: int
+  mx:          float
+  my:          float
+  mbLeftDown:  bool
+  mbRightDown: bool
+  mbMidDown:   bool
+  hotItem:     int
+  activeItem:  int
+  prevHotItem:    int
+  prevActiveItem: int
 
   tooltipState:     TooltipState
   lastTooltipState: TooltipState
@@ -36,9 +38,9 @@ proc mouseButtonCb(win: Window, button: MouseButton, pressed: bool,
                    modKeys: set[ModifierKey]) =
 
   case button
-  of mb1: gui.mbLeft  = pressed
-  of mb2: gui.mbRight = pressed
-  of mb3: gui.mbMid   = pressed
+  of mb1: gui.mbLeftDown  = pressed
+  of mb2: gui.mbRightDown = pressed
+  of mb3: gui.mbMidDown   = pressed
   else: discard
 
 
@@ -82,13 +84,13 @@ proc drawToolTip(vg: NVGContext, x, y: float, text: string,
 
   vg.beginPath()
   vg.roundedRect(x, y, w, h, 5)
-  vg.fillColor(black(0.65 * alpha))
+  vg.fillColor(gray(0.1, 0.88 * alpha))
   vg.fill()
 
-  vg.fontSize(15.0)
+  vg.fontSize(17.0)
   vg.fontFace("sans-bold")
   vg.textAlign(haLeft, vaMiddle)
-  vg.fillColor(white(alpha))
+  vg.fillColor(white(0.9 * alpha))
   discard vg.text(x + 10, y + 10, text)
 
 
@@ -96,19 +98,6 @@ proc uiStatePre() =
   gui.hotItem = 0
 
 proc uiStatePost(vg: NVGContext) =
-  if gui.mbLeft:
-    if gui.activeItem == 0:
-      # Mouse button was pressed outside of any widget. We need to mark this
-      # as a separate state so we can't just "drag into" a widget while the
-      # button is being depressed and activate it.
-      gui.activeItem = -1
-  else:
-    # If the button was released inside the active widget, that
-    # was already handled at this point, we're just clearing the active item
-    # here. This also takes care of the case when the button was depressed
-    # inside the widget but released outside of it.
-    gui.activeItem = 0
-
   # Tooltip handling
   let
     ttx = gui.mx + 13
@@ -146,10 +135,30 @@ proc uiStatePost(vg: NVGContext) =
     gui.tooltipT0 = getTime()
 
 
-proc handleTooltipInsideWidget(tooltipText: string) =
+  gui.prevHotItem = gui.hotItem
+  gui.prevActiveItem = gui.activeItem
+
+  if gui.mbLeftDown:
+    if gui.activeItem == 0:
+      # Mouse button was pressed outside of any widget. We need to mark this
+      # as a separate state so we can't just "drag into" a widget while the
+      # button is being depressed and activate it.
+      gui.activeItem = -1
+  else:
+    # If the button was released inside the active widget, that
+    # was already handled at this point, we're just clearing the active item
+    # here. This also takes care of the case when the button was depressed
+    # inside the widget but released outside of it.
+    gui.activeItem = 0
+
+
+proc handleTooltipInsideWidget(id: int, tooltipText: string) =
   gui.tooltipState = gui.lastTooltipState
 
-  if gui.tooltipState == tsOff:
+  if gui.mbLeftDown and gui.activeItem > 0:
+    gui.tooltipState = tsOff
+
+  elif gui.tooltipState == tsOff and not gui.mbLeftDown and gui.prevHotItem != id:
     gui.tooltipState = tsShowDelay
     gui.tooltipT0 = getTime()
 
@@ -159,17 +168,28 @@ proc handleTooltipInsideWidget(tooltipText: string) =
     gui.tooltipText = tooltipText
 
 
-proc renderButton(vg: NVGContext, id: int, x, y, w, h: float, label: string, color: Color,
-                  tooltipText: string = ""): bool =
+proc renderLabel(vg: NVGContext, id: int, x, y, w, h: float, label: string,
+                 color: Color,
+                 fontSize: float = 19.0, fontFace = "sans-bold") =
+
+  vg.fontSize(fontSize)
+  vg.fontFace(fontFace)
+  vg.textAlign(haLeft, vaMiddle)
+  vg.fillColor(color)
+#  let tw = vg.horizontalAdvance(0,0, label)
+  discard vg.text(x, y+h*0.5, label)
+
+
+proc renderButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
+                  color: Color, tooltipText: string = ""): bool =
 
   let inside = mouseInside(x, y, w, h)
   if inside:
     gui.hotItem = id
-    if gui.activeItem == 0 and gui.mbLeft:
+    if gui.activeItem == 0 and gui.mbLeftDown:
       gui.activeItem = id
 
-  if not gui.mbLeft and gui.hotItem == id and gui.activeItem == id:
-    echo fmt"button {id} pressed"
+  if not gui.mbLeftDown and gui.hotItem == id and gui.activeItem == id:
     result = true
 
   let fillColor = if gui.hotItem == id:
@@ -182,9 +202,6 @@ proc renderButton(vg: NVGContext, id: int, x, y, w, h: float, label: string, col
   vg.roundedRect(x, y, w, h, 5)
   vg.fillColor(fillColor)
   vg.fill()
-#  vg.strokeWidth(2.0)
-#  vg.strokeColor(gray(0.2))
-#  vg.stroke()
 
   vg.fontSize(19.0)
   vg.fontFace("sans-bold")
@@ -194,7 +211,39 @@ proc renderButton(vg: NVGContext, id: int, x, y, w, h: float, label: string, col
   discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, label)
 
   if inside:
-    handleTooltipInsideWidget(tooltipText)
+    handleTooltipInsideWidget(id, tooltipText)
+
+
+proc renderSlider(vg: NVGContext, id: int, x, y, w, h: float,
+                  value: float, tooltipText: string = ""): float =
+
+  let inside = mouseInside(x, y, w, h)
+  if inside:
+    gui.hotItem = id
+    if gui.activeItem == 0 and gui.mbLeftDown:
+      gui.activeItem = id
+
+  if not gui.mbLeftDown and gui.hotItem == id and gui.activeItem == id:
+    echo fmt"button {id} pressed"
+
+  let fillColor = if gui.hotItem == id:
+    if gui.activeItem == id: RED
+    else: gray(0.8)
+  else:
+    gray(0.60)
+
+  vg.beginPath()
+  vg.roundedRect(x, y, w, h, 5)
+  vg.fillColor(fillColor)
+  vg.fill()
+
+  vg.beginPath()
+  vg.roundedRect(x - 3, y - 3, h-3, h-3, 5)
+  vg.fillColor(white())
+  vg.fill()
+
+  if inside:
+    handleTooltipInsideWidget(id, tooltipText)
 
 
 proc renderUI(vg: NVGContext) =
@@ -206,14 +255,23 @@ proc renderUI(vg: NVGContext) =
     x = 100.5
     y = 50.5
 
-  var btnpUshed = renderButton(vg, 1, x, y, w, h, "Start", color = gray(0.60), "I am the first!")
+  renderLabel(vg, 1, x + 5, y, w, h, "Test buttons", color = gray(0.90),
+              fontSize = 22.0)
   y += pad
+  if renderButton(vg, 1, x, y, w, h, "Start", color = gray(0.60), "I am the first!"):
+    echo "button 1 pressed"
 
-  btnPushed = renderButton(vg, 2, x, y, w, h, "Stop", color = gray(0.60), "Middle one...")
   y += pad
+  if renderButton(vg, 2, x, y, w, h, "Stop", color = gray(0.60), "Middle one..."):
+    echo "button 2 pressed"
 
-  btnPushed = renderButton(vg, 3, x, y, w, h, "Preferences", color = gray(0.60), "Last button")
   y += pad
+  if renderButton(vg, 3, x, y, w, h, "Preferences", color = gray(0.60), "Last button"):
+    echo "button 3 pressed"
+
+  var sliderVal1: float
+  y += pad
+  sliderVal1 = renderSlider(vg, 5, x, y, w, h, sliderVal1, "Slider 1")
 
 
 proc loadData(vg: NVGContext) =
