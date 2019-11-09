@@ -9,8 +9,8 @@ type TooltipState = enum
 
 const
   TooltipShowDelay       = 0.5
-  TooltipFadeOutDelay    = 0.2
-  TooltipFadeOutDuration = 0.5
+  TooltipFadeOutDelay    = 0.1
+  TooltipFadeOutDuration = 0.3
 
 type UIState = object
   mx:          float
@@ -22,6 +22,9 @@ type UIState = object
   activeItem:  int
   prevHotItem:    int
   prevActiveItem: int
+
+  x0:          float
+  y0:          float
 
   tooltipState:     TooltipState
   lastTooltipState: TooltipState
@@ -214,21 +217,59 @@ proc renderButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
     handleTooltipInsideWidget(id, tooltipText)
 
 
-proc renderSlider(vg: NVGContext, id: int, x, y, w, h: float,
-                  value: float, tooltipText: string = ""): float =
+proc renderSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
+                  min: float = 0.0, max: float = 1.0, size: float = 0.1,
+                  step: float = 0.1,
+                  tooltipText: string = ""): float =
 
-  let inside = mouseInside(x, y, w, h)
-  if inside:
+  assert min < max
+  assert value >= min
+  assert value <= max
+  assert size >= 0.0
+  assert size < (max - min)
+  assert step >= 0.0
+  assert step < (max - min)
+
+  # Handle knob
+  result = value
+
+  const
+    KnobPad = 3
+    KnobMinW = 10
+
+  let
+    knobW = max((w - KnobPad*2) / ((max - min) / size), KnobMinW)
+    knobH = h - KnobPad * 2
+    knobMinX = x + KnobPad
+    knobMaxX = x + w - KnobPad - knobW
+
+  proc calcKnobX(val: float): float =
+    knobMinX + (knobMaxX - knobMinX) * (val / (max - min))
+
+  let knobX = calcKnobX(value)
+
+  let insideSlider = mouseInside(x, y, w, h)
+  if insideSlider:
     gui.hotItem = id
-    if gui.activeItem == 0 and gui.mbLeftDown:
-      gui.activeItem = id
 
-  if not gui.mbLeftDown and gui.hotItem == id and gui.activeItem == id:
-    echo fmt"button {id} pressed"
+  let insideKnob = mouseInside(knobX, y, knobW, h)
+
+  if insideKnob and gui.activeItem == 0 and gui.mbLeftDown:
+    gui.activeItem = id
+    gui.x0 = gui.mx
+
+  var newKnobX = knobX
+  if gui.activeItem == id:
+    let
+      dx = gui.mx - gui.x0
+      newValue = (min(max(knobX + dx, knobMinX), knobMaxX) - knobMinX) / (knobMaxX - knobMinX) * (max - min)
+
+    result = newValue
+    newKnobX = calcKnobX(newValue)
+    gui.x0 = min(max(gui.mx, knobMinX), knobMaxX + knobW)
 
   let fillColor = if gui.hotItem == id:
-    if gui.activeItem == id: RED
-    else: gray(0.8)
+    gray(0.8)
   else:
     gray(0.60)
 
@@ -237,41 +278,17 @@ proc renderSlider(vg: NVGContext, id: int, x, y, w, h: float,
   vg.fillColor(fillColor)
   vg.fill()
 
+  let knobColor = if gui.activeItem == id: RED
+  elif insideKnob: gray(0.35)
+  else: gray(0.25)
+
   vg.beginPath()
-  vg.roundedRect(x - 3, y - 3, h-3, h-3, 5)
-  vg.fillColor(white())
+  vg.roundedRect(newKnobX, y + KnobPad, knobW, knobH, 5)
+  vg.fillColor(knobColor)
   vg.fill()
 
-  if inside:
+  if insideSlider:
     handleTooltipInsideWidget(id, tooltipText)
-
-
-proc renderUI(vg: NVGContext) =
-  let
-    w = 110.0
-    h = 22.0
-    pad = h + 8
-  var
-    x = 100.5
-    y = 50.5
-
-  renderLabel(vg, 1, x + 5, y, w, h, "Test buttons", color = gray(0.90),
-              fontSize = 22.0)
-  y += pad
-  if renderButton(vg, 1, x, y, w, h, "Start", color = gray(0.60), "I am the first!"):
-    echo "button 1 pressed"
-
-  y += pad
-  if renderButton(vg, 2, x, y, w, h, "Stop", color = gray(0.60), "Middle one..."):
-    echo "button 2 pressed"
-
-  y += pad
-  if renderButton(vg, 3, x, y, w, h, "Preferences", color = gray(0.60), "Last button"):
-    echo "button 3 pressed"
-
-  var sliderVal1: float
-  y += pad
-  sliderVal1 = renderSlider(vg, 5, x, y, w, h, sliderVal1, "Slider 1")
 
 
 proc loadData(vg: NVGContext) =
@@ -306,6 +323,11 @@ proc main() =
 
   glfw.swapInterval(1)
 
+  ### UI DATA ################################################
+  var sliderVal1 = 50.0
+
+  ############################################################
+
   while not win.shouldClose:
     var
       (winWidth, winHeight) = win.size
@@ -326,7 +348,34 @@ proc main() =
     uiStatePre()
     (gui.mx, gui.my) = win.cursorPos()
 
-    vg.renderUI()
+    ############################################################
+    let
+      w = 110.0
+      h = 22.0
+      pad = h + 8
+    var
+      x = 100.5
+      y = 50.5
+
+    renderLabel(vg, 1, x + 5, y, w, h, "Test buttons", color = gray(0.90),
+                fontSize = 22.0)
+    y += pad
+    if renderButton(vg, 2, x, y, w, h, "Start", color = gray(0.60), "I am the first!"):
+      echo "button 1 pressed"
+
+    y += pad
+    if renderButton(vg, 3, x, y, w, h, "Stop", color = gray(0.60), "Middle one..."):
+      echo "button 2 pressed"
+
+    y += pad
+    if renderButton(vg, 4, x, y, w, h, "Preferences", color = gray(0.60), "Last button"):
+      echo "button 3 pressed"
+
+    y += pad
+    sliderVal1 = renderSlider(
+      vg, 5, x, y, w * 1.5, h, sliderVal1,
+      min = 0.0, max = 100.0, size = 20.0, step = 1.0, tooltipText = "Slider 1")
+    ############################################################
 
     uiStatePost(vg)
 
