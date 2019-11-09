@@ -4,6 +4,14 @@ import glad/gl
 import glfw
 import nanovg
 
+type TooltipState = enum
+  tsOff, tsShowDelay, tsShow, tsFadeOutDelay, tsFadeOut
+
+const
+  TooltipShowDelay       = 0.2
+  TooltipFadeOutDelay    = 0.2
+  TooltipFadeOutDuration = 0.3
+
 type UIState = object
   mx:         float
   my:         float
@@ -13,10 +21,10 @@ type UIState = object
   hotItem:    int
   activeItem: int
 
-  drawToolTip: bool
-  toolTipX:    float
-  toolTipY:    float
-  toolTipText: string
+  tooltipState:     TooltipState
+  lastTooltipState: TooltipState
+  tooltipT0:        float
+  tooltipText:      string
 
 
 var gui: UIState
@@ -66,20 +74,21 @@ proc mouseInside(x, y, w, h: float): bool =
   gui.my >= y and gui.my <= y+h
 
 
-proc drawToolTip(vg: NVGContext, x, y: float, text: string) =
+proc drawToolTip(vg: NVGContext, x, y: float, text: string,
+                 alpha: float = 1.0) =
   let
     w = 150.0
     h = 40.0
 
   vg.beginPath()
   vg.roundedRect(x, y, w, h, 5)
-  vg.fillColor(black(0.65))
+  vg.fillColor(black(0.65 * alpha))
   vg.fill()
 
   vg.fontSize(15.0)
   vg.fontFace("sans-bold")
   vg.textAlign(haLeft, vaMiddle)
-  vg.fillColor(white())
+  vg.fillColor(white(alpha))
   discard vg.text(x + 10, y + 10, text)
 
 
@@ -100,13 +109,58 @@ proc uiStatePost(vg: NVGContext) =
     # inside the widget but released outside of it.
     gui.activeItem = 0
 
-  if gui.drawToolTip:
-    drawToolTip(vg, gui.toolTipX, gui.toolTipY, gui.toolTipText)
-    gui.drawToolTip = false
+  # Tooltip handling
+  let
+    ttx = gui.mx + 13
+    tty = gui.my + 20
+
+  case gui.tooltipState:
+  of tsOff: discard
+  of tsShowDelay:
+    if getTime() - gui.tooltipT0 > TooltipShowDelay:
+      gui.tooltipState = tsShow
+
+  of tsShow:
+    drawToolTip(vg, ttx, tty, gui.tooltipText)
+
+  of tsFadeOutDelay:
+    drawToolTip(vg, ttx, tty, gui.tooltipText)
+    if getTime() - gui.tooltipT0 > TooltipFadeOutDelay:
+      gui.tooltipState = tsFadeOut
+      gui.tooltipT0 = getTime()
+
+  of tsFadeOut:
+    let t = getTime() - gui.tooltipT0
+    if t > TooltipFadeOutDuration:
+      gui.tooltipState = tsOff
+    else:
+      let alpha = 1.0 - t / TooltipFadeOutDuration
+      drawToolTip(vg, ttx, tty, gui.tooltipText, alpha)
+
+  gui.lastTooltipState = gui.tooltipState
+
+  if gui.lastTooltipState == tsShowDelay:
+    gui.tooltipState = tsOff
+  elif gui.lastTooltipState == tsShow:
+    gui.tooltipState = tsFadeOutDelay
+    gui.tooltipT0 = getTime()
 
 
-proc renderButton(id: int, x, y, w, h: float, label: string, color: Color,
-                  vg: NVGContext): bool =
+proc handleTooltipInsideWidget(tooltipText: string) =
+  gui.tooltipState = gui.lastTooltipState
+
+  if gui.tooltipState == tsOff:
+    gui.tooltipState = tsShowDelay
+    gui.tooltipT0 = getTime()
+
+  elif gui.tooltipState >= tsShow:
+    gui.tooltipState = tsShow
+    gui.tooltipT0 = getTime()
+    gui.tooltipText = tooltipText
+
+
+proc renderButton(vg: NVGContext, id: int, x, y, w, h: float, label: string, color: Color,
+                  tooltipText: string = ""): bool =
 
   let inside = mouseInside(x, y, w, h)
   if inside:
@@ -129,7 +183,8 @@ proc renderButton(id: int, x, y, w, h: float, label: string, color: Color,
   vg.fillColor(fillColor)
   vg.fill()
 #  vg.strokeWidth(2.0)
-#  vg.strokeColor()
+#  vg.strokeColor(gray(0.2))
+#  vg.stroke()
 
   vg.fontSize(19.0)
   vg.fontFace("sans-bold")
@@ -139,10 +194,7 @@ proc renderButton(id: int, x, y, w, h: float, label: string, color: Color,
   discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, label)
 
   if inside:
-    gui.drawToolTip = true
-    gui.toolTipX = gui.mx + 13
-    gui.toolTipY = gui.my + 20
-    gui.toolTipText = fmt"Button ID: {id}"
+    handleTooltipInsideWidget(tooltipText)
 
 
 proc renderUI(vg: NVGContext) =
@@ -154,13 +206,13 @@ proc renderUI(vg: NVGContext) =
     x = 100.5
     y = 50.5
 
-  var btnpUshed = renderButton(1, x, y, w, h, "Start", color = gray(0.60), vg)
+  var btnpUshed = renderButton(vg, 1, x, y, w, h, "Start", color = gray(0.60), "I am the first!")
   y += pad
 
-  btnPushed = renderButton(2, x, y, w, h, "Stop", color = gray(0.60), vg)
+  btnPushed = renderButton(vg, 2, x, y, w, h, "Stop", color = gray(0.60), "Middle one...")
   y += pad
 
-  btnPushed = renderButton(3, x, y, w, h, "Preferences", color = gray(0.60), vg)
+  btnPushed = renderButton(vg, 3, x, y, w, h, "Preferences", color = gray(0.60), "Last button")
   y += pad
 
 
