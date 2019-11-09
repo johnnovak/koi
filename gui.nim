@@ -217,10 +217,10 @@ proc renderButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
     handleTooltipInsideWidget(id, tooltipText)
 
 
-proc renderSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
-                  min: float = 0.0, max: float = 1.0, size: float = 0.1,
-                  step: float = 0.1,
-                  tooltipText: string = ""): float =
+proc renderHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
+                       min: float = 0.0, max: float = 1.0, size: float = 0.1,
+                       step: float = 0.1,
+                       tooltipText: string = ""): float =
 
   assert min < max
   assert value >= min
@@ -372,7 +372,7 @@ proc main() =
       echo "button 3 pressed"
 
     y += pad
-    sliderVal1 = renderSlider(
+    sliderVal1 = renderHorizSlider(
       vg, 5, x, y, w * 1.5, h, sliderVal1,
       min = 0.0, max = 100.0, size = 20.0, step = 1.0, tooltipText = "Slider 1")
     ############################################################
