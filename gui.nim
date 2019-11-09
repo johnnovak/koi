@@ -186,6 +186,7 @@ proc renderLabel(vg: NVGContext, id: int, x, y, w, h: float, label: string,
 proc renderButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
                   color: Color, tooltipText: string = ""): bool =
 
+  # Hit testing
   let inside = mouseInside(x, y, w, h)
   if inside:
     gui.hotItem = id
@@ -195,6 +196,7 @@ proc renderButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
   if not gui.mbLeftDown and gui.hotItem == id and gui.activeItem == id:
     result = true
 
+  # Draw button
   let fillColor = if gui.hotItem == id:
     if gui.activeItem == id: RED
     else: gray(0.8)
@@ -218,66 +220,66 @@ proc renderButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
 
 
 proc renderHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
-                       min: float = 0.0, max: float = 1.0, size: float = 0.1,
-                       step: float = 0.1,
+                       minVal: float = 0.0, maxVal: float = 1.0,
+                       size: float = 0.1, step: float = 0.1,
                        tooltipText: string = ""): float =
 
-  assert min < max
-  assert value >= min
-  assert value <= max
+  assert minVal < maxVal
+  assert value >= minVal
+  assert value <= maxVal
   assert size >= 0.0
-  assert size < (max - min)
+  assert size < (maxVal - minVal)
   assert step >= 0.0
-  assert step < (max - min)
+  assert step < (maxVal - minVal)
 
-  # Handle knob
-  result = value
-
+  # Calculate current knob position
   const
     KnobPad = 3
     KnobMinW = 10
 
   let
-    knobW = max((w - KnobPad*2) / ((max - min) / size), KnobMinW)
+    knobW = max((w - KnobPad*2) / ((maxVal - minVal) / size), KnobMinW)
     knobH = h - KnobPad * 2
     knobMinX = x + KnobPad
     knobMaxX = x + w - KnobPad - knobW
+    knobX = knobMinX + (knobMaxX - knobMinX) * (value / (maxVal - minVal))
 
-  proc calcKnobX(val: float): float =
-    knobMinX + (knobMaxX - knobMinX) * (val / (max - min))
+  # Hit testing
+  let
+    insideSlider = mouseInside(x, y, w, h)
+    insideKnob = mouseInside(knobX, y, knobW, h)
 
-  let knobX = calcKnobX(value)
-
-  let insideSlider = mouseInside(x, y, w, h)
   if insideSlider:
     gui.hotItem = id
-
-  let insideKnob = mouseInside(knobX, y, knobW, h)
 
   if insideKnob and gui.activeItem == 0 and gui.mbLeftDown:
     gui.activeItem = id
     gui.x0 = gui.mx
 
+  # New knob position & value calculation
   var newKnobX = knobX
-  if gui.activeItem == id:
-    let
-      dx = gui.mx - gui.x0
-      newValue = (min(max(knobX + dx, knobMinX), knobMaxX) - knobMinX) / (knobMaxX - knobMinX) * (max - min)
+  result = value
 
+  if gui.activeItem == id:
+    let dx = gui.mx - gui.x0
+    newKnobX = min(max(knobX + dx, knobMinX), knobMaxX)
+
+    let newValue = (newKnobX - knobMinX) / (knobMaxX - knobMinX) *
+                   (maxVal - minVal)
     result = newValue
-    newKnobX = calcKnobX(newValue)
+
     gui.x0 = min(max(gui.mx, knobMinX), knobMaxX + knobW)
 
-  let fillColor = if gui.hotItem == id:
-    gray(0.8)
-  else:
-    gray(0.60)
+  # Draw slider
+  let fillColor = if gui.hotItem == id: gray(0.8)
+  else: gray(0.60)
 
   vg.beginPath()
   vg.roundedRect(x, y, w, h, 5)
   vg.fillColor(fillColor)
   vg.fill()
 
+  # Draw knob
   let knobColor = if gui.activeItem == id: RED
   elif insideKnob: gray(0.35)
   else: gray(0.25)
@@ -354,8 +356,8 @@ proc main() =
       h = 22.0
       pad = h + 8
     var
-      x = 100.5
-      y = 50.5
+      x = 100.0
+      y = 50.0
 
     renderLabel(vg, 1, x + 5, y, w, h, "Test buttons", color = gray(0.90),
                 fontSize = 22.0)
@@ -374,7 +376,8 @@ proc main() =
     y += pad
     sliderVal1 = renderHorizSlider(
       vg, 5, x, y, w * 1.5, h, sliderVal1,
-      min = 0.0, max = 100.0, size = 20.0, step = 1.0, tooltipText = "Slider 1")
+      minVal = 0.0, maxVal = 100.0, size = 20.0, step = 1.0,
+      tooltipText = "Slider 1")
     ############################################################
 
     uiStatePost(vg)
