@@ -278,12 +278,12 @@ proc renderButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
 
   # Hit testing
   let inside = mouseInside(x, y, w, h)
-  if inside and not gui.mbLeftDown:
-    gui.hotItem = id
-
-  if inside and gui.activeItem == 0 and gui.mbLeftDown:
-    gui.hotItem = id
-    gui.activeItem = id
+  if inside:
+    if not gui.mbLeftDown:
+      gui.hotItem = id
+    elif gui.activeItem == 0 and gui.mbLeftDown:
+      gui.hotItem = id
+      gui.activeItem = id
 
   if not gui.mbLeftDown and gui.hotItem == id and gui.activeItem == id:
     result = true
