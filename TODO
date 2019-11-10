@@ -1,5 +1,3 @@
 BUGS
 ====
 
-- slider step mode: holding LMB and dragging over other widgets shouldn't
-  activate the hover state

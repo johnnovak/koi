@@ -278,19 +278,20 @@ proc renderButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
 
   # Hit testing
   let inside = mouseInside(x, y, w, h)
-  if inside:
+  if inside and not gui.mbLeftDown:
     gui.hotItem = id
-    if gui.activeItem == 0 and gui.mbLeftDown:
-      gui.activeItem = id
+
+  if inside and gui.activeItem == 0 and gui.mbLeftDown:
+    gui.hotItem = id
+    gui.activeItem = id
 
   if not gui.mbLeftDown and gui.hotItem == id and gui.activeItem == id:
     result = true
 
   # Draw button
   let fillColor = if gui.hotItem == id:
-    if gui.activeItem == id: RED
-    elif gui.activeItem <= 0: gray(0.8)
-    else: color
+    gray(0.8)
+  elif gui.activeItem == id and inside: RED
   else:
     color
 
@@ -348,7 +349,7 @@ proc renderHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     else:
       (mouseInside(x, y, w, h), mouseInside(knobX, y, knobW, h))
 
-  if insideSlider:
+  if insideSlider and not gui.mbLeftDown:
     gui.hotItem = id
 
   var sliderClicked = 0.0
@@ -492,7 +493,7 @@ proc renderVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     else:
       (mouseInside(x, y, w, h), mouseInside(x, knobY, w, knobH))
 
-  if insideSlider:
+  if insideSlider and not gui.mbLeftDown:
     gui.hotItem = id
 
   var sliderClicked = 0.0
