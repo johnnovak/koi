@@ -163,6 +163,10 @@ proc uiStatePost(vg: NVGContext) =
 
   gui.lastTooltipState = gui.tooltipState
 
+  # We reset the show delay state or move into the fade out state if the
+  # tooltip was shown to handle the case when the user just moved the cursor
+  # outside of a widget. The actual widgets are responsible to "keep alive"
+  # the state every frame by restoring the tooltip state from lastTooltipState 
   if gui.lastTooltipState == tsShowDelay:
     gui.tooltipState = tsOff
   elif gui.lastTooltipState == tsShow:
@@ -208,6 +212,7 @@ proc handleTooltipInsideWidget(id: int, tooltipText: string) =
     gui.tooltipState = tsOff
 
   elif gui.tooltipState == tsOff and not gui.mbLeftDown and gui.prevHotItem != id:
+    echo "**************"
     gui.tooltipState = tsShowDelay
     gui.tooltipT0 = getTime()
 
@@ -295,9 +300,11 @@ proc renderHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
   let knobX = calcKnobX(value)
 
   # Hit testing
-  let
-    insideSlider = mouseInside(x, y, w, h)
-    insideKnob = mouseInside(knobX, y, knobW, h)
+  let (insideSlider, insideKnob) =
+    if gui.dragMode == dmFine and gui.activeItem == id:
+      (true, true)
+    else:
+      (mouseInside(x, y, w, h), mouseInside(knobX, y, knobW, h))
 
   if insideSlider:
     gui.hotItem = id
@@ -334,21 +341,21 @@ proc renderHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     if gui.shiftDown and gui.dragMode == dmNormal:
       gui.dragMode = dmFine
       disableCursor()
+
     elif not gui.shiftDown and gui.dragMode == dmFine:
       gui.dragMode = dmNormal
       enableCursor()
-      # TODO
+
       let win = glfw.currentContext()
       let (x, y) = win.cursorPos()
       gui.mx = gui.dragX
       gui.x0 = gui.dragX
       win.cursorPos = (gui.dragX, y)
-      echo "shit happens here"
 
     var dx = gui.mx - gui.x0
     if gui.dragMode == dmFine:
-      dx /= 5
-      if gui.altDown: dx /= 5
+      dx /= 8
+      if gui.altDown: dx /= 8
 
     newKnobX = min(max(knobX + dx, knobMinX), knobMaxX)
 
