@@ -28,6 +28,7 @@ type DragMode = enum
 type UIState = object
   # Mouse state
   mx, my:         float
+  lastmx, lastmy: float
   mbLeftDown:     bool
   mbRightDown:    bool
   mbMidDown:      bool
@@ -41,8 +42,8 @@ type UIState = object
   # Active & hot items
   hotItem:        int
   activeItem:     int
-  prevHotItem:    int
-  prevActiveItem: int
+  lastHotItem:    int
+  lastActiveItem: int
 
   # Internal state for slider types
   x0, y0:       float
@@ -153,7 +154,11 @@ proc drawToolTip(vg: NVGContext, x, y: float, text: string,
 
 proc uiStatePre() =
   gui.hotItem = 0
+
+  gui.lastmx = gui.mx
+  gui.lastmy = gui.my
   (gui.mx, gui.my) = glfw.currentContext().cursorPos()
+
 
 proc uiStatePost(vg: NVGContext) =
   # Tooltip handling
@@ -197,8 +202,8 @@ proc uiStatePost(vg: NVGContext) =
     gui.tooltipT0 = getTime()
 
 
-  gui.prevHotItem = gui.hotItem
-  gui.prevActiveItem = gui.activeItem
+  gui.lastHotItem = gui.hotItem
+  gui.lastActiveItem = gui.activeItem
 
   if gui.mbLeftDown:
     if gui.activeItem == 0 and gui.hotItem == 0:
@@ -234,11 +239,19 @@ proc uiStatePost(vg: NVGContext) =
 proc handleTooltipInsideWidget(id: int, tooltipText: string) =
   gui.tooltipState = gui.lastTooltipState
 
+  # Reset the tooltip show delay if the cursor has been moved inside a
+  # widget
+  if gui.tooltipState == tsShowDelay:
+    let cursorMoved = gui.mx != gui.lastmx or gui.my != gui.lastmy
+    if cursorMoved:
+      gui.tooltipT0 = getTime()
+
+  # Hide the tooltip immediately if the LMB was pressed inside the widget
   if gui.mbLeftDown and gui.activeItem > 0:
     gui.tooltipState = tsOff
 
   elif gui.tooltipState == tsOff and not gui.mbLeftDown and
-       gui.prevHotItem != id:
+       gui.lastHotItem != id:
     gui.tooltipState = tsShowDelay
     gui.tooltipT0 = getTime()
 
