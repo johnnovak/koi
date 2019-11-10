@@ -17,8 +17,7 @@ type DragMode = enum
 
 type UIState = object
   # Mouse state
-  mx:             float
-  my:             float
+  mx, my:         float
   mbLeftDown:     bool
   mbRightDown:    bool
   mbMidDown:      bool
@@ -36,11 +35,10 @@ type UIState = object
   prevActiveItem: int
 
   # Internal state for slider types
-  x0:       float
-  y0:       float
-  dragMode: DragMode
-  dragX:    float
-  sliderStep: bool
+  x0, y0:       float
+  dragMode:     DragMode
+  dragX, dragY: float
+  sliderStep:   bool
 
   # Internal state for tooltips
   tooltipState:     TooltipState
@@ -205,7 +203,10 @@ proc uiStatePost(vg: NVGContext) =
       enableCursor()
       let win = glfw.currentContext()
       let (x, y) = win.cursorPos()
-      win.cursorPos = (gui.dragX, y)
+      if gui.dragX > -1.0:
+        win.cursorPos = (gui.dragX, y)
+      else:
+        win.cursorPos = (x, gui.dragY)
 
 
 proc handleTooltipInsideWidget(id: int, tooltipText: string) =
@@ -372,7 +373,8 @@ proc renderHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     else:
       min(max(gui.mx, knobMinX), knobMaxX + knobW)
 
-    gui.dragX = newKnobX + knobW/2
+    gui.dragX = newKnobX + knobW*0.5
+    gui.dragY = -1.0
 
 
   result = newValue
@@ -404,7 +406,139 @@ proc renderHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
   vg.fillColor(white())
   let valueString = fmt"{newValue:.3f}"
   let tw = vg.horizontalAdvance(0,0, valueString)
-  discard vg.text(x + w/2 - tw/2, y+h*0.5, valueString)
+  discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, valueString)
+
+  if insideSlider:
+    handleTooltipInsideWidget(id, tooltipText)
+
+    if gui.sliderStep:
+      gui.tooltipState = tsOff
+
+
+proc renderVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
+                      minVal: float = 0.0, maxVal: float = 1.0,
+                      size: float = -1.0, step: float = -1.0,
+                      tooltipText: string = ""): float =
+
+  assert minVal < maxVal
+  assert value >= minVal
+  assert value <= maxVal
+  assert size < 0.0 or size < (maxVal - minVal)
+  assert step < 0.0 or step < (maxVal - minVal)
+
+  const
+    KnobPad = 3
+    KnobMinH = 10
+
+  # Calculate current knob position
+  let
+    windowSize = if size < 0: 0.000001 else: size
+    knobH = max((h - KnobPad*2) / ((maxVal - minVal) / windowSize), KnobMinH)
+    knobW = w - KnobPad * 2
+    knobMinY = y + KnobPad
+    knobMaxY = y + h - KnobPad - knobH
+
+  proc calcKnobY(val: float): float =
+    knobMinY + (knobMaxY - knobMinY) * (val / (maxVal - minVal))
+
+  let knobY = calcKnobY(value)
+
+  # Hit testing
+  let (insideSlider, insideKnob) =
+    if gui.dragMode == dmFine and gui.activeItem == id:
+      (true, true)
+    else:
+      (mouseInside(x, y, w, h), mouseInside(x, knobY, w, knobH))
+
+  if insideSlider:
+    gui.hotItem = id
+
+  var sliderClicked = 0.0
+
+  if gui.mbLeftDown and gui.activeItem == 0:
+    if insideKnob:
+      # Active item is only set if the knob is being dragged
+      gui.activeItem = id
+      gui.y0 = gui.my
+      if gui.shiftDown:
+        gui.dragMode = dmFine
+        disableCursor()
+      else:
+        gui.dragMode = dmNormal
+
+    elif insideSlider and not insideKnob and not gui.sliderStep:
+      if gui.my < knobY: sliderClicked = -1.0
+      else:              sliderClicked =  1.0
+      gui.sliderStep = true
+
+  # New knob position & value calculation...
+  var
+    newKnobY = knobY
+    newValue = value
+
+  # ...when the slider was clicked outside of the knob
+  if sliderClicked != 0:
+    let stepSize = if step < 0: (maxVal - minVal) * 0.1 else: step
+    newValue = min(max(newValue + sliderClicked * stepSize, minVal), maxVal)
+    newKnobY = calcKnobY(newValue)
+
+  # ...when dragging slider
+  elif gui.activeItem == id:
+    if gui.shiftDown and gui.dragMode == dmNormal:
+      gui.dragMode = dmFine
+      disableCursor()
+
+    elif not gui.shiftDown and gui.dragMode == dmFine:
+      gui.dragMode = dmNormal
+      enableCursor()
+
+      let win = glfw.currentContext()
+      let (x, y) = win.cursorPos()
+      gui.my = gui.dragY
+      gui.y0 = gui.dragY
+      win.cursorPos = (x, gui.dragY)
+
+    var dy = gui.my - gui.y0
+    if gui.dragMode == dmFine:
+      dy /= 8
+      if gui.altDown: dy /= 8
+
+    newKnobY = min(max(knobY + dy, knobMinY), knobMaxY)
+
+    newValue = (newKnobY - knobMinY) / (knobMaxY - knobMinY) *
+               (maxVal - minVal)
+
+    gui.y0 = if gui.dragMode == dmFine:
+      gui.my
+    else:
+      min(max(gui.my, knobMinY), knobMaxY + knobH)
+
+    gui.dragX = -1.0
+    gui.dragY = newKnobY + knobH*0.5
+
+
+  result = newValue
+
+  # Draw slider
+  let fillColor = if gui.hotItem == id and not insideKnob:
+    if gui.activeItem <= 0: gray(0.8)
+    else: gray(0.60)
+  else: gray(0.60)
+
+  vg.beginPath()
+  vg.roundedRect(x, y, w, h, 5)
+  vg.fillColor(fillColor)
+  vg.fill()
+
+  # Draw knob
+  let knobColor = if gui.activeItem == id: RED
+  elif insideKnob and gui.activeItem <= 0: gray(0.35)
+  else: gray(0.25)
+
+  vg.beginPath()
+  vg.roundedRect(x + KnobPad, newKnobY, knobW, knobH, 5)
+  vg.fillColor(knobColor)
+  vg.fill()
 
   if insideSlider:
     handleTooltipInsideWidget(id, tooltipText)
@@ -448,6 +582,8 @@ proc main() =
   ### UI DATA ################################################
   var sliderVal1 = 50.0
   var sliderVal2 = 0.0
+  var sliderVal3 = 50.0
+  var sliderVal4 = 0.0
 
   ############################################################
 
@@ -497,14 +633,24 @@ proc main() =
     y += pad
     sliderVal1 = renderHorizSlider(
       vg, 5, x, y, w * 1.5, h, sliderVal1,
-      minVal = 0.0, maxVal = 100.0, size = 20.0, step = 10.0,
-      tooltipText = "Slider 1")
+      minVal = 0, maxVal = 100, size = 20, step = 10.0,
+      tooltipText = "Horizontal Slider 1")
 
     y += pad
     sliderVal2 = renderHorizSlider(
       vg, 6, x, y, w * 1.5, h, sliderVal2,
-      minVal = 0.0, maxVal = 1.0, size = -1.0, step = -1.0,
-      tooltipText = "Slider 2")
+      minVal = 0, maxVal = 1, size = -1, step = -1,
+      tooltipText = "Horizontal 2")
+ 
+    sliderVal3 = renderVertSlider(
+      vg, 7, 300, 50, h, 165, sliderVal3,
+      minVal = 0.0, maxVal = 100, size = 20, step = 10,
+      tooltipText = "Vertical Slider 1")
+
+    sliderVal4 = renderVertSlider(
+      vg, 8, 330, 50, h, 165, sliderVal4,
+      minVal = 0, maxVal = 1, size = -1, step = -1,
+      tooltipText = "Vertical Slider 2")
     ############################################################
 
     uiStatePost(vg)
