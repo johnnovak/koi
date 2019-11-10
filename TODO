@@ -1,5 +1,5 @@
 BUGS
 ====
 
-- slider step mode: holding LMB and dragging over the knob currently grabs it,
-  this should not happen
+- slider step mode: holding LMB and dragging over other widgets shouldn't
+  activate the hover state
