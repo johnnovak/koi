@@ -40,6 +40,7 @@ type UIState = object
   y0:       float
   dragMode: DragMode
   dragX:    float
+  sliderStep: bool
 
   # Internal state for tooltips
   tooltipState:     TooltipState
@@ -166,7 +167,7 @@ proc uiStatePost(vg: NVGContext) =
   # We reset the show delay state or move into the fade out state if the
   # tooltip was shown to handle the case when the user just moved the cursor
   # outside of a widget. The actual widgets are responsible to "keep alive"
-  # the state every frame by restoring the tooltip state from lastTooltipState 
+  # the state every frame by restoring the tooltip state from lastTooltipState
   if gui.lastTooltipState == tsShowDelay:
     gui.tooltipState = tsOff
   elif gui.lastTooltipState == tsShow:
@@ -178,20 +179,22 @@ proc uiStatePost(vg: NVGContext) =
   gui.prevActiveItem = gui.activeItem
 
   if gui.mbLeftDown:
-    if gui.activeItem == 0:
+    if gui.activeItem == 0 and gui.hotItem == 0:
       # Mouse button was pressed outside of any widget. We need to mark this
       # as a separate state so we can't just "drag into" a widget while the
       # button is being depressed and activate it.
       gui.activeItem = -1
   else:
-    # If the button was released inside the active widget, that
-    # was already handled at this point, we're just clearing the active item
-    # here. This also takes care of the case when the button was depressed
-    # inside the widget but released outside of it.
+    # If the button was released inside the active widget, that has already
+    # been handled at this point--we're just clearing the active item here.
+    # This also takes care of the case when the button was depressed inside
+    # the widget but released outside of it.
     gui.activeItem = 0
 
+    gui.sliderStep = false
+
     # Disable drag mode and reset the cursor if the left mouse button was
-    # released
+    # released while in fine drag mode.
     case gui.dragMode:
     of dmOff: discard
     of dmNormal:
@@ -211,8 +214,8 @@ proc handleTooltipInsideWidget(id: int, tooltipText: string) =
   if gui.mbLeftDown and gui.activeItem > 0:
     gui.tooltipState = tsOff
 
-  elif gui.tooltipState == tsOff and not gui.mbLeftDown and gui.prevHotItem != id:
-    echo "**************"
+  elif gui.tooltipState == tsOff and not gui.mbLeftDown and
+       gui.prevHotItem != id:
     gui.tooltipState = tsShowDelay
     gui.tooltipT0 = getTime()
 
@@ -313,6 +316,7 @@ proc renderHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 
   if gui.mbLeftDown and gui.activeItem == 0:
     if insideKnob:
+      # Active item is only set if the knob is being dragged
       gui.activeItem = id
       gui.x0 = gui.mx
       if gui.shiftDown:
@@ -321,9 +325,10 @@ proc renderHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
       else:
         gui.dragMode = dmNormal
 
-    elif insideSlider and not insideKnob:
+    elif insideSlider and not insideKnob and not gui.sliderStep:
       if gui.mx < knobX: sliderClicked = -1.0
       else:              sliderClicked =  1.0
+      gui.sliderStep = true
 
   # New knob position & value calculation...
   var
@@ -403,6 +408,9 @@ proc renderHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 
   if insideSlider:
     handleTooltipInsideWidget(id, tooltipText)
+
+    if gui.sliderStep:
+      gui.tooltipState = tsOff
 
 
 proc loadData(vg: NVGContext) =
