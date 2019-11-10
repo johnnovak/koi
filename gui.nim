@@ -12,20 +12,36 @@ const
   TooltipFadeOutDelay    = 0.1
   TooltipFadeOutDuration = 0.3
 
+type DragMode = enum
+  dmOff, dmNormal, dmFine
+
 type UIState = object
-  mx:          float
-  my:          float
-  mbLeftDown:  bool
-  mbRightDown: bool
-  mbMidDown:   bool
-  hotItem:     int
-  activeItem:  int
+  # Mouse state
+  mx:             float
+  my:             float
+  mbLeftDown:     bool
+  mbRightDown:    bool
+  mbMidDown:      bool
+
+  # Keyboard
+  shiftDown:      bool
+  altDown:        bool
+  ctrlDown:       bool
+  superDown:      bool
+
+  # Active & hot items
+  hotItem:        int
+  activeItem:     int
   prevHotItem:    int
   prevActiveItem: int
 
-  x0:          float
-  y0:          float
+  # Internal state for slider types
+  x0:       float
+  y0:       float
+  dragMode: DragMode
+  dragX:    float
 
+  # Internal state for tooltips
   tooltipState:     TooltipState
   lastTooltipState: TooltipState
   tooltipT0:        float
@@ -35,6 +51,10 @@ type UIState = object
 var gui: UIState
 
 let RED = rgb(1.0, 0.4, 0.4)
+
+
+proc disableCursor() = glfw.currentContext().cursorMode = cmDisabled
+proc enableCursor()  = glfw.currentContext().cursorMode = cmNormal
 
 
 proc mouseButtonCb(win: Window, button: MouseButton, pressed: bool,
@@ -50,11 +70,23 @@ proc mouseButtonCb(win: Window, button: MouseButton, pressed: bool,
 proc keyCb(win: Window, key: Key, scanCode: int32, action: KeyAction,
            modKeys: set[ModifierKey]) =
 
-  if action != kaDown: return
+  if action == kaDown:
+    case key
+    of keyEscape: win.shouldClose = true
 
-  case key
-  of keyEscape: win.shouldClose = true
-  else: return
+    of keyLeftShift,   keyRightShift:   gui.shiftDown = true
+    of keyLeftControl, keyRightControl: gui.ctrlDown  = true
+    of keyLeftAlt,     keyRightAlt:     gui.altDown   = true
+    of keyLeftSuper,   keyRightSuper:   gui.superDown = true
+    else: discard
+
+  elif action == kaUp:
+    case key
+    of keyLeftShift,   keyRightShift:   gui.shiftDown = false
+    of keyLeftControl, keyRightControl: gui.ctrlDown  = false
+    of keyLeftAlt,     keyRightAlt:     gui.altDown   = false
+    of keyLeftSuper,   keyRightSuper:   gui.superDown = false
+    else: discard
 
 
 proc createWindow(): Window =
@@ -154,6 +186,20 @@ proc uiStatePost(vg: NVGContext) =
     # inside the widget but released outside of it.
     gui.activeItem = 0
 
+    # Disable drag mode and reset the cursor if the left mouse button was
+    # released
+    case gui.dragMode:
+    of dmOff: discard
+    of dmNormal:
+      gui.dragMode = dmOff
+
+    of dmFine:
+      gui.dragMode = dmOff
+      enableCursor()
+      let win = glfw.currentContext()
+      let (x, y) = win.cursorPos()
+      win.cursorPos = (gui.dragX, y)
+
 
 proc handleTooltipInsideWidget(id: int, tooltipText: string) =
   gui.tooltipState = gui.lastTooltipState
@@ -199,7 +245,8 @@ proc renderButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
   # Draw button
   let fillColor = if gui.hotItem == id:
     if gui.activeItem == id: RED
-    else: gray(0.8)
+    elif gui.activeItem <= 0: gray(0.8)
+    else: color
   else:
     color
 
@@ -221,28 +268,31 @@ proc renderButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
 
 proc renderHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
                        minVal: float = 0.0, maxVal: float = 1.0,
-                       size: float = 0.1, step: float = 0.1,
+                       size: float = -1.0, step: float = -1.0,
                        tooltipText: string = ""): float =
 
   assert minVal < maxVal
   assert value >= minVal
   assert value <= maxVal
-  assert size >= 0.0
-  assert size < (maxVal - minVal)
-  assert step >= 0.0
-  assert step < (maxVal - minVal)
+  assert size < 0.0 or size < (maxVal - minVal)
+  assert step < 0.0 or step < (maxVal - minVal)
 
-  # Calculate current knob position
   const
     KnobPad = 3
     KnobMinW = 10
 
+  # Calculate current knob position
   let
-    knobW = max((w - KnobPad*2) / ((maxVal - minVal) / size), KnobMinW)
+    windowSize = if size < 0: 0.000001 else: size
+    knobW = max((w - KnobPad*2) / ((maxVal - minVal) / windowSize), KnobMinW)
     knobH = h - KnobPad * 2
     knobMinX = x + KnobPad
     knobMaxX = x + w - KnobPad - knobW
-    knobX = knobMinX + (knobMaxX - knobMinX) * (value / (maxVal - minVal))
+
+  proc calcKnobX(val: float): float =
+    knobMinX + (knobMaxX - knobMinX) * (val / (maxVal - minVal))
+
+  let knobX = calcKnobX(value)
 
   # Hit testing
   let
@@ -252,26 +302,73 @@ proc renderHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
   if insideSlider:
     gui.hotItem = id
 
-  if insideKnob and gui.activeItem == 0 and gui.mbLeftDown:
-    gui.activeItem = id
-    gui.x0 = gui.mx
+  var sliderClicked = 0.0
 
-  # New knob position & value calculation
-  var newKnobX = knobX
-  result = value
+  if gui.mbLeftDown and gui.activeItem == 0:
+    if insideKnob:
+      gui.activeItem = id
+      gui.x0 = gui.mx
+      if gui.shiftDown:
+        gui.dragMode = dmFine
+        disableCursor()
+      else:
+        gui.dragMode = dmNormal
 
-  if gui.activeItem == id:
-    let dx = gui.mx - gui.x0
+    elif insideSlider and not insideKnob:
+      if gui.mx < knobX: sliderClicked = -1.0
+      else:              sliderClicked =  1.0
+
+  # New knob position & value calculation...
+  var
+    newKnobX = knobX
+    newValue = value
+
+  # ...when the slider was clicked outside of the knob
+  if sliderClicked != 0:
+    let stepSize = if step < 0: (maxVal - minVal) * 0.1 else: step
+    newValue = min(max(newValue + sliderClicked * stepSize, minVal), maxVal)
+    newKnobX = calcKnobX(newValue)
+
+  # ...when dragging slider
+  elif gui.activeItem == id:
+    if gui.shiftDown and gui.dragMode == dmNormal:
+      gui.dragMode = dmFine
+      disableCursor()
+    elif not gui.shiftDown and gui.dragMode == dmFine:
+      gui.dragMode = dmNormal
+      enableCursor()
+      # TODO
+      let win = glfw.currentContext()
+      let (x, y) = win.cursorPos()
+      gui.mx = gui.dragX
+      gui.x0 = gui.dragX
+      win.cursorPos = (gui.dragX, y)
+      echo "shit happens here"
+
+    var dx = gui.mx - gui.x0
+    if gui.dragMode == dmFine:
+      dx /= 5
+      if gui.altDown: dx /= 5
+
     newKnobX = min(max(knobX + dx, knobMinX), knobMaxX)
 
-    let newValue = (newKnobX - knobMinX) / (knobMaxX - knobMinX) *
-                   (maxVal - minVal)
-    result = newValue
+    newValue = (newKnobX - knobMinX) / (knobMaxX - knobMinX) *
+               (maxVal - minVal)
 
-    gui.x0 = min(max(gui.mx, knobMinX), knobMaxX + knobW)
+    gui.x0 = if gui.dragMode == dmFine:
+      gui.mx
+    else:
+      min(max(gui.mx, knobMinX), knobMaxX + knobW)
+
+    gui.dragX = newKnobX + knobW/2
+
+
+  result = newValue
 
   # Draw slider
-  let fillColor = if gui.hotItem == id: gray(0.8)
+  let fillColor = if gui.hotItem == id and not insideKnob:
+    if gui.activeItem <= 0: gray(0.8)
+    else: gray(0.60)
   else: gray(0.60)
 
   vg.beginPath()
@@ -281,13 +378,21 @@ proc renderHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 
   # Draw knob
   let knobColor = if gui.activeItem == id: RED
-  elif insideKnob: gray(0.35)
+  elif insideKnob and gui.activeItem <= 0: gray(0.35)
   else: gray(0.25)
 
   vg.beginPath()
   vg.roundedRect(newKnobX, y + KnobPad, knobW, knobH, 5)
   vg.fillColor(knobColor)
   vg.fill()
+
+  vg.fontSize(19.0)
+  vg.fontFace("sans-bold")
+  vg.textAlign(haLeft, vaMiddle)
+  vg.fillColor(white())
+  let valueString = fmt"{newValue:.3f}"
+  let tw = vg.horizontalAdvance(0,0, valueString)
+  discard vg.text(x + w/2 - tw/2, y+h*0.5, valueString)
 
   if insideSlider:
     handleTooltipInsideWidget(id, tooltipText)
@@ -327,6 +432,7 @@ proc main() =
 
   ### UI DATA ################################################
   var sliderVal1 = 50.0
+  var sliderVal2 = 0.0
 
   ############################################################
 
@@ -376,8 +482,14 @@ proc main() =
     y += pad
     sliderVal1 = renderHorizSlider(
       vg, 5, x, y, w * 1.5, h, sliderVal1,
-      minVal = 0.0, maxVal = 100.0, size = 20.0, step = 1.0,
+      minVal = 0.0, maxVal = 100.0, size = 20.0, step = 10.0,
       tooltipText = "Slider 1")
+
+    y += pad
+    sliderVal2 = renderHorizSlider(
+      vg, 6, x, y, w * 1.5, h, sliderVal2,
+      minVal = 0.0, maxVal = 1.0, size = -1.0, step = -1.0,
+      tooltipText = "Slider 2")
     ############################################################
 
     uiStatePost(vg)
