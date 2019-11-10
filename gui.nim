@@ -63,8 +63,21 @@ var gui: UIState
 let RED = rgb(1.0, 0.4, 0.4)
 
 
-proc disableCursor() = glfw.currentContext().cursorMode = cmDisabled
-proc enableCursor()  = glfw.currentContext().cursorMode = cmNormal
+proc disableCursor() =
+  glfw.currentContext().cursorMode = cmDisabled
+
+proc enableCursor() =
+  glfw.currentContext().cursorMode = cmNormal
+
+proc setCursorPosX(x: float) =
+  let win = glfw.currentContext()
+  let (currX, currY) = win.cursorPos()
+  win.cursorPos = (x, currY)
+
+proc setCursorPosY(y: float) =
+  let win = glfw.currentContext()
+  let (currX, currY) = win.cursorPos()
+  win.cursorPos = (currX, y)
 
 
 proc mouseButtonCb(win: Window, button: MouseButton, pressed: bool,
@@ -141,6 +154,7 @@ proc drawToolTip(vg: NVGContext, x, y: float, text: string,
 
 proc uiStatePre() =
   gui.hotItem = 0
+  (gui.mx, gui.my) = glfw.currentContext().cursorPos()
 
 proc uiStatePost(vg: NVGContext) =
   # Tooltip handling
@@ -212,12 +226,10 @@ proc uiStatePost(vg: NVGContext) =
     of dmFine:
       gui.dragMode = dmOff
       enableCursor()
-      let win = glfw.currentContext()
-      let (x, y) = win.cursorPos()
       if gui.dragX > -1.0:
-        win.cursorPos = (gui.dragX, y)
+        setCursorPosX(gui.dragX)
       else:
-        win.cursorPos = (x, gui.dragY)
+        setCursorPosY(gui.dragY)
 
 
 proc handleTooltipInsideWidget(id: int, tooltipText: string) =
@@ -369,12 +381,9 @@ proc renderHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     elif not gui.shiftDown and gui.dragMode == dmFine:
       gui.dragMode = dmNormal
       enableCursor()
-
-      let win = glfw.currentContext()
-      let (x, y) = win.cursorPos()
+      setCursorPosX(gui.dragX)
       gui.mx = gui.dragX
       gui.x0 = gui.dragX
-      win.cursorPos = (gui.dragX, y)
 
     var dx = gui.mx - gui.x0
     if gui.dragMode == dmFine:
@@ -515,12 +524,9 @@ proc renderVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     elif not gui.shiftDown and gui.dragMode == dmFine:
       gui.dragMode = dmNormal
       enableCursor()
-
-      let win = glfw.currentContext()
-      let (x, y) = win.cursorPos()
+      setCursorPosY(gui.dragY)
       gui.my = gui.dragY
       gui.y0 = gui.dragY
-      win.cursorPos = (x, gui.dragY)
 
     var dy = gui.my - gui.y0
     if gui.dragMode == dmFine:
@@ -629,7 +635,6 @@ proc main() =
     vg.beginFrame(winWidth.float, winHeight.float, pxRatio)
 
     uiStatePre()
-    (gui.mx, gui.my) = win.cursorPos()
 
     ############################################################
     let
