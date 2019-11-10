@@ -7,7 +7,6 @@ import nanovg
 
 
 # TODO util
-
 proc lerp(a, b, t: float): float =
   a + (b - a) * t
 
@@ -298,6 +297,7 @@ proc renderButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
     handleTooltipInsideWidget(id, tooltipText)
 
 
+# Must be kept in sync with renderVertSlider!
 proc renderHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
                        startVal: float = 0.0, endVal: float = 1.0,
                        size: float = -1.0, step: float = -1.0,
@@ -341,7 +341,7 @@ proc renderHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
   var sliderClicked = 0.0
 
   if gui.mbLeftDown and gui.activeItem == 0:
-    if insideKnob:
+    if insideKnob and not gui.sliderStep:
       # Active item is only set if the knob is being dragged
       gui.activeItem = id
       gui.x0 = gui.mx
@@ -441,6 +441,7 @@ proc renderHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
       gui.tooltipState = tsOff
 
 
+# Must be kept in sync with renderHorizSlider!
 proc renderVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
                       startVal: float = 0.0, endVal: float = 1.0,
                       size: float = -1.0, step: float = -1.0,
@@ -484,7 +485,7 @@ proc renderVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
   var sliderClicked = 0.0
 
   if gui.mbLeftDown and gui.activeItem == 0:
-    if insideKnob:
+    if insideKnob and not gui.sliderStep:
       # Active item is only set if the knob is being dragged
       gui.activeItem = id
       gui.y0 = gui.my
