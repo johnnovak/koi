@@ -146,6 +146,45 @@ proc drawToolTip(vg: NVGContext, x, y: float, text: string,
   discard vg.text(x + 10, y + 10, text)
 
 # }}}
+# {{{ handleTooltipInsideWidget
+
+proc handleTooltipInsideWidget(id: int, tooltipText: string) =
+  gui.tooltipState = gui.lastTooltipState
+
+  # Reset the tooltip show delay if the cursor has been moved inside a
+  # widget
+  if gui.tooltipState == tsShowDelay:
+    let cursorMoved = gui.mx != gui.lastmx or gui.my != gui.lastmy
+    if cursorMoved:
+      gui.tooltipT0 = getTime()
+
+  # Hide the tooltip immediately if the LMB was pressed inside the widget
+  if gui.mbLeftDown and gui.activeItem > 0:
+    gui.tooltipState = tsOff
+
+  elif gui.tooltipState == tsOff and not gui.mbLeftDown and
+       gui.lastHotItem != id:
+    gui.tooltipState = tsShowDelay
+    gui.tooltipT0 = getTime()
+
+  elif gui.tooltipState >= tsShow:
+    gui.tooltipState = tsShow
+    gui.tooltipT0 = getTime()
+    gui.tooltipText = tooltipText
+
+
+proc renderLabel(vg: NVGContext, id: int, x, y, w, h: float, label: string,
+                 color: Color,
+                 fontSize: float = 19.0, fontFace = "sans-bold") =
+
+  vg.fontSize(fontSize)
+  vg.fontFace(fontFace)
+  vg.textAlign(haLeft, vaMiddle)
+  vg.fillColor(color)
+#  let tw = vg.horizontalAdvance(0,0, label)
+  discard vg.text(x, y+h*0.5, label)
+
+# }}}
 # {{{ uiStatePre
 
 proc uiStatePre() =
@@ -233,45 +272,6 @@ proc uiStatePost(vg: NVGContext) =
         setCursorPosX(gui.dragX)
       else:
         setCursorPosY(gui.dragY)
-
-# }}}
-# {{{ handleTooltipInsideWidget
-
-proc handleTooltipInsideWidget(id: int, tooltipText: string) =
-  gui.tooltipState = gui.lastTooltipState
-
-  # Reset the tooltip show delay if the cursor has been moved inside a
-  # widget
-  if gui.tooltipState == tsShowDelay:
-    let cursorMoved = gui.mx != gui.lastmx or gui.my != gui.lastmy
-    if cursorMoved:
-      gui.tooltipT0 = getTime()
-
-  # Hide the tooltip immediately if the LMB was pressed inside the widget
-  if gui.mbLeftDown and gui.activeItem > 0:
-    gui.tooltipState = tsOff
-
-  elif gui.tooltipState == tsOff and not gui.mbLeftDown and
-       gui.lastHotItem != id:
-    gui.tooltipState = tsShowDelay
-    gui.tooltipT0 = getTime()
-
-  elif gui.tooltipState >= tsShow:
-    gui.tooltipState = tsShow
-    gui.tooltipT0 = getTime()
-    gui.tooltipText = tooltipText
-
-
-proc renderLabel(vg: NVGContext, id: int, x, y, w, h: float, label: string,
-                 color: Color,
-                 fontSize: float = 19.0, fontFace = "sans-bold") =
-
-  vg.fontSize(fontSize)
-  vg.fontFace(fontFace)
-  vg.textAlign(haLeft, vaMiddle)
-  vg.fillColor(color)
-#  let tw = vg.horizontalAdvance(0,0, label)
-  discard vg.text(x, y+h*0.5, label)
 
 # }}}
 
