@@ -315,45 +315,45 @@ proc doButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
     handleTooltipInsideWidget(id, tooltipText)
 
 # }}}
-# {{{ doHorizSlider
+# {{{ doHorizScrollbar
 
-# Must be kept in sync with doVertSlider!
-proc doHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
-                       startVal: float = 0.0, endVal: float = 1.0,
-                       knobSize: float = -1.0, clickStep: float = -1.0,
-                       tooltipText: string = ""): float =
+# Must be kept in sync with doVertScrollbar!
+proc doHorizScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
+                      startVal: float = 0.0, endVal: float = 1.0,
+                      thumbSize: float = -1.0, clickStep: float = -1.0,
+                      tooltipText: string = ""): float =
 
   assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
          (endVal   < startVal and value >= endVal   and value <= startVal)
 
-  assert knobSize < 0.0 or knobSize < abs(startVal - endVal)
+  assert thumbSize < 0.0 or thumbSize < abs(startVal - endVal)
   assert clickStep < 0.0 or clickStep < abs(startVal - endVal)
 
   const
-    KnobPad = 3
-    KnobMinW = 10
+    ThumbPad = 3
+    ThumbMinW = 10
 
-  # Calculate current knob position
-  var knobSize = if knobSize < 0: 0.000001 else: knobSize
+  # Calculate current thumb position
+  var thumbSize = if thumbSize < 0: 0.000001 else: thumbSize
   let
-    knobW = max((w - KnobPad*2) / (abs(startVal - endVal) / knobSize),
-                KnobMinW)
-    knobH = h - KnobPad * 2
-    knobMinX = x + KnobPad
-    knobMaxX = x + w - KnobPad - knobW
+    thumbW = max((w - ThumbPad*2) / (abs(startVal - endVal) / thumbSize),
+                ThumbMinW)
+    thumbH = h - ThumbPad * 2
+    thumbMinX = x + ThumbPad
+    thumbMaxX = x + w - ThumbPad - thumbW
 
-  proc calcKnobX(val: float): float =
+  proc calcThumbX(val: float): float =
     let t = invLerp(startVal, endVal, value)
-    lerp(knobMinX, knobMaxX, t)
+    lerp(thumbMinX, thumbMaxX, t)
 
-  let knobX = calcKnobX(value)
+  let thumbX = calcThumbX(value)
 
   # Hit testing
-  let (insideSlider, insideKnob) =
+  let (insideSlider, insideThumb) =
     if gui.dragMode == dmFine and gui.activeItem == id:
       (true, true)
     else:
-      (mouseInside(x, y, w, h), mouseInside(knobX, y, knobW, h))
+      (mouseInside(x, y, w, h), mouseInside(thumbX, y, thumbW, h))
 
   if insideSlider and not gui.mbLeftDown:
     gui.hotItem = id
@@ -361,8 +361,8 @@ proc doHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
   var sliderClicked = 0.0
 
   if gui.mbLeftDown and gui.activeItem == 0:
-    if insideKnob and not gui.sliderStep:
-      # Active item is only set if the knob is being dragged
+    if insideThumb and not gui.sliderStep:
+      # Active item is only set if the thumb is being dragged
       gui.activeItem = id
       gui.x0 = gui.mx
       if gui.shiftDown:
@@ -371,17 +371,17 @@ proc doHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
       else:
         gui.dragMode = dmNormal
 
-    elif insideSlider and not insideKnob and not gui.sliderStep:
-      if gui.mx < knobX: sliderClicked = -1.0
+    elif insideSlider and not insideThumb and not gui.sliderStep:
+      if gui.mx < thumbX: sliderClicked = -1.0
       else:              sliderClicked =  1.0
       gui.sliderStep = true
 
-  # New knob position & value calculation...
+  # New thumb position & value calculation...
   var
-    newKnobX = knobX
+    newThumbX = thumbX
     newValue = value
 
-  # ...when the slider was clicked outside of the knob
+  # ...when the slider was clicked outside of the thumb
   if sliderClicked != 0:
     var clickStep = if clickStep < 0: abs(startVal - endVal) * 0.1
                     else: clickStep
@@ -391,7 +391,7 @@ proc doHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     else:
       newValue = min(max(newValue - sliderClicked * clickStep, endVal),
                      startVal)
-    newKnobX = calcKnobX(newValue)
+    newThumbX = calcThumbX(newValue)
 
   # ...when dragging slider
   elif gui.activeItem == id:
@@ -411,23 +411,23 @@ proc doHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
       dx /= 8
       if gui.altDown: dx /= 8
 
-    newKnobX = min(max(knobX + dx, knobMinX), knobMaxX)
-    let t = invLerp(knobMinX, knobMaxX, newKnobX)
+    newThumbX = min(max(thumbX + dx, thumbMinX), thumbMaxX)
+    let t = invLerp(thumbMinX, thumbMaxX, newthumbX)
     newValue = lerp(startVal, endVal, t)
 
     gui.x0 = if gui.dragMode == dmFine:
       gui.mx
     else:
-      min(max(gui.mx, knobMinX), knobMaxX + knobW)
+      min(max(gui.mx, thumbMinX), thumbMaxX + thumbW)
 
-    gui.dragX = newKnobX + knobW*0.5
+    gui.dragX = newthumbX + thumbW*0.5
     gui.dragY = -1.0
 
 
   result = newValue
 
   # Draw slider
-  let fillColor = if gui.hotItem == id and not insideKnob:
+  let fillColor = if gui.hotItem == id and not insideThumb:
     if gui.activeItem <= 0: gray(0.8)
     else: gray(0.60)
   else: gray(0.60)
@@ -437,14 +437,14 @@ proc doHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
   vg.fillColor(fillColor)
   vg.fill()
 
-  # Draw knob
-  let knobColor = if gui.activeItem == id: RED
-  elif insideKnob and gui.activeItem <= 0: gray(0.35)
+  # Draw thumb
+  let thumbColor = if gui.activeItem == id: RED
+  elif insideThumb and gui.activeItem <= 0: gray(0.35)
   else: gray(0.25)
 
   vg.beginPath()
-  vg.roundedRect(newKnobX, y + KnobPad, knobW, knobH, 5)
-  vg.fillColor(knobColor)
+  vg.roundedRect(newThumbX, y + ThumbPad, thumbW, thumbH, 5)
+  vg.fillColor(thumbColor)
   vg.fill()
 
   vg.fontSize(19.0)
@@ -462,45 +462,45 @@ proc doHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
       gui.tooltipState = tsOff
 
 # }}}
-# {{{ doVertSlider
+# {{{ doVertScrollbar
 
-# Must be kept in sync with doHorizSlider!
-proc doVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
-                      startVal: float = 0.0, endVal: float = 1.0,
-                      knobSize: float = -1.0, clickStep: float = -1.0,
-                      tooltipText: string = ""): float =
+# Must be kept in sync with doHorizScrollbar!
+proc doVertScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
+                     startVal: float = 0.0, endVal: float = 1.0,
+                     thumbSize: float = -1.0, clickStep: float = -1.0,
+                     tooltipText: string = ""): float =
 
   assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
          (endVal   < startVal and value >= endVal   and value <= startVal)
 
-  assert knobSize < 0.0 or knobSize < abs(startVal - endVal)
+  assert thumbSize < 0.0 or thumbSize < abs(startVal - endVal)
   assert clickStep < 0.0 or clickStep < abs(startVal - endVal)
 
   const
-    KnobPad = 3
-    KnobMinH = 10
+    ThumbPad = 3
+    thumbMinH = 10
 
-  # Calculate current knob position
-  var knobSize = if knobSize < 0: 0.000001 else: knobSize
+  # Calculate current thumb position
+  var thumbSize = if thumbSize < 0: 0.000001 else: thumbSize
   let
-    knobH = max((h - KnobPad*2) / (abs(startVal - endVal) / knobSize),
-                KnobMinH)
-    knobW = w - KnobPad * 2
-    knobMinY = y + KnobPad
-    knobMaxY = y + h - KnobPad - knobH
+    thumbH = max((h - ThumbPad*2) / (abs(startVal - endVal) / thumbSize),
+                thumbMinH)
+    thumbW = w - ThumbPad * 2
+    thumbMinY = y + ThumbPad
+    thumbMaxY = y + h - ThumbPad - thumbH
 
-  proc calcKnobY(val: float): float =
+  proc calcThumbY(val: float): float =
     let t = invLerp(startVal, endVal, value)
-    lerp(knobMinY, knobMaxY, t)
+    lerp(thumbMinY, thumbMaxY, t)
 
-  let knobY = calcKnobY(value)
+  let thumbY = calcthumbY(value)
 
   # Hit testing
-  let (insideSlider, insideKnob) =
+  let (insideSlider, insideThumb) =
     if gui.dragMode == dmFine and gui.activeItem == id:
       (true, true)
     else:
-      (mouseInside(x, y, w, h), mouseInside(x, knobY, w, knobH))
+      (mouseInside(x, y, w, h), mouseInside(x, thumbY, w, thumbH))
 
   if insideSlider and not gui.mbLeftDown:
     gui.hotItem = id
@@ -508,8 +508,8 @@ proc doVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
   var sliderClicked = 0.0
 
   if gui.mbLeftDown and gui.activeItem == 0:
-    if insideKnob and not gui.sliderStep:
-      # Active item is only set if the knob is being dragged
+    if insideThumb and not gui.sliderStep:
+      # Active item is only set if the thumb is being dragged
       gui.activeItem = id
       gui.y0 = gui.my
       if gui.shiftDown:
@@ -518,17 +518,17 @@ proc doVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
       else:
         gui.dragMode = dmNormal
 
-    elif insideSlider and not insideKnob and not gui.sliderStep:
-      if gui.my < knobY: sliderClicked = -1.0
+    elif insideSlider and not insideThumb and not gui.sliderStep:
+      if gui.my < thumbY: sliderClicked = -1.0
       else:              sliderClicked =  1.0
       gui.sliderStep = true
 
-  # New knob position & value calculation...
+  # New thumb position & value calculation...
   var
-    newKnobY = knobY
+    newThumbY = thumbY
     newValue = value
 
-  # ...when the slider was clicked outside of the knob
+  # ...when the slider was clicked outside of the thumb
   if sliderClicked != 0:
     var clickStep = if clickStep < 0: abs(startVal - endVal) * 0.1
                     else: clickStep
@@ -538,7 +538,7 @@ proc doVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     else:
       newValue = min(max(newValue - sliderClicked * clickStep, endVal),
                      startVal)
-    newKnobY = calcKnobY(newValue)
+    newThumbY = calcThumbY(newValue)
 
   # ...when dragging slider
   elif gui.activeItem == id:
@@ -558,23 +558,23 @@ proc doVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
       dy /= 8
       if gui.altDown: dy /= 8
 
-    newKnobY = min(max(knobY + dy, knobMinY), knobMaxY)
-    let t = invLerp(knobMinY, knobMaxY, newKnobY)
+    newThumbY = min(max(thumbY + dy, thumbMinY), thumbMaxY)
+    let t = invLerp(thumbMinY, thumbMaxY, newThumbY)
     newValue = lerp(startVal, endVal, t)
 
     gui.y0 = if gui.dragMode == dmFine:
       gui.my
     else:
-      min(max(gui.my, knobMinY), knobMaxY + knobH)
+      min(max(gui.my, thumbMinY), thumbMaxY + thumbH)
 
     gui.dragX = -1.0
-    gui.dragY = newKnobY + knobH*0.5
+    gui.dragY = newThumbY + thumbH*0.5
 
 
   result = newValue
 
   # Draw slider
-  let fillColor = if gui.hotItem == id and not insideKnob:
+  let fillColor = if gui.hotItem == id and not insideThumb:
     if gui.activeItem <= 0: gray(0.8)
     else: gray(0.60)
   else: gray(0.60)
@@ -584,14 +584,14 @@ proc doVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
   vg.fillColor(fillColor)
   vg.fill()
 
-  # Draw knob
-  let knobColor = if gui.activeItem == id: RED
-  elif insideKnob and gui.activeItem <= 0: gray(0.35)
+  # Draw thumb
+  let thumbColor = if gui.activeItem == id: RED
+  elif insideThumb and gui.activeItem <= 0: gray(0.35)
   else: gray(0.25)
 
   vg.beginPath()
-  vg.roundedRect(x + KnobPad, newKnobY, knobW, knobH, 5)
-  vg.fillColor(knobColor)
+  vg.roundedRect(x + ThumbPad, newThumbY, thumbW, thumbH, 5)
+  vg.fillColor(thumbColor)
   vg.fill()
 
   if insideSlider:
@@ -709,31 +709,31 @@ proc main() =
       echo "button 3 pressed"
 
     y += pad
-    sliderVal1 = doHorizSlider(
+    sliderVal1 = doHorizScrollbar(
       vg, 5, x, y, w * 1.5, h, sliderVal1,
-      startVal = 0, endVal = 100, knobSize = 20, clickStep = 10.0,
+      startVal = 0, endVal = 100, thumbSize = 20, clickStep = 10.0,
       tooltipText = "Horizontal Slider 1")
 
     y += pad
-    sliderVal2 = doHorizSlider(
+    sliderVal2 = doHorizScrollbar(
       vg, 6, x, y, w * 1.5, h, sliderVal2,
-      startVal = 0, endVal = 1, knobSize = -1, clickStep = -1,
+      startVal = 0, endVal = 1, thumbSize = -1, clickStep = -1,
       tooltipText = "Horizontal 2")
 
-    sliderVal3 = doVertSlider(
+    sliderVal3 = doVertScrollbar(
       vg, 7, 300, 50, h, 165, sliderVal3,
-      startVal = 0.0, endVal = 100, knobSize = 20, clickStep = 10,
+      startVal = 0.0, endVal = 100, thumbSize = 20, clickStep = 10,
       tooltipText = "Vertical Slider 1")
 
-    sliderVal4 = doVertSlider(
+    sliderVal4 = doVertScrollbar(
       vg, 8, 330, 50, h, 165, sliderVal4,
-      startVal = 1, endVal = 0, knobSize = -1, clickStep = -1,
+      startVal = 1, endVal = 0, thumbSize = -1, clickStep = -1,
       tooltipText = "Vertical Slider 2")
 
     y += pad
-    sliderVal5 = doHorizSlider(
+    sliderVal5 = doHorizScrollbar(
       vg, 9, x, y, w * 1.5, h, sliderVal5,
-      startVal = 100, endVal = 0, knobSize = 20, clickStep = 10.0,
+      startVal = 100, endVal = 0, thumbSize = 20, clickStep = 10.0,
       tooltipText = "Horizontal Slider 3")
 
     ############################################################
