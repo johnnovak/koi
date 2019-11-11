@@ -314,13 +314,13 @@ proc renderButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
 # Must be kept in sync with renderVertSlider!
 proc renderHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
                        startVal: float = 0.0, endVal: float = 1.0,
-                       size: float = -1.0, clickStep: float = -1.0,
+                       knobSize: float = -1.0, clickStep: float = -1.0,
                        tooltipText: string = ""): float =
 
   assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
          (endVal   < startVal and value >= endVal   and value <= startVal)
 
-  assert size < 0.0 or size < abs(startVal - endVal)
+  assert knobSize < 0.0 or knobSize < abs(startVal - endVal)
   assert clickStep < 0.0 or clickStep < abs(startVal - endVal)
 
   const
@@ -328,9 +328,9 @@ proc renderHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     KnobMinW = 10
 
   # Calculate current knob position
+  var knobSize = if knobSize < 0: 0.000001 else: knobSize
   let
-    windowSize = if size < 0: 0.000001 else: size
-    knobW = max((w - KnobPad*2) / (abs(startVal - endVal) / windowSize),
+    knobW = max((w - KnobPad*2) / (abs(startVal - endVal) / knobSize),
                 KnobMinW)
     knobH = h - KnobPad * 2
     knobMinX = x + KnobPad
@@ -377,13 +377,13 @@ proc renderHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 
   # ...when the slider was clicked outside of the knob
   if sliderClicked != 0:
-    let stepSize = if clickStep < 0: abs(startVal - endVal) * 0.1
-                   else: clickStep
+    var clickStep = if clickStep < 0: abs(startVal - endVal) * 0.1
+                    else: clickStep
     if startVal < endVal:
-      newValue = min(max(newValue + sliderClicked * stepSize, startVal),
+      newValue = min(max(newValue + sliderClicked * clickStep, startVal),
                      endVal)
     else:
-      newValue = min(max(newValue - sliderClicked * stepSize, endVal),
+      newValue = min(max(newValue - sliderClicked * clickStep, endVal),
                      startVal)
     newKnobX = calcKnobX(newValue)
 
@@ -459,13 +459,13 @@ proc renderHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 # Must be kept in sync with renderHorizSlider!
 proc renderVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
                       startVal: float = 0.0, endVal: float = 1.0,
-                      size: float = -1.0, clickStep: float = -1.0,
+                      knobSize: float = -1.0, clickStep: float = -1.0,
                       tooltipText: string = ""): float =
 
   assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
          (endVal   < startVal and value >= endVal   and value <= startVal)
 
-  assert size < 0.0 or size < abs(startVal - endVal)
+  assert knobSize < 0.0 or knobSize < abs(startVal - endVal)
   assert clickStep < 0.0 or clickStep < abs(startVal - endVal)
 
   const
@@ -473,9 +473,9 @@ proc renderVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     KnobMinH = 10
 
   # Calculate current knob position
+  var knobSize = if knobSize < 0: 0.000001 else: knobSize
   let
-    windowSize = if size < 0: 0.000001 else: size
-    knobH = max((h - KnobPad*2) / (abs(startVal - endVal) / windowSize),
+    knobH = max((h - KnobPad*2) / (abs(startVal - endVal) / knobSize),
                 KnobMinH)
     knobW = w - KnobPad * 2
     knobMinY = y + KnobPad
@@ -522,13 +522,13 @@ proc renderVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 
   # ...when the slider was clicked outside of the knob
   if sliderClicked != 0:
-    let stepSize = if clickStep < 0: abs(startVal - endVal) * 0.1
-                   else: clickStep
+    var clickStep = if clickStep < 0: abs(startVal - endVal) * 0.1
+                    else: clickStep
     if startVal < endVal:
-      newValue = min(max(newValue + sliderClicked * stepSize, startVal),
+      newValue = min(max(newValue + sliderClicked * clickStep, startVal),
                      endVal)
     else:
-      newValue = min(max(newValue - sliderClicked * stepSize, endVal),
+      newValue = min(max(newValue - sliderClicked * clickStep, endVal),
                      startVal)
     newKnobY = calcKnobY(newValue)
 
@@ -679,29 +679,29 @@ proc main() =
     y += pad
     sliderVal1 = renderHorizSlider(
       vg, 5, x, y, w * 1.5, h, sliderVal1,
-      startVal = 0, endVal = 100, size = 20, clickStep = 10.0,
+      startVal = 0, endVal = 100, knobSize = 20, clickStep = 10.0,
       tooltipText = "Horizontal Slider 1")
 
     y += pad
     sliderVal2 = renderHorizSlider(
       vg, 6, x, y, w * 1.5, h, sliderVal2,
-      startVal = 0, endVal = 1, size = -1, clickStep = -1,
+      startVal = 0, endVal = 1, knobSize = -1, clickStep = -1,
       tooltipText = "Horizontal 2")
 
     sliderVal3 = renderVertSlider(
       vg, 7, 300, 50, h, 165, sliderVal3,
-      startVal = 0.0, endVal = 100, size = 20, clickStep = 10,
+      startVal = 0.0, endVal = 100, knobSize = 20, clickStep = 10,
       tooltipText = "Vertical Slider 1")
 
     sliderVal4 = renderVertSlider(
       vg, 8, 330, 50, h, 165, sliderVal4,
-      startVal = 1, endVal = 0, size = -1, clickStep = -1,
+      startVal = 1, endVal = 0, knobSize = -1, clickStep = -1,
       tooltipText = "Vertical Slider 2")
 
     y += pad
     sliderVal5 = renderHorizSlider(
       vg, 9, x, y, w * 1.5, h, sliderVal5,
-      startVal = 100, endVal = 0, size = 20, clickStep = 10.0,
+      startVal = 100, endVal = 0, knobSize = 20, clickStep = 10.0,
       tooltipText = "Horizontal Slider 3")
 
     ############################################################
