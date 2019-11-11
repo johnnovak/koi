@@ -16,7 +16,7 @@ const
   TooltipFadeOutDuration = 0.3
 
 type DragMode = enum
-  dmOff, dmNormal, dmFine
+  dmOff, dmNormal, dmHidden
 
 type UIState = object
   # Mouse state
@@ -265,7 +265,7 @@ proc uiStatePost(vg: NVGContext) =
     of dmNormal:
       gui.dragMode = dmOff
 
-    of dmFine:
+    of dmHidden:
       gui.dragMode = dmOff
       enableCursor()
       if gui.dragX > -1.0:
@@ -350,7 +350,7 @@ proc doHorizScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 
   # Hit testing
   let (insideSlider, insideThumb) =
-    if gui.dragMode == dmFine and gui.activeItem == id:
+    if gui.dragMode == dmHidden and gui.activeItem == id:
       (true, true)
     else:
       (mouseInside(x, y, w, h), mouseInside(thumbX, y, thumbW, h))
@@ -366,7 +366,7 @@ proc doHorizScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
       gui.activeItem = id
       gui.x0 = gui.mx
       if gui.shiftDown:
-        gui.dragMode = dmFine
+        gui.dragMode = dmHidden
         disableCursor()
       else:
         gui.dragMode = dmNormal
@@ -396,10 +396,10 @@ proc doHorizScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
   # ...when dragging slider
   elif gui.activeItem == id:
     if gui.shiftDown and gui.dragMode == dmNormal:
-      gui.dragMode = dmFine
+      gui.dragMode = dmHidden
       disableCursor()
 
-    elif not gui.shiftDown and gui.dragMode == dmFine:
+    elif not gui.shiftDown and gui.dragMode == dmHidden:
       gui.dragMode = dmNormal
       enableCursor()
       setCursorPosX(gui.dragX)
@@ -407,20 +407,20 @@ proc doHorizScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
       gui.x0 = gui.dragX
 
     var dx = gui.mx - gui.x0
-    if gui.dragMode == dmFine:
+    if gui.shiftDown:
       dx /= 8
       if gui.altDown: dx /= 8
 
     newThumbX = min(max(thumbX + dx, thumbMinX), thumbMaxX)
-    let t = invLerp(thumbMinX, thumbMaxX, newthumbX)
+    let t = invLerp(thumbMinX, thumbMaxX, newThumbX)
     newValue = lerp(startVal, endVal, t)
 
-    gui.x0 = if gui.dragMode == dmFine:
+    gui.x0 = if gui.dragMode == dmHidden:
       gui.mx
     else:
       min(max(gui.mx, thumbMinX), thumbMaxX + thumbW)
 
-    gui.dragX = newthumbX + thumbW*0.5
+    gui.dragX = newThumbX + thumbW*0.5
     gui.dragY = -1.0
 
 
@@ -497,7 +497,7 @@ proc doVertScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 
   # Hit testing
   let (insideSlider, insideThumb) =
-    if gui.dragMode == dmFine and gui.activeItem == id:
+    if gui.dragMode == dmHidden and gui.activeItem == id:
       (true, true)
     else:
       (mouseInside(x, y, w, h), mouseInside(x, thumbY, w, thumbH))
@@ -513,7 +513,7 @@ proc doVertScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
       gui.activeItem = id
       gui.y0 = gui.my
       if gui.shiftDown:
-        gui.dragMode = dmFine
+        gui.dragMode = dmHidden
         disableCursor()
       else:
         gui.dragMode = dmNormal
@@ -543,10 +543,10 @@ proc doVertScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
   # ...when dragging slider
   elif gui.activeItem == id:
     if gui.shiftDown and gui.dragMode == dmNormal:
-      gui.dragMode = dmFine
+      gui.dragMode = dmHidden
       disableCursor()
 
-    elif not gui.shiftDown and gui.dragMode == dmFine:
+    elif not gui.shiftDown and gui.dragMode == dmHidden:
       gui.dragMode = dmNormal
       enableCursor()
       setCursorPosY(gui.dragY)
@@ -554,7 +554,7 @@ proc doVertScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
       gui.y0 = gui.dragY
 
     var dy = gui.my - gui.y0
-    if gui.dragMode == dmFine:
+    if gui.shiftDown:
       dy /= 8
       if gui.altDown: dy /= 8
 
@@ -562,7 +562,7 @@ proc doVertScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     let t = invLerp(thumbMinY, thumbMaxY, newThumbY)
     newValue = lerp(startVal, endVal, t)
 
-    gui.y0 = if gui.dragMode == dmFine:
+    gui.y0 = if gui.dragMode == dmHidden:
       gui.my
     else:
       min(max(gui.my, thumbMinY), thumbMaxY + thumbH)
@@ -599,6 +599,98 @@ proc doVertScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 
     if gui.sliderStep:
       gui.tooltipState = tsOff
+
+# }}}
+# {{{ doHorizSlider
+
+proc doHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
+                   startVal: float = 0.0, endVal: float = 1.0,
+                   tooltipText: string = ""): float =
+
+  assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
+         (endVal   < startVal and value >= endVal   and value <= startVal)
+
+  const SliderPad = 3
+
+  let
+    posMinX = x + SliderPad
+    posMaxX = x + w - SliderPad
+
+  # Calculate current slider position
+  proc calcPosX(val: float): float =
+    let t = invLerp(startVal, endVal, value)
+    lerp(posMinX, posMaxX, t)
+
+  let posX = calcPosX(value)
+
+  # Hit testing
+  let inside = mouseInside(x, y, w, h)
+
+  if inside:
+    if not gui.mbLeftDown:
+      gui.hotItem = id
+    elif gui.mbLeftDown and gui.activeItem == 0:
+      gui.activeItem = id
+      gui.x0 = gui.mx
+      gui.dragMode = dmHidden
+      gui.dragX = gui.mx
+      gui.dragY = -1.0
+      disableCursor()
+
+  # New position & value calculation
+  var
+    newPosX = posX
+    newValue = value
+
+  if gui.activeItem == id:
+    var dx = gui.mx - gui.x0
+    if gui.shiftDown:
+      dx /= 8
+      if gui.altDown: dx /= 8
+
+    newPosX = min(max(posX + dx, posMinX), posMaxX)
+    let t = invLerp(posMinX, posMaxX, newPosX)
+    newValue = lerp(startVal, endVal, t)
+
+    gui.x0 = if gui.dragMode == dmHidden:
+      gui.mx
+    else:
+      min(max(gui.mx, posMinX), posMaxX)
+
+  result = newValue
+
+  # Draw slider background
+  let fillColor = if gui.hotItem == id:
+    if gui.activeItem <= 0: gray(0.8)
+    else: gray(0.60)
+  else: gray(0.60)
+
+  vg.beginPath()
+  vg.roundedRect(x, y, w, h, 5)
+  vg.fillColor(fillColor)
+  vg.fill()
+
+  # Draw slider
+  let sliderColor = if gui.activeItem == id: RED
+  elif inside and gui.activeItem <= 0: gray(0.35)
+  else: gray(0.25)
+
+  vg.beginPath()
+  vg.roundedRect(x + SliderPad, y + SliderPad,
+                 newPosX - x - SliderPad, h - (SliderPad*2), 5)
+  vg.fillColor(sliderColor)
+  vg.fill()
+
+  vg.fontSize(19.0)
+  vg.fontFace("sans-bold")
+  vg.textAlign(haLeft, vaMiddle)
+  vg.fillColor(white())
+  let valueString = fmt"{result:.3f}"
+  let tw = vg.horizontalAdvance(0,0, valueString)
+  discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, valueString)
+
+  if inside:
+    handleTooltipInsideWidget(id, tooltipText)
 
 # }}}
 
@@ -658,11 +750,14 @@ proc main() =
   glfw.swapInterval(1)
 
   ### UI DATA ################################################
-  var sliderVal1 = 30.0
-  var sliderVal2 = 0.0
-  var sliderVal3 = 50.0
-  var sliderVal4 = 0.0
-  var sliderVal5 = 50.0
+  var scrollbarVal1 = 30.0
+  var scrollbarVal2 = 0.0
+  var scrollbarVal3 = 50.0
+  var scrollbarVal4 = 0.0
+  var scrollbarVal5 = 50.0
+
+  var sliderVal1 = 50.0
+  var sliderVal2 = -20.0
 
   ############################################################
 
@@ -696,6 +791,9 @@ proc main() =
 
     renderLabel(vg, 1, x + 5, y, w, h, "Test buttons", color = gray(0.90),
                 fontSize = 22.0)
+
+    # Buttons
+
     y += pad
     if doButton(vg, 2, x, y, w, h, "Start", color = gray(0.60), "I am the first!"):
       echo "button 1 pressed"
@@ -708,33 +806,47 @@ proc main() =
     if doButton(vg, 4, x, y, w, h, "Preferences", color = gray(0.60), "Last button"):
       echo "button 3 pressed"
 
-    y += pad
-    sliderVal1 = doHorizScrollbar(
-      vg, 5, x, y, w * 1.5, h, sliderVal1,
+    # Scrollbars
+
+    y += pad * 2
+    scrollbarVal1 = doHorizScrollbar(
+      vg, 5, x, y, w * 1.5, h, scrollbarVal1,
       startVal = 0, endVal = 100, thumbSize = 20, clickStep = 10.0,
-      tooltipText = "Horizontal Slider 1")
+      tooltipText = "Horizontal Scrollbar 1")
 
     y += pad
-    sliderVal2 = doHorizScrollbar(
-      vg, 6, x, y, w * 1.5, h, sliderVal2,
+    scrollbarVal2 = doHorizScrollbar(
+      vg, 6, x, y, w * 1.5, h, scrollbarVal2,
       startVal = 0, endVal = 1, thumbSize = -1, clickStep = -1,
-      tooltipText = "Horizontal 2")
+      tooltipText = "Horizontal Scrollbar 2")
 
-    sliderVal3 = doVertScrollbar(
-      vg, 7, 300, 50, h, 165, sliderVal3,
+    scrollbarVal3 = doVertScrollbar(
+      vg, 7, 320, 60, h, 140, scrollbarVal3,
       startVal = 0.0, endVal = 100, thumbSize = 20, clickStep = 10,
-      tooltipText = "Vertical Slider 1")
+      tooltipText = "Vertical Scrollbar 1")
 
-    sliderVal4 = doVertScrollbar(
-      vg, 8, 330, 50, h, 165, sliderVal4,
+    scrollbarVal4 = doVertScrollbar(
+      vg, 8, 350, 60, h, 140, scrollbarVal4,
       startVal = 1, endVal = 0, thumbSize = -1, clickStep = -1,
-      tooltipText = "Vertical Slider 2")
+      tooltipText = "Vertical Scrollbar 2")
 
     y += pad
-    sliderVal5 = doHorizScrollbar(
-      vg, 9, x, y, w * 1.5, h, sliderVal5,
+    scrollbarVal5 = doHorizScrollbar(
+      vg, 9, x, y, w * 1.5, h, scrollbarVal5,
       startVal = 100, endVal = 0, thumbSize = 20, clickStep = 10.0,
-      tooltipText = "Horizontal Slider 3")
+      tooltipText = "Horizontal Scrollbar 3")
+
+    # Sliders
+
+    y += pad * 2
+    sliderVal1 = doHorizSlider(
+      vg, 10, x, y, w * 1.5, h, sliderVal1,
+      startVal = 0, endVal = 100, tooltipText = "Horizontal Slider 1")
+
+    y += pad
+    sliderVal2 = doHorizSlider(
+      vg, 11, x, y, w * 1.5, h, sliderVal2,
+      startVal = 50, endVal = -30, tooltipText = "Horizontal Slider 2")
 
     ############################################################
 
