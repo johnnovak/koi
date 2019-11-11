@@ -693,6 +693,90 @@ proc doHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     handleTooltipInsideWidget(id, tooltipText)
 
 # }}}
+# {{{ doVertSlider
+
+proc doVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
+                  startVal: float = 0.0, endVal: float = 1.0,
+                  tooltipText: string = ""): float =
+
+  assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
+         (endVal   < startVal and value >= endVal   and value <= startVal)
+
+  const SliderPad = 3
+
+  let
+    posMinY = y + SliderPad
+    posMaxY = y + h - SliderPad
+
+  # Calculate current slider position
+  proc calcPosY(val: float): float =
+    let t = invLerp(startVal, endVal, value)
+    lerp(posMinY, posMaxY, t)
+
+  let posY = calcPosY(value)
+
+  # Hit testing
+  let inside = mouseInside(x, y, w, h)
+
+  if inside:
+    if not gui.mbLeftDown:
+      gui.hotItem = id
+    elif gui.mbLeftDown and gui.activeItem == 0:
+      gui.activeItem = id
+      gui.y0 = gui.my
+      gui.dragMode = dmHidden
+      gui.dragX = -1.0
+      gui.dragY = gui.my
+      disableCursor()
+
+  # New position & value calculation
+  var
+    newPosY = posY
+    newValue = value
+
+  if gui.activeItem == id:
+    var dy = gui.my - gui.y0
+    if gui.shiftDown:
+      dy /= 8
+      if gui.altDown: dy /= 8
+
+    newPosY = min(max(posY + dy, posMinY), posMaxY)
+    let t = invLerp(posMinY, posMaxY, newPosY)
+    newValue = lerp(startVal, endVal, t)
+
+    gui.y0 = if gui.dragMode == dmHidden:
+      gui.my
+    else:
+      min(max(gui.my, posMinY), posMaxY)
+
+  result = newValue
+
+  # Draw slider background
+  let fillColor = if gui.hotItem == id:
+    if gui.activeItem <= 0: gray(0.8)
+    else: gray(0.60)
+  else: gray(0.60)
+
+  vg.beginPath()
+  vg.roundedRect(x, y, w, h, 5)
+  vg.fillColor(fillColor)
+  vg.fill()
+
+  # Draw slider
+  let sliderColor = if gui.activeItem == id: RED
+  elif inside and gui.activeItem <= 0: gray(0.35)
+  else: gray(0.25)
+
+  vg.beginPath()
+  vg.roundedRect(x + SliderPad, y + SliderPad,
+                 w - (SliderPad*2), newPosY - y - SliderPad, 5)
+  vg.fillColor(sliderColor)
+  vg.fill()
+
+  if inside:
+    handleTooltipInsideWidget(id, tooltipText)
+
+# }}}
 
 # {{{ createWindow
 
@@ -750,14 +834,17 @@ proc main() =
   glfw.swapInterval(1)
 
   ### UI DATA ################################################
-  var scrollbarVal1 = 30.0
-  var scrollbarVal2 = 0.0
-  var scrollbarVal3 = 50.0
-  var scrollbarVal4 = 0.0
-  var scrollbarVal5 = 50.0
+  var
+    scrollbarVal1 = 30.0
+    scrollbarVal2 = 0.0
+    scrollbarVal3 = 50.0
+    scrollbarVal4 = 0.0
+    scrollbarVal5 = 50.0
 
-  var sliderVal1 = 50.0
-  var sliderVal2 = -20.0
+    sliderVal1 = 50.0
+    sliderVal2 = -20.0
+    sliderVal3 = 50.0
+    sliderVal4 = -20.0
 
   ############################################################
 
@@ -847,6 +934,14 @@ proc main() =
     sliderVal2 = doHorizSlider(
       vg, 11, x, y, w * 1.5, h, sliderVal2,
       startVal = 50, endVal = -30, tooltipText = "Horizontal Slider 2")
+
+    sliderVal3 = doVertSlider(
+      vg, 12, 320, 300, h, 120, sliderVal3,
+      startVal = 0, endVal = 100, tooltipText = "Vertical Slider 1")
+
+    sliderVal4 = doVertSlider(
+      vg, 13, 350, 300, h, 120, sliderVal4,
+      startVal = 50, endVal = -30, tooltipText = "Vertical Slider 2")
 
     ############################################################
 
