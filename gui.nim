@@ -940,8 +940,11 @@ proc main() =
       startVal = 0, endVal = 100, tooltipText = "Vertical Slider 1")
 
     sliderVal4 = doVertSlider(
-      vg, 13, 350, 300, h, 120, sliderVal4,
+      vg, 13, 400, 300, h, 120, sliderVal4,
       startVal = 50, endVal = -30, tooltipText = "Vertical Slider 2")
+
+    renderLabel(vg, 14, 320, 430, w, h, fmt"{sliderVal3:.3f}",
+                color = gray(0.90), fontSize = 19.0)
 
     ############################################################
 
