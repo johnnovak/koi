@@ -1,4 +1,4 @@
-import os, strformat
+import strformat
 
 import glad/gl
 import glfw
@@ -71,12 +71,12 @@ proc enableCursor() =
 
 proc setCursorPosX(x: float) =
   let win = glfw.currentContext()
-  let (currX, currY) = win.cursorPos()
+  let (_, currY) = win.cursorPos()
   win.cursorPos = (x, currY)
 
 proc setCursorPosY(y: float) =
   let win = glfw.currentContext()
-  let (currX, currY) = win.cursorPos()
+  let (currX, _) = win.cursorPos()
   win.cursorPos = (currX, y)
 
 
