@@ -677,7 +677,7 @@ proc doHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 
   vg.beginPath()
   vg.roundedRect(x + SliderPad, y + SliderPad,
-                 newPosX - x - SliderPad, h - (SliderPad*2), 5)
+                 newPosX - x - SliderPad, h - SliderPad*2, 5)
   vg.fillColor(sliderColor)
   vg.fill()
 
@@ -705,8 +705,8 @@ proc doVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
   const SliderPad = 3
 
   let
-    posMinY = y + SliderPad
-    posMaxY = y + h - SliderPad
+    posMinY = y + h - SliderPad
+    posMaxY = y + SliderPad
 
   # Calculate current slider position
   proc calcPosY(val: float): float =
@@ -740,14 +740,14 @@ proc doVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
       dy /= 8
       if gui.altDown: dy /= 8
 
-    newPosY = min(max(posY + dy, posMinY), posMaxY)
+    newPosY = min(max(posY + dy, posMaxY), posMinY)
     let t = invLerp(posMinY, posMaxY, newPosY)
     newValue = lerp(startVal, endVal, t)
 
     gui.y0 = if gui.dragMode == dmHidden:
       gui.my
     else:
-      min(max(gui.my, posMinY), posMaxY)
+      min(max(gui.my, posMaxY), posMinY)
 
   result = newValue
 
@@ -768,8 +768,8 @@ proc doVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
   else: gray(0.25)
 
   vg.beginPath()
-  vg.roundedRect(x + SliderPad, y + SliderPad,
-                 w - (SliderPad*2), newPosY - y - SliderPad, 5)
+  vg.roundedRect(x + SliderPad, newPosY,
+                 w - SliderPad*2, y + h - newPosY - SliderPad, 5)
   vg.fillColor(sliderColor)
   vg.fill()
 
@@ -843,7 +843,7 @@ proc main() =
 
     sliderVal1 = 50.0
     sliderVal2 = -20.0
-    sliderVal3 = 50.0
+    sliderVal3 = 30.0
     sliderVal4 = -20.0
 
   ############################################################
@@ -939,13 +939,15 @@ proc main() =
       vg, 12, 320, 300, h, 120, sliderVal3,
       startVal = 0, endVal = 100, tooltipText = "Vertical Slider 1")
 
-    sliderVal4 = doVertSlider(
-      vg, 13, 400, 300, h, 120, sliderVal4,
-      startVal = 50, endVal = -30, tooltipText = "Vertical Slider 2")
-
-    renderLabel(vg, 14, 320, 430, w, h, fmt"{sliderVal3:.3f}",
+    renderLabel(vg, 13, 320, 430, w, h, fmt"{sliderVal3:.3f}",
                 color = gray(0.90), fontSize = 19.0)
 
+    sliderVal4 = doVertSlider(
+      vg, 14, 400, 300, h, 120, sliderVal4,
+      startVal = 50, endVal = -30, tooltipText = "Vertical Slider 2")
+
+    renderLabel(vg, 15, 400, 430, w, h, fmt"{sliderVal4:.3f}",
+                color = gray(0.90), fontSize = 19.0)
     ############################################################
 
     uiStatePost(vg)
