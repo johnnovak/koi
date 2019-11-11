@@ -275,9 +275,9 @@ proc uiStatePost(vg: NVGContext) =
 
 # }}}
 
-# {{{ renderButton
+# {{{ doButton
 
-proc renderButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
+proc doButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
                   color: Color, tooltipText: string = ""): bool =
 
   # Hit testing
@@ -315,10 +315,10 @@ proc renderButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
     handleTooltipInsideWidget(id, tooltipText)
 
 # }}}
-# {{{ renderHorizSlider
+# {{{ doHorizSlider
 
-# Must be kept in sync with renderVertSlider!
-proc renderHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
+# Must be kept in sync with doVertSlider!
+proc doHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
                        startVal: float = 0.0, endVal: float = 1.0,
                        knobSize: float = -1.0, clickStep: float = -1.0,
                        tooltipText: string = ""): float =
@@ -462,10 +462,10 @@ proc renderHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
       gui.tooltipState = tsOff
 
 # }}}
-# {{{ renderVertSlider
+# {{{ doVertSlider
 
-# Must be kept in sync with renderHorizSlider!
-proc renderVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
+# Must be kept in sync with doHorizSlider!
+proc doVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
                       startVal: float = 0.0, endVal: float = 1.0,
                       knobSize: float = -1.0, clickStep: float = -1.0,
                       tooltipText: string = ""): float =
@@ -697,41 +697,41 @@ proc main() =
     renderLabel(vg, 1, x + 5, y, w, h, "Test buttons", color = gray(0.90),
                 fontSize = 22.0)
     y += pad
-    if renderButton(vg, 2, x, y, w, h, "Start", color = gray(0.60), "I am the first!"):
+    if doButton(vg, 2, x, y, w, h, "Start", color = gray(0.60), "I am the first!"):
       echo "button 1 pressed"
 
     y += pad
-    if renderButton(vg, 3, x, y, w, h, "Stop", color = gray(0.60), "Middle one..."):
+    if doButton(vg, 3, x, y, w, h, "Stop", color = gray(0.60), "Middle one..."):
       echo "button 2 pressed"
 
     y += pad
-    if renderButton(vg, 4, x, y, w, h, "Preferences", color = gray(0.60), "Last button"):
+    if doButton(vg, 4, x, y, w, h, "Preferences", color = gray(0.60), "Last button"):
       echo "button 3 pressed"
 
     y += pad
-    sliderVal1 = renderHorizSlider(
+    sliderVal1 = doHorizSlider(
       vg, 5, x, y, w * 1.5, h, sliderVal1,
       startVal = 0, endVal = 100, knobSize = 20, clickStep = 10.0,
       tooltipText = "Horizontal Slider 1")
 
     y += pad
-    sliderVal2 = renderHorizSlider(
+    sliderVal2 = doHorizSlider(
       vg, 6, x, y, w * 1.5, h, sliderVal2,
       startVal = 0, endVal = 1, knobSize = -1, clickStep = -1,
       tooltipText = "Horizontal 2")
 
-    sliderVal3 = renderVertSlider(
+    sliderVal3 = doVertSlider(
       vg, 7, 300, 50, h, 165, sliderVal3,
       startVal = 0.0, endVal = 100, knobSize = 20, clickStep = 10,
       tooltipText = "Vertical Slider 1")
 
-    sliderVal4 = renderVertSlider(
+    sliderVal4 = doVertSlider(
       vg, 8, 330, 50, h, 165, sliderVal4,
       startVal = 1, endVal = 0, knobSize = -1, clickStep = -1,
       tooltipText = "Vertical Slider 2")
 
     y += pad
-    sliderVal5 = renderHorizSlider(
+    sliderVal5 = doHorizSlider(
       vg, 9, x, y, w * 1.5, h, sliderVal5,
       startVal = 100, endVal = 0, knobSize = 20, clickStep = 10.0,
       tooltipText = "Horizontal Slider 3")
