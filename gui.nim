@@ -5,14 +5,7 @@ import glfw
 import nanovg
 
 
-
-# TODO util
-proc lerp(a, b, t: float): float =
-  a + (b - a) * t
-
-proc invLerp(a, b, v: float): float =
-  (v - a) / (b - a)
-
+# {{{ Types
 
 type TooltipState = enum
   tsOff, tsShowDelay, tsShow, tsFadeOutDelay, tsFadeOut
@@ -57,10 +50,14 @@ type UIState = object
   tooltipT0:        float
   tooltipText:      string
 
+# }}}
+# {{{ Utils
 
-var gui: UIState
+proc lerp(a, b, t: float): float =
+  a + (b - a) * t
 
-let RED = rgb(1.0, 0.4, 0.4)
+proc invLerp(a, b, v: float): float =
+  (v - a) / (b - a)
 
 
 proc disableCursor() =
@@ -79,6 +76,15 @@ proc setCursorPosY(y: float) =
   let (currX, _) = win.cursorPos()
   win.cursorPos = (currX, y)
 
+# }}}
+# {{{ Globals
+
+var gui: UIState
+
+let RED = rgb(1.0, 0.4, 0.4)
+
+# }}}
+# {{{ Callbacks
 
 proc mouseButtonCb(win: Window, button: MouseButton, pressed: bool,
                    modKeys: set[ModifierKey]) =
@@ -111,28 +117,16 @@ proc keyCb(win: Window, key: Key, scanCode: int32, action: KeyAction,
     of keyLeftSuper,   keyRightSuper:   gui.superDown = false
     else: discard
 
+# }}}
 
-proc createWindow(): Window =
-  var cfg = DefaultOpenglWindowConfig
-  cfg.size = (w: 1000, h: 800)
-  cfg.title = "uiState test"
-  cfg.resizable = true
-  cfg.bits = (r: 8, g: 8, b: 8, a: 8, stencil: 8, depth: 16)
-  cfg.debugContext = true
-  cfg.nMultiSamples = 4
-
-  when defined(macosx):
-    cfg.version = glv32
-    cfg.forwardCompat = true
-    cfg.profile = opCoreProfile
-
-  newWindow(cfg)
-
+# {{{ mouseInside
 
 proc mouseInside(x, y, w, h: float): bool =
   gui.mx >= x and gui.mx <= x+w and
   gui.my >= y and gui.my <= y+h
 
+# }}}
+# {{{ drawToolTip
 
 proc drawToolTip(vg: NVGContext, x, y: float, text: string,
                  alpha: float = 1.0) =
@@ -151,6 +145,8 @@ proc drawToolTip(vg: NVGContext, x, y: float, text: string,
   vg.fillColor(white(0.9 * alpha))
   discard vg.text(x + 10, y + 10, text)
 
+# }}}
+# {{{ uiStatePre
 
 proc uiStatePre() =
   gui.hotItem = 0
@@ -159,6 +155,9 @@ proc uiStatePre() =
   gui.lastmy = gui.my
   (gui.mx, gui.my) = glfw.currentContext().cursorPos()
 
+
+# }}}
+# {{{ uiStatePost
 
 proc uiStatePost(vg: NVGContext) =
   # Tooltip handling
@@ -235,6 +234,8 @@ proc uiStatePost(vg: NVGContext) =
       else:
         setCursorPosY(gui.dragY)
 
+# }}}
+# {{{ handleTooltipInsideWidget
 
 proc handleTooltipInsideWidget(id: int, tooltipText: string) =
   gui.tooltipState = gui.lastTooltipState
@@ -272,6 +273,9 @@ proc renderLabel(vg: NVGContext, id: int, x, y, w, h: float, label: string,
 #  let tw = vg.horizontalAdvance(0,0, label)
   discard vg.text(x, y+h*0.5, label)
 
+# }}}
+
+# {{{ renderButton
 
 proc renderButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
                   color: Color, tooltipText: string = ""): bool =
@@ -310,6 +314,8 @@ proc renderButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
   if inside:
     handleTooltipInsideWidget(id, tooltipText)
 
+# }}}
+# {{{ renderHorizSlider
 
 # Must be kept in sync with renderVertSlider!
 proc renderHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
@@ -455,6 +461,8 @@ proc renderHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     if gui.sliderStep:
       gui.tooltipState = tsOff
 
+# }}}
+# {{{ renderVertSlider
 
 # Must be kept in sync with renderHorizSlider!
 proc renderVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
@@ -592,6 +600,28 @@ proc renderVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     if gui.sliderStep:
       gui.tooltipState = tsOff
 
+# }}}
+
+# {{{ createWindow
+
+proc createWindow(): Window =
+  var cfg = DefaultOpenglWindowConfig
+  cfg.size = (w: 1000, h: 800)
+  cfg.title = "uiState test"
+  cfg.resizable = true
+  cfg.bits = (r: 8, g: 8, b: 8, a: 8, stencil: 8, depth: 16)
+  cfg.debugContext = true
+  cfg.nMultiSamples = 4
+
+  when defined(macosx):
+    cfg.version = glv32
+    cfg.forwardCompat = true
+    cfg.profile = opCoreProfile
+
+  newWindow(cfg)
+
+# }}}
+# {{{ loadData
 
 proc loadData(vg: NVGContext) =
   let regularFont = vg.createFont("sans", "data/Roboto-Regular.ttf")
@@ -602,6 +632,8 @@ proc loadData(vg: NVGContext) =
   if boldFont == NoFont:
     quit "Could not add font italic.\n"
 
+# }}}
+# {{{ main
 
 proc main() =
   glfw.initialize()
@@ -718,5 +750,9 @@ proc main() =
 
   glfw.terminate()
 
+# }}}
+
 
 main()
+
+# vim: et:ts=2:sw=2:fdm=marker
