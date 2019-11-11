@@ -651,11 +651,7 @@ proc doHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     newPosX = min(max(posX + dx, posMinX), posMaxX)
     let t = invLerp(posMinX, posMaxX, newPosX)
     newValue = lerp(startVal, endVal, t)
-
-    gui.x0 = if gui.dragMode == dmHidden:
-      gui.mx
-    else:
-      min(max(gui.mx, posMinX), posMaxX)
+    gui.x0 = gui.mx
 
   result = newValue
 
@@ -743,11 +739,7 @@ proc doVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     newPosY = min(max(posY + dy, posMaxY), posMinY)
     let t = invLerp(posMinY, posMaxY, newPosY)
     newValue = lerp(startVal, endVal, t)
-
-    gui.y0 = if gui.dragMode == dmHidden:
-      gui.my
-    else:
-      min(max(gui.my, posMaxY), posMinY)
+    gui.y0 = gui.my
 
   result = newValue
 
