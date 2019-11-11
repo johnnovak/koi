@@ -373,7 +373,7 @@ proc doHorizScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 
     elif insideSlider and not insideThumb and not gui.sliderStep:
       if gui.mx < thumbX: sliderClicked = -1.0
-      else:              sliderClicked =  1.0
+      else:               sliderClicked =  1.0
       gui.sliderStep = true
 
   # New thumb position & value calculation...
@@ -493,7 +493,7 @@ proc doVertScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     let t = invLerp(startVal, endVal, value)
     lerp(thumbMinY, thumbMaxY, t)
 
-  let thumbY = calcthumbY(value)
+  let thumbY = calcThumbY(value)
 
   # Hit testing
   let (insideSlider, insideThumb) =
@@ -520,7 +520,7 @@ proc doVertScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 
     elif insideSlider and not insideThumb and not gui.sliderStep:
       if gui.my < thumbY: sliderClicked = -1.0
-      else:              sliderClicked =  1.0
+      else:               sliderClicked =  1.0
       gui.sliderStep = true
 
   # New thumb position & value calculation...
