@@ -1,4 +1,4 @@
-import strformat
+import math, strformat
 
 import glad/gl
 import glfw
@@ -19,7 +19,8 @@ type DragMode = enum         # TODO remove?
   dmOff, dmNormal, dmHidden
 
 type SliderState = enum
-  ssDefault, ssDragNormal, ssDragHidden
+  ssDefault, ssDragNormal, ssDragHidden,
+  ssTrackClickFirst, ssTrackClickWait, ssTrackClickRepeat
 
 type UIState = object
   # Mouse state
@@ -44,8 +45,11 @@ type UIState = object
   x0, y0:       float
   dragMode:     DragMode    # TODO remove?
   sliderState:  SliderState
+  sliderTrackClickDir: float
+  sliderTrackClickT0:  float
+
   dragX, dragY: float
-  sliderStep:   bool
+  sliderStep:   bool  # TODO remove
 
   # Internal state for tooltips
   tooltipState:     TooltipState
@@ -285,10 +289,6 @@ proc uiStatePost(vg: NVGContext) =
 
       # Handle release slider outside of the slider
       case gui.sliderState:
-      of ssDefault: discard
-      of ssDragNormal:
-        gui.sliderState = ssDefault
-
       of ssDragHidden:
         gui.sliderState = ssDefault
         enableCursor()
@@ -296,6 +296,8 @@ proc uiStatePost(vg: NVGContext) =
           setCursorPosX(gui.dragX)
         else:
           setCursorPosY(gui.dragY)
+
+      else: gui.sliderState = ssDefault
 
 
 #    gui.sliderStep = false
@@ -377,10 +379,12 @@ proc doHorizScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     ThumbMinW = 10
 
   # Calculate current thumb position
-  var thumbSize = if thumbSize < 0: 0.000001 else: thumbSize
   let
+    thumbSize = if thumbSize < 0: 0.000001 else: thumbSize
+
     thumbW = max((w - ThumbPad*2) / (abs(startVal - endVal) / thumbSize),
                  ThumbMinW)
+
     thumbH = h - ThumbPad * 2
     thumbMinX = x + ThumbPad
     thumbMaxX = x + w - ThumbPad - thumbW
@@ -403,6 +407,18 @@ proc doHorizScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     newThumbX = thumbX
     newValue = value
 
+  proc calcNewValue(newThumbX: float): float =
+    let t = invLerp(thumbMinX, thumbMaxX, newThumbX)
+    lerp(startVal, endVal, t)
+
+  proc calcNewValueTrackClick(): float =
+    let clickStep = if clickStep < 0: abs(startVal - endVal) * 0.1
+                    else: clickStep
+
+    let (s, e) = if startVal < endVal: (startVal, endVal)
+                 else: (endVal, startVal)
+    min(max(newValue + gui.sliderTrackClickDir * clickStep, s), e)
+
   if isActive(id):
     case gui.sliderState
     of ssDefault:
@@ -413,31 +429,33 @@ proc doHorizScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
           gui.sliderState = ssDragHidden
         else:
           gui.sliderState = ssDragNormal
+      else:
+        let s = sgn(endVal - startVal).float
+        if gui.mx < thumbX: gui.sliderTrackClickDir = -1.0 * s
+        else:               gui.sliderTrackClickDir =  1.0 * s
+        gui.sliderState = ssTrackClickFirst
+        gui.sliderTrackClickT0 = getTime()
 
     of ssDragNormal:
       if gui.shiftDown:
         disableCursor()
         gui.sliderState = ssDragHidden
       else:
-        var dx = gui.mx - gui.x0
+        let dx = gui.mx - gui.x0
 
         newThumbX = min(max(thumbX + dx, thumbMinX), thumbMaxX)
-        let t = invLerp(thumbMinX, thumbMaxX, newThumbX)
-        newValue = lerp(startVal, endVal, t)
+        newValue = calcNewValue(newThumbX)
 
         gui.x0 = min(max(gui.mx, thumbMinX), thumbMaxX + thumbW)
 
     of ssDragHidden:
       if gui.shiftDown:
-        var dx = (gui.mx - gui.x0) / 8
-        if gui.altDown: dx /= 8
+        let dx = (gui.mx - gui.x0) / (if gui.altDown: 100 else: 10)
 
         newThumbX = min(max(thumbX + dx, thumbMinX), thumbMaxX)
-        let t = invLerp(thumbMinX, thumbMaxX, newThumbX)
-        newValue = lerp(startVal, endVal, t)
+        newValue = calcNewValue(newThumbX)
 
         gui.x0 = gui.mx
-
         gui.dragX = newThumbX + thumbW*0.5
         gui.dragY = -1.0
       else:
@@ -447,62 +465,22 @@ proc doHorizScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
         gui.mx = gui.dragX
         gui.x0 = gui.dragX
 
-#      if gui.shiftDown:
-#        gui.dragMode = dmHidden
-#        disableCursor()
-#      else:
-#        gui.dragMode = dmNormal
+    of ssTrackClickFirst:
+      newValue = calcNewValueTrackClick()
+      newThumbX = calcThumbX(newValue)
 
-#    elif insideSlider and not insideThumb and not gui.sliderStep:
-#      if gui.mx < thumbX: sliderClicked = -1.0
-#      else:               sliderClicked =  1.0
-#      gui.sliderStep = true
+      gui.sliderState = ssTrackClickWait
+      gui.sliderTrackClickT0 = getTime()
 
+    of ssTrackClickWait:
+      if getTime() - gui.sliderTrackClickT0 > 0.3:
+        gui.sliderState = ssTrackClickRepeat
 
-  # ...when the slider was clicked outside of the thumb
-#  if sliderClicked != 0:
-#    var clickStep = if clickStep < 0: abs(startVal - endVal) * 0.1
-#                    else: clickStep
-#    if startVal < endVal:
-#      newValue = min(max(newValue + sliderClicked * clickStep, startVal),
-#                     endVal)
-#    else:
-#      newValue = min(max(newValue - sliderClicked * clickStep, endVal),
-#                     startVal)
-#    newThumbX = calcThumbX(newValue)
-#
-  # ...when dragging slider
-  
-  # TODO
-#  if isActive(id):
-#    if gui.shiftDown and gui.dragMode == dmNormal:
-#      gui.dragMode = dmHidden
-#      disableCursor()
-#
-#    elif not gui.shiftDown and gui.dragMode == dmHidden:
-#      gui.dragMode = dmNormal
-#      enableCursor()
-#      setCursorPosX(gui.dragX)
-#      gui.mx = gui.dragX
-#      gui.x0 = gui.dragX
-#
-#    var dx = gui.mx - gui.x0
-#    if gui.shiftDown:
-#      dx /= 8
-#      if gui.altDown: dx /= 8
-#
-#    newThumbX = min(max(thumbX + dx, thumbMinX), thumbMaxX)
-#    let t = invLerp(thumbMinX, thumbMaxX, newThumbX)
-#    newValue = lerp(startVal, endVal, t)
-#
-#    gui.x0 = if gui.dragMode == dmHidden:
-#      gui.mx
-#    else:
-#      min(max(gui.mx, thumbMinX), thumbMaxX + thumbW)
-#
-#    gui.dragX = newThumbX + thumbW*0.5
-#    gui.dragY = -1.0
-
+    of ssTrackClickRepeat:
+      if getTime() - gui.sliderTrackClickT0 > 0.05:
+        newValue = calcNewValueTrackClick()
+        newThumbX = calcThumbX(newValue)
+        gui.sliderTrackClickT0 = getTime()
 
   result = newValue
 
@@ -524,7 +502,9 @@ proc doHorizScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
   # Draw thumb
   let thumbColor = case drawState
     of dsHover: gray(0.35)
-    of dsActive: RED
+    of dsActive:
+      if gui.sliderState < ssTrackClickFirst: RED
+      else: gray(0.25)
     else: gray(0.25)
 
   vg.beginPath()
@@ -542,9 +522,6 @@ proc doHorizScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 
   if isHot(id):
     handleTooltipInsideWidget(id, tooltipText)
-
-#    if gui.sliderStep:
-#      gui.tooltipState = tsOff
 
 # }}}
 # {{{ doVertScrollbar
