@@ -361,7 +361,7 @@ proc doHorizScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
   var thumbSize = if thumbSize < 0: 0.000001 else: thumbSize
   let
     thumbW = max((w - ThumbPad*2) / (abs(startVal - endVal) / thumbSize),
-                ThumbMinW)
+                 ThumbMinW)
     thumbH = h - ThumbPad * 2
     thumbMinX = x + ThumbPad
     thumbMaxX = x + w - ThumbPad - thumbW
@@ -373,21 +373,29 @@ proc doHorizScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
   let thumbX = calcThumbX(value)
 
   # Hit testing
-  let (insideSlider, insideThumb) =
-    if gui.dragMode == dmHidden and gui.activeItem == id:
-      (true, true)
-    else:
-      (mouseInside(x, y, w, h), mouseInside(thumbX, y, thumbW, h))
+#  let (insideSlider, insideThumb) =
+#    if gui.dragMode == dmHidden and gui.activeItem == id:
+#      (true, true)
+#    else:
+#      (mouseInside(x, y, w, h), mouseInside(thumbX, y, thumbW, h))
+#
+#  if insideSlider and not gui.mbLeftDown:
+#    gui.hotItem = id
 
-  if insideSlider and not gui.mbLeftDown:
-    gui.hotItem = id
+  if mouseInside(x, y, w, h):
+    setHot(id)
+    if gui.mbLeftDown and noActiveItem():
+      setActive(id)
 
-  var sliderClicked = 0.0
+  let insideThumb = mouseInside(thumbX, y, thumbW, h)
 
-  if gui.mbLeftDown and gui.activeItem == 0:
-    if insideThumb and not gui.sliderStep:
-      # Active item is only set if the thumb is being dragged
-      gui.activeItem = id
+#  var sliderClicked = 0.0
+#  echo insideThumb
+
+  if isActive(id):
+    if insideThumb: # and not gui.sliderStep:
+      # // Active item is only set if the thumb is being dragged
+#      gui.activeItem = id
       gui.x0 = gui.mx
       if gui.shiftDown:
         gui.dragMode = dmHidden
@@ -395,10 +403,10 @@ proc doHorizScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
       else:
         gui.dragMode = dmNormal
 
-    elif insideSlider and not insideThumb and not gui.sliderStep:
-      if gui.mx < thumbX: sliderClicked = -1.0
-      else:               sliderClicked =  1.0
-      gui.sliderStep = true
+#    elif insideSlider and not insideThumb and not gui.sliderStep:
+#      if gui.mx < thumbX: sliderClicked = -1.0
+#      else:               sliderClicked =  1.0
+#      gui.sliderStep = true
 
   # New thumb position & value calculation...
   var
@@ -406,65 +414,72 @@ proc doHorizScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     newValue = value
 
   # ...when the slider was clicked outside of the thumb
-  if sliderClicked != 0:
-    var clickStep = if clickStep < 0: abs(startVal - endVal) * 0.1
-                    else: clickStep
-    if startVal < endVal:
-      newValue = min(max(newValue + sliderClicked * clickStep, startVal),
-                     endVal)
-    else:
-      newValue = min(max(newValue - sliderClicked * clickStep, endVal),
-                     startVal)
-    newThumbX = calcThumbX(newValue)
-
+#  if sliderClicked != 0:
+#    var clickStep = if clickStep < 0: abs(startVal - endVal) * 0.1
+#                    else: clickStep
+#    if startVal < endVal:
+#      newValue = min(max(newValue + sliderClicked * clickStep, startVal),
+#                     endVal)
+#    else:
+#      newValue = min(max(newValue - sliderClicked * clickStep, endVal),
+#                     startVal)
+#    newThumbX = calcThumbX(newValue)
+#
   # ...when dragging slider
-  elif gui.activeItem == id:
-    if gui.shiftDown and gui.dragMode == dmNormal:
-      gui.dragMode = dmHidden
-      disableCursor()
-
-    elif not gui.shiftDown and gui.dragMode == dmHidden:
-      gui.dragMode = dmNormal
-      enableCursor()
-      setCursorPosX(gui.dragX)
-      gui.mx = gui.dragX
-      gui.x0 = gui.dragX
-
-    var dx = gui.mx - gui.x0
-    if gui.shiftDown:
-      dx /= 8
-      if gui.altDown: dx /= 8
-
-    newThumbX = min(max(thumbX + dx, thumbMinX), thumbMaxX)
-    let t = invLerp(thumbMinX, thumbMaxX, newThumbX)
-    newValue = lerp(startVal, endVal, t)
-
-    gui.x0 = if gui.dragMode == dmHidden:
-      gui.mx
-    else:
-      min(max(gui.mx, thumbMinX), thumbMaxX + thumbW)
-
-    gui.dragX = newThumbX + thumbW*0.5
-    gui.dragY = -1.0
+  
+  # TODO
+#  if isActive(id):
+#    if gui.shiftDown and gui.dragMode == dmNormal:
+#      gui.dragMode = dmHidden
+#      disableCursor()
+#
+#    elif not gui.shiftDown and gui.dragMode == dmHidden:
+#      gui.dragMode = dmNormal
+#      enableCursor()
+#      setCursorPosX(gui.dragX)
+#      gui.mx = gui.dragX
+#      gui.x0 = gui.dragX
+#
+#    var dx = gui.mx - gui.x0
+#    if gui.shiftDown:
+#      dx /= 8
+#      if gui.altDown: dx /= 8
+#
+#    newThumbX = min(max(thumbX + dx, thumbMinX), thumbMaxX)
+#    let t = invLerp(thumbMinX, thumbMaxX, newThumbX)
+#    newValue = lerp(startVal, endVal, t)
+#
+#    gui.x0 = if gui.dragMode == dmHidden:
+#      gui.mx
+#    else:
+#      min(max(gui.mx, thumbMinX), thumbMaxX + thumbW)
+#
+#    gui.dragX = newThumbX + thumbW*0.5
+#    gui.dragY = -1.0
 
 
   result = newValue
 
   # Draw slider
-  let fillColor = if gui.hotItem == id and not insideThumb:
-    if gui.activeItem <= 0: gray(0.8)
-    else: gray(0.60)
-  else: gray(0.60)
+  let drawState = if isHot(id) and noActiveItem(): dsHover
+    elif isActive(id): dsActive
+    else: dsNormal
+
+  let trackColor = case drawState
+    of dsHover: gray(0.8)
+    of dsActive: gray(0.6)
+    else: gray(0.6)
 
   vg.beginPath()
   vg.roundedRect(x, y, w, h, 5)
-  vg.fillColor(fillColor)
+  vg.fillColor(trackColor)
   vg.fill()
 
   # Draw thumb
-  let thumbColor = if gui.activeItem == id: RED
-  elif insideThumb and gui.activeItem <= 0: gray(0.35)
-  else: gray(0.25)
+  let thumbColor = case drawState
+    of dsHover: gray(0.35)
+    of dsActive: RED
+    else: gray(0.25)
 
   vg.beginPath()
   vg.roundedRect(newThumbX, y + ThumbPad, thumbW, thumbH, 5)
@@ -479,11 +494,11 @@ proc doHorizScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
   let tw = vg.horizontalAdvance(0,0, valueString)
   discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, valueString)
 
-  if insideSlider:
+  if isHot(id):
     handleTooltipInsideWidget(id, tooltipText)
 
-    if gui.sliderStep:
-      gui.tooltipState = tsOff
+#    if gui.sliderStep:
+#      gui.tooltipState = tsOff
 
 # }}}
 # {{{ doVertScrollbar
