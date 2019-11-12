@@ -154,26 +154,7 @@ proc mouseInside(x, y, w, h: float): bool =
   gui.my >= y and gui.my <= y+h
 
 # }}}
-# {{{ drawToolTip
-
-proc drawToolTip(vg: NVGContext, x, y: float, text: string,
-                 alpha: float = 1.0) =
-  let
-    w = 150.0
-    h = 40.0
-
-  vg.beginPath()
-  vg.roundedRect(x, y, w, h, 5)
-  vg.fillColor(gray(0.1, 0.88 * alpha))
-  vg.fill()
-
-  vg.fontSize(17.0)
-  vg.fontFace("sans-bold")
-  vg.textAlign(haLeft, vaMiddle)
-  vg.fillColor(white(0.9 * alpha))
-  discard vg.text(x + 10, y + 10, text)
-
-# }}}
+# {{{ Tooltip
 # {{{ handleTooltipInsideWidget
 
 proc handleTooltipInsideWidget(id: int, tooltipText: string) =
@@ -213,24 +194,33 @@ proc renderLabel(vg: NVGContext, id: int, x, y, w, h: float, label: string,
   discard vg.text(x, y+h*0.5, label)
 
 # }}}
-# {{{ uiStatePre
+# {{{ drawTooltip
 
-proc uiStatePre() =
-  gui.hotItem = 0
+proc drawTooltip(vg: NVGContext, x, y: float, text: string,
+                 alpha: float = 1.0) =
+  # TODO should moved to the drawing section once deferred drawing is
+  # implemented
+  let
+    w = 150.0
+    h = 40.0
 
-  gui.lastmx = gui.mx
-  gui.lastmy = gui.my
+  vg.beginPath()
+  vg.roundedRect(x, y, w, h, 5)
+  vg.fillColor(gray(0.1, 0.88 * alpha))
+  vg.fill()
 
-  (gui.mx, gui.my) = glfw.currentContext().cursorPos()
-
+  vg.fontSize(17.0)
+  vg.fontFace("sans-bold")
+  vg.textAlign(haLeft, vaMiddle)
+  vg.fillColor(white(0.9 * alpha))
+  discard vg.text(x + 10, y + 10, text)
 
 # }}}
-# {{{ uiStatePost
+# {{{ tooltipPost
 
-proc uiStatePost(vg: NVGContext) =
-  echo fmt"hotItem: {gui.hotItem}, activeItem: {gui.activeItem}, sliderState: {gui.sliderState}"
-
-  # Tooltip handling
+proc tooltipPost(vg: NVGContext) =
+  # TODO the actual drawing should be moved out of here once deferred drawing
+  # is implemented
   let
     ttx = gui.mx + 13
     tty = gui.my + 20
@@ -270,9 +260,38 @@ proc uiStatePost(vg: NVGContext) =
     gui.tooltipState = tsFadeOutDelay
     gui.tooltipT0 = getTime()
 
+# }}}
+# }}}
+# {{{ uiStatePre
+
+proc uiStatePre() =
+  gui.hotItem = 0
+
+  gui.lastmx = gui.mx
+  gui.lastmy = gui.my
+
+  (gui.mx, gui.my) = glfw.currentContext().cursorPos()
+
+
+# }}}
+# {{{ uiStatePost
+
+proc scrollbarPost
+
+proc uiStatePost(vg: NVGContext) =
+  echo fmt"hotItem: {gui.hotItem}, activeItem: {gui.activeItem}, sliderState: {gui.sliderState}"
+
+  tooltipPost(vg)
+
   gui.lastHotItem = gui.hotItem
 
-  # Widget deactivation
+  # Widget specific postprocessing
+  #
+  # NOTE: These must be called before the "Active state reset" section below
+  # as they usually depend on the pre-reset value of the activeItem!
+  scrollbarPost()
+
+  # Active state reset
   if gui.mbLeftDown:
     if gui.activeItem == 0 and gui.hotItem == 0:
       # LMB was pressed outside of any widget. We need to mark this as
@@ -286,36 +305,6 @@ proc uiStatePost(vg: NVGContext) =
       # This also takes care of the case when the LMB was depressed inside the
       # widget but released outside of it.
       gui.activeItem = 0
-
-      # Handle release slider outside of the slider
-      case gui.sliderState:
-      of ssDragHidden:
-        gui.sliderState = ssDefault
-        enableCursor()
-        if gui.dragX > -1.0:
-          setCursorPosX(gui.dragX)
-        else:
-          setCursorPosY(gui.dragY)
-
-      else: gui.sliderState = ssDefault
-
-
-#    gui.sliderStep = false
-
-    # Disable drag mode and reset the cursor if the left mouse button was
-    # released while in fine drag mode.
-#    case gui.dragMode:
-#    of dmOff: discard
-#    of dmNormal:
-#      gui.dragMode = dmOff
-#
-#    of dmHidden:
-#      gui.dragMode = dmOff
-#      enableCursor()
-#      if gui.dragX > -1.0:
-#        setCursorPosX(gui.dragX)
-#      else:
-#        setCursorPosY(gui.dragY)
 
 # }}}
 
@@ -360,6 +349,7 @@ proc doButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
     handleTooltipInsideWidget(id, tooltipText)
 
 # }}}
+# {{{ ScrollBar
 # {{{ doHorizScrollbar
 
 # Must be kept in sync with doVertScrollbar!
@@ -662,6 +652,23 @@ proc doVertScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     if gui.sliderStep:
       gui.tooltipState = tsOff
 
+# }}}
+# {{{ scrollbarPost
+
+proc scrollbarPost() =
+  # Handle release active scrollbar outside of the widget
+  if not gui.mbLeftDown and gui.activeItem != 0:
+    case gui.sliderState:
+    of ssDragHidden:
+      gui.sliderState = ssDefault
+      enableCursor()
+      if gui.dragX > -1.0:
+        setCursorPosX(gui.dragX)
+      else:
+        setCursorPosY(gui.dragY)
+
+    else: gui.sliderState = ssDefault
+# }}}
 # }}}
 # {{{ doHorizSlider
 
