@@ -15,8 +15,11 @@ const
   TooltipFadeOutDelay    = 0.1
   TooltipFadeOutDuration = 0.3
 
-type DragMode = enum
+type DragMode = enum         # TODO remove?
   dmOff, dmNormal, dmHidden
+
+type SliderState = enum
+  ssDefault, ssDragNormal, ssDragHidden
 
 type UIState = object
   # Mouse state
@@ -35,12 +38,12 @@ type UIState = object
   # Active & hot items
   hotItem:        int
   activeItem:     int
-  lastHotItem:    int
-  lastActiveItem: int
+  lastHotItem:    int   # TODO needed?
 
   # Internal state for slider types
   x0, y0:       float
-  dragMode:     DragMode
+  dragMode:     DragMode    # TODO remove?
+  sliderState:  SliderState
   dragX, dragY: float
   sliderStep:   bool
 
@@ -213,6 +216,7 @@ proc uiStatePre() =
 
   gui.lastmx = gui.mx
   gui.lastmy = gui.my
+
   (gui.mx, gui.my) = glfw.currentContext().cursorPos()
 
 
@@ -220,7 +224,7 @@ proc uiStatePre() =
 # {{{ uiStatePost
 
 proc uiStatePost(vg: NVGContext) =
-  echo fmt"hotItem: {gui.hotItem}, activeItem: {gui.activeItem}"
+  echo fmt"hotItem: {gui.hotItem}, activeItem: {gui.activeItem}, sliderState: {gui.sliderState}"
 
   # Tooltip handling
   let
@@ -250,51 +254,66 @@ proc uiStatePost(vg: NVGContext) =
       let alpha = 1.0 - t / TooltipFadeOutDuration
       drawToolTip(vg, ttx, tty, gui.tooltipText, alpha)
 
-  gui.lastTooltipState = gui.tooltipState
-
   # We reset the show delay state or move into the fade out state if the
   # tooltip was shown to handle the case when the user just moved the cursor
   # outside of a widget. The actual widgets are responsible to "keep alive"
   # the state every frame by restoring the tooltip state from lastTooltipState
+  gui.lastTooltipState = gui.tooltipState
+
   if gui.tooltipState == tsShowDelay:
     gui.tooltipState = tsOff
   elif gui.tooltipState == tsShow:
     gui.tooltipState = tsFadeOutDelay
     gui.tooltipT0 = getTime()
 
-
   gui.lastHotItem = gui.hotItem
-  gui.lastActiveItem = gui.activeItem
 
+  # Widget deactivation
   if gui.mbLeftDown:
     if gui.activeItem == 0 and gui.hotItem == 0:
-      # Mouse button was pressed outside of any widget. We need to mark this
-      # as a separate state so we can't just "drag into" a widget while the
-      # button is being depressed and activate it.
+      # LMB was pressed outside of any widget. We need to mark this as
+      # a separate state so we can't just "drag into" a widget while the LMB
+      # is being depressed and activate it.
       gui.activeItem = -1
   else:
-    # If the button was released inside the active widget, that has already
-    # been handled at this point--we're just clearing the active item here.
-    # This also takes care of the case when the button was depressed inside
-    # the widget but released outside of it.
-    gui.activeItem = 0
+    if gui.activeItem != 0:
+      # If the LMB was released inside the active widget, that has already
+      # been handled at this point--we're just clearing the active item here.
+      # This also takes care of the case when the LMB was depressed inside the
+      # widget but released outside of it.
+      gui.activeItem = 0
 
-    gui.sliderStep = false
+      # Handle release slider outside of the slider
+      case gui.sliderState:
+      of ssDefault: discard
+      of ssDragNormal:
+        gui.sliderState = ssDefault
+
+      of ssDragHidden:
+        gui.sliderState = ssDefault
+        enableCursor()
+        if gui.dragX > -1.0:
+          setCursorPosX(gui.dragX)
+        else:
+          setCursorPosY(gui.dragY)
+
+
+#    gui.sliderStep = false
 
     # Disable drag mode and reset the cursor if the left mouse button was
     # released while in fine drag mode.
-    case gui.dragMode:
-    of dmOff: discard
-    of dmNormal:
-      gui.dragMode = dmOff
-
-    of dmHidden:
-      gui.dragMode = dmOff
-      enableCursor()
-      if gui.dragX > -1.0:
-        setCursorPosX(gui.dragX)
-      else:
-        setCursorPosY(gui.dragY)
+#    case gui.dragMode:
+#    of dmOff: discard
+#    of dmNormal:
+#      gui.dragMode = dmOff
+#
+#    of dmHidden:
+#      gui.dragMode = dmOff
+#      enableCursor()
+#      if gui.dragX > -1.0:
+#        setCursorPosX(gui.dragX)
+#      else:
+#        setCursorPosY(gui.dragY)
 
 # }}}
 
@@ -372,16 +391,6 @@ proc doHorizScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 
   let thumbX = calcThumbX(value)
 
-  # Hit testing
-#  let (insideSlider, insideThumb) =
-#    if gui.dragMode == dmHidden and gui.activeItem == id:
-#      (true, true)
-#    else:
-#      (mouseInside(x, y, w, h), mouseInside(thumbX, y, thumbW, h))
-#
-#  if insideSlider and not gui.mbLeftDown:
-#    gui.hotItem = id
-
   if mouseInside(x, y, w, h):
     setHot(id)
     if gui.mbLeftDown and noActiveItem():
@@ -389,29 +398,66 @@ proc doHorizScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 
   let insideThumb = mouseInside(thumbX, y, thumbW, h)
 
-#  var sliderClicked = 0.0
-#  echo insideThumb
+  # New thumb position & value calculation...
+  var
+    newThumbX = thumbX
+    newValue = value
 
   if isActive(id):
-    if insideThumb: # and not gui.sliderStep:
-      # // Active item is only set if the thumb is being dragged
-#      gui.activeItem = id
-      gui.x0 = gui.mx
+    case gui.sliderState
+    of ssDefault:
+      if insideThumb:
+        gui.x0 = gui.mx
+        if gui.shiftDown:
+          disableCursor()
+          gui.sliderState = ssDragHidden
+        else:
+          gui.sliderState = ssDragNormal
+
+    of ssDragNormal:
       if gui.shiftDown:
-        gui.dragMode = dmHidden
         disableCursor()
+        gui.sliderState = ssDragHidden
       else:
-        gui.dragMode = dmNormal
+        var dx = gui.mx - gui.x0
+
+        newThumbX = min(max(thumbX + dx, thumbMinX), thumbMaxX)
+        let t = invLerp(thumbMinX, thumbMaxX, newThumbX)
+        newValue = lerp(startVal, endVal, t)
+
+        gui.x0 = min(max(gui.mx, thumbMinX), thumbMaxX + thumbW)
+
+    of ssDragHidden:
+      if gui.shiftDown:
+        var dx = (gui.mx - gui.x0) / 8
+        if gui.altDown: dx /= 8
+
+        newThumbX = min(max(thumbX + dx, thumbMinX), thumbMaxX)
+        let t = invLerp(thumbMinX, thumbMaxX, newThumbX)
+        newValue = lerp(startVal, endVal, t)
+
+        gui.x0 = gui.mx
+
+        gui.dragX = newThumbX + thumbW*0.5
+        gui.dragY = -1.0
+      else:
+        gui.sliderState = ssDragNormal
+        enableCursor()
+        setCursorPosX(gui.dragX)
+        gui.mx = gui.dragX
+        gui.x0 = gui.dragX
+
+#      if gui.shiftDown:
+#        gui.dragMode = dmHidden
+#        disableCursor()
+#      else:
+#        gui.dragMode = dmNormal
 
 #    elif insideSlider and not insideThumb and not gui.sliderStep:
 #      if gui.mx < thumbX: sliderClicked = -1.0
 #      else:               sliderClicked =  1.0
 #      gui.sliderStep = true
 
-  # New thumb position & value calculation...
-  var
-    newThumbX = thumbX
-    newValue = value
 
   # ...when the slider was clicked outside of the thumb
 #  if sliderClicked != 0:
