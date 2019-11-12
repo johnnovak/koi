@@ -50,6 +50,9 @@ type UIState = object
   tooltipT0:        float
   tooltipText:      string
 
+type DrawState = enum
+  dsNormal, dsHover, dsActive
+
 # }}}
 # {{{ Utils
 
@@ -199,6 +202,8 @@ proc uiStatePre() =
 # {{{ uiStatePost
 
 proc uiStatePost(vg: NVGContext) =
+  echo fmt"hotItem: {gui.hotItem}, activeItem: {gui.activeItem}"
+
   # Tooltip handling
   let
     ttx = gui.mx + 13
@@ -233,9 +238,9 @@ proc uiStatePost(vg: NVGContext) =
   # tooltip was shown to handle the case when the user just moved the cursor
   # outside of a widget. The actual widgets are responsible to "keep alive"
   # the state every frame by restoring the tooltip state from lastTooltipState
-  if gui.lastTooltipState == tsShowDelay:
+  if gui.tooltipState == tsShowDelay:
     gui.tooltipState = tsOff
-  elif gui.lastTooltipState == tsShow:
+  elif gui.tooltipState == tsShow:
     gui.tooltipState = tsFadeOutDelay
     gui.tooltipT0 = getTime()
 
@@ -281,23 +286,24 @@ proc doButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
                   color: Color, tooltipText: string = ""): bool =
 
   # Hit testing
-  let inside = mouseInside(x, y, w, h)
-  if inside:
-    if not gui.mbLeftDown:
-      gui.hotItem = id
-    elif gui.activeItem == 0 and gui.mbLeftDown:
-      gui.hotItem = id
+  if mouseInside(x, y, w, h):
+    gui.hotItem = id
+    if gui.mbLeftDown and gui.activeItem == 0:
       gui.activeItem = id
 
+  # Mouse button released over active button
   if not gui.mbLeftDown and gui.hotItem == id and gui.activeItem == id:
     result = true
 
   # Draw button
-  let fillColor = if gui.hotItem == id:
-    gray(0.8)
-  elif gui.activeItem == id and inside: RED
-  else:
-    color
+  let drawState = if gui.hotItem == id and gui.activeItem == 0: dsHover
+    elif gui.hotItem == id and gui.activeItem == id: dsActive
+    else: dsNormal
+
+  let fillColor = case drawState
+    of dsHover: gray(0.8)
+    of dsActive: RED
+    else: color
 
   vg.beginPath()
   vg.roundedRect(x, y, w, h, 5)
@@ -311,7 +317,7 @@ proc doButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
   let tw = vg.horizontalAdvance(0,0, label)
   discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, label)
 
-  if inside:
+  if gui.hotItem == id:
     handleTooltipInsideWidget(id, tooltipText)
 
 # }}}
@@ -878,8 +884,8 @@ proc main() =
       echo "button 1 pressed"
 
     y += pad
-    if doButton(vg, 3, x, y, w, h, "Stop", color = gray(0.60), "Middle one..."):
-      echo "button 2 pressed"
+#    if doButton(vg, 3, x, y, w, h, "Stop", color = gray(0.60), "Middle one..."):
+#      echo "button 2 pressed"
 
     y += pad
     if doButton(vg, 4, x, y, w, h, "Preferences", color = gray(0.60), "Last button"):
