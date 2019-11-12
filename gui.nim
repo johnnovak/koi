@@ -84,6 +84,24 @@ proc setCursorPosY(y: float) =
 
 var gui: UIState
 
+template isHot(id: int): bool =
+  gui.hotItem == id
+
+template setHot(id: int) =
+  gui.hotItem = id
+
+template isActive(id: int): bool =
+  gui.activeItem == id
+
+template setActive(id: int) =
+  gui.activeItem = id
+
+template isHotAndActive(id: int): bool =
+  isHot(id) and isActive(id)
+
+template noActiveItem(): bool =
+  gui.activeItem == 0
+
 let RED = rgb(1.0, 0.4, 0.4)
 
 # }}}
@@ -287,17 +305,17 @@ proc doButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
 
   # Hit testing
   if mouseInside(x, y, w, h):
-    gui.hotItem = id
-    if gui.mbLeftDown and gui.activeItem == 0:
-      gui.activeItem = id
+    setHot(id)
+    if gui.mbLeftDown and noActiveItem():
+      setActive(id)
 
-  # Mouse button released over active button
-  if not gui.mbLeftDown and gui.hotItem == id and gui.activeItem == id:
+  # LMB released over active button
+  if not gui.mbLeftDown and isHotAndActive(id):
     result = true
 
   # Draw button
-  let drawState = if gui.hotItem == id and gui.activeItem == 0: dsHover
-    elif gui.hotItem == id and gui.activeItem == id: dsActive
+  let drawState = if isHot(id) and noActiveItem(): dsHover
+    elif isHotAndActive(id): dsActive
     else: dsNormal
 
   let fillColor = case drawState
@@ -317,7 +335,7 @@ proc doButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
   let tw = vg.horizontalAdvance(0,0, label)
   discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, label)
 
-  if gui.hotItem == id:
+  if isHot(id):
     handleTooltipInsideWidget(id, tooltipText)
 
 # }}}
