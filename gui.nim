@@ -5,22 +5,37 @@ import glfw
 import nanovg
 
 
-# {{{ Types
-
-type TooltipState = enum
-  tsOff, tsShowDelay, tsShow, tsFadeOutDelay, tsFadeOut
+# {{{ Configuration
 
 const
   TooltipShowDelay       = 0.5
   TooltipFadeOutDelay    = 0.1
   TooltipFadeOutDuration = 0.3
 
-type DragMode = enum         # TODO remove?
+  ScrollBarFineDragDivisor      = 10.0
+  ScrollBarUltraFineDragDivisor = 100.0
+
+  ScrollBarTrackClickRepeatDelay   = 0.3
+  ScrollBarTrackClickRepeatTimeout = 0.05
+
+
+# }}}
+
+# {{{ Types
+
+type TooltipState = enum
+  tsOff, tsShowDelay, tsShow, tsFadeOutDelay, tsFadeOut
+
+type DragMode = enum         # TODO remove
   dmOff, dmNormal, dmHidden
 
-type SliderState = enum
-  ssDefault, ssDragNormal, ssDragHidden,
-  ssTrackClickFirst, ssTrackClickWait, ssTrackClickRepeat
+type ScrollBarState = enum
+  sbsDefault,
+  sbsDragNormal,
+  sbsDragHidden,
+  sbsTrackClickFirst,
+  sbsTrackClickDelay,
+  sbsTrackClickRepeat
 
 type UIState = object
   # Mouse state
@@ -41,17 +56,18 @@ type UIState = object
   activeItem:     int
   lastHotItem:    int   # TODO needed?
 
-  # Internal state for slider types
-  x0, y0:       float
-  dragMode:     DragMode    # TODO remove?
-  sliderState:  SliderState
-  sliderTrackClickDir: float
-  sliderTrackClickT0:  float
+  # General purpose internal widget state
+  x0, y0:       float   # for relative mouse movement calculations
+  t0:           float   # for timeouts
+  dragX, dragY: float   # for keeping track of the cursor in hidden drag mode
 
-  dragX, dragY: float
+  scrollBarState:    ScrollBarState
+  scrollBarClickDir: float
+
+  dragMode:     DragMode    # TODO remove?
   sliderStep:   bool  # TODO remove
 
-  # Internal state for tooltips
+  # Internal tooltip state
   tooltipState:     TooltipState
   lastTooltipState: TooltipState
   tooltipT0:        float
@@ -276,10 +292,10 @@ proc uiStatePre() =
 # }}}
 # {{{ uiStatePost
 
-proc scrollbarPost
+proc scrollBarPost
 
 proc uiStatePost(vg: NVGContext) =
-  echo fmt"hotItem: {gui.hotItem}, activeItem: {gui.activeItem}, sliderState: {gui.sliderState}"
+  echo fmt"hotItem: {gui.hotItem}, activeItem: {gui.activeItem}, scrollBarState: {gui.scrollBarState}"
 
   tooltipPost(vg)
 
@@ -289,7 +305,7 @@ proc uiStatePost(vg: NVGContext) =
   #
   # NOTE: These must be called before the "Active state reset" section below
   # as they usually depend on the pre-reset value of the activeItem!
-  scrollbarPost()
+  scrollBarPost()
 
   # Active state reset
   if gui.mbLeftDown:
@@ -350,10 +366,10 @@ proc doButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
 
 # }}}
 # {{{ ScrollBar
-# {{{ doHorizScrollbar
+# {{{ doHorizScrollBar
 
-# Must be kept in sync with doVertScrollbar!
-proc doHorizScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
+# Must be kept in sync with doVertScrollBar!
+proc doHorizScrollBar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
                       startVal: float = 0.0, endVal: float = 1.0,
                       thumbSize: float = -1.0, clickStep: float = -1.0,
                       tooltipText: string = ""): float =
@@ -407,29 +423,29 @@ proc doHorizScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 
     let (s, e) = if startVal < endVal: (startVal, endVal)
                  else: (endVal, startVal)
-    min(max(newValue + gui.sliderTrackClickDir * clickStep, s), e)
+    min(max(newValue + gui.scrollBarClickDir * clickStep, s), e)
 
   if isActive(id):
-    case gui.sliderState
-    of ssDefault:
+    case gui.scrollBarState
+    of sbsDefault:
       if insideThumb:
         gui.x0 = gui.mx
         if gui.shiftDown:
           disableCursor()
-          gui.sliderState = ssDragHidden
+          gui.scrollBarState = sbsDragHidden
         else:
-          gui.sliderState = ssDragNormal
+          gui.scrollBarState = sbsDragNormal
       else:
         let s = sgn(endVal - startVal).float
-        if gui.mx < thumbX: gui.sliderTrackClickDir = -1.0 * s
-        else:               gui.sliderTrackClickDir =  1.0 * s
-        gui.sliderState = ssTrackClickFirst
-        gui.sliderTrackClickT0 = getTime()
+        if gui.mx < thumbX: gui.scrollBarClickDir = -1.0 * s
+        else:               gui.scrollBarClickDir =  1.0 * s
+        gui.scrollBarState = sbsTrackClickFirst
+        gui.t0 = getTime()
 
-    of ssDragNormal:
+    of sbsDragNormal:
       if gui.shiftDown:
         disableCursor()
-        gui.sliderState = ssDragHidden
+        gui.scrollBarState = sbsDragHidden
       else:
         let dx = gui.mx - gui.x0
 
@@ -438,9 +454,11 @@ proc doHorizScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 
         gui.x0 = min(max(gui.mx, thumbMinX), thumbMaxX + thumbW)
 
-    of ssDragHidden:
+    of sbsDragHidden:
       if gui.shiftDown:
-        let dx = (gui.mx - gui.x0) / (if gui.altDown: 100 else: 10)
+        let d = if gui.altDown: ScrollBarUltraFineDragDivisor
+                else:           ScrollBarFineDragDivisor
+        let dx = (gui.mx - gui.x0) / d
 
         newThumbX = min(max(thumbX + dx, thumbMinX), thumbMaxX)
         newValue = calcNewValue(newThumbX)
@@ -449,28 +467,28 @@ proc doHorizScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
         gui.dragX = newThumbX + thumbW*0.5
         gui.dragY = -1.0
       else:
-        gui.sliderState = ssDragNormal
+        gui.scrollBarState = sbsDragNormal
         enableCursor()
         setCursorPosX(gui.dragX)
         gui.mx = gui.dragX
         gui.x0 = gui.dragX
 
-    of ssTrackClickFirst:
+    of sbsTrackClickFirst:
       newValue = calcNewValueTrackClick()
       newThumbX = calcThumbX(newValue)
 
-      gui.sliderState = ssTrackClickWait
-      gui.sliderTrackClickT0 = getTime()
+      gui.scrollBarState = sbsTrackClickDelay
+      gui.t0 = getTime()
 
-    of ssTrackClickWait:
-      if getTime() - gui.sliderTrackClickT0 > 0.3:
-        gui.sliderState = ssTrackClickRepeat
+    of sbsTrackClickDelay:
+      if getTime() - gui.t0 > ScrollBarTrackClickRepeatDelay:
+        gui.scrollBarState = sbsTrackClickRepeat
 
-    of ssTrackClickRepeat:
-      if getTime() - gui.sliderTrackClickT0 > 0.05:
+    of sbsTrackClickRepeat:
+      if getTime() - gui.t0 > ScrollBarTrackClickRepeatTimeout:
         newValue = calcNewValueTrackClick()
         newThumbX = calcThumbX(newValue)
-        gui.sliderTrackClickT0 = getTime()
+        gui.t0 = getTime()
 
   result = newValue
 
@@ -493,7 +511,7 @@ proc doHorizScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
   let thumbColor = case drawState
     of dsHover: gray(0.35)
     of dsActive:
-      if gui.sliderState < ssTrackClickFirst: RED
+      if gui.scrollBarState < sbsTrackClickFirst: RED
       else: gray(0.25)
     else: gray(0.25)
 
@@ -514,10 +532,10 @@ proc doHorizScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     handleTooltipInsideWidget(id, tooltipText)
 
 # }}}
-# {{{ doVertScrollbar
+# {{{ doVertScrollBar
 
-# Must be kept in sync with doHorizScrollbar!
-proc doVertScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
+# Must be kept in sync with doHorizScrollBar!
+proc doVertScrollBar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
                      startVal: float = 0.0, endVal: float = 1.0,
                      thumbSize: float = -1.0, clickStep: float = -1.0,
                      tooltipText: string = ""): float =
@@ -653,21 +671,21 @@ proc doVertScrollbar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
       gui.tooltipState = tsOff
 
 # }}}
-# {{{ scrollbarPost
+# {{{ scrollBarPost
 
-proc scrollbarPost() =
+proc scrollBarPost() =
   # Handle release active scrollbar outside of the widget
   if not gui.mbLeftDown and gui.activeItem != 0:
-    case gui.sliderState:
-    of ssDragHidden:
-      gui.sliderState = ssDefault
+    case gui.scrollBarState:
+    of sbsDragHidden:
+      gui.scrollBarState = sbsDefault
       enableCursor()
       if gui.dragX > -1.0:
         setCursorPosX(gui.dragX)
       else:
         setCursorPosY(gui.dragY)
 
-    else: gui.sliderState = ssDefault
+    else: gui.scrollBarState = sbsDefault
 # }}}
 # }}}
 # {{{ doHorizSlider
@@ -896,11 +914,11 @@ proc main() =
 
   ### UI DATA ################################################
   var
-    scrollbarVal1 = 30.0
-    scrollbarVal2 = 0.0
-    scrollbarVal3 = 50.0
-    scrollbarVal4 = 0.0
-    scrollbarVal5 = 50.0
+    scrollBarVal1 = 30.0
+    scrollBarVal2 = 0.0
+    scrollBarVal3 = 50.0
+    scrollBarVal4 = 0.0
+    scrollBarVal5 = 50.0
 
     sliderVal1 = 50.0
     sliderVal2 = -20.0
@@ -954,35 +972,35 @@ proc main() =
     if doButton(vg, 4, x, y, w, h, "Preferences", color = gray(0.60), "Last button"):
       echo "button 3 pressed"
 
-    # Scrollbars
+    # ScrollBars
 
     y += pad * 2
-    scrollbarVal1 = doHorizScrollbar(
-      vg, 5, x, y, w * 1.5, h, scrollbarVal1,
+    scrollBarVal1 = doHorizScrollBar(
+      vg, 5, x, y, w * 1.5, h, scrollBarVal1,
       startVal = 0, endVal = 100, thumbSize = 20, clickStep = 10.0,
-      tooltipText = "Horizontal Scrollbar 1")
+      tooltipText = "Horizontal ScrollBar 1")
 
     y += pad
-    scrollbarVal2 = doHorizScrollbar(
-      vg, 6, x, y, w * 1.5, h, scrollbarVal2,
+    scrollBarVal2 = doHorizScrollBar(
+      vg, 6, x, y, w * 1.5, h, scrollBarVal2,
       startVal = 0, endVal = 1, thumbSize = -1, clickStep = -1,
-      tooltipText = "Horizontal Scrollbar 2")
+      tooltipText = "Horizontal ScrollBar 2")
 
-    scrollbarVal3 = doVertScrollbar(
-      vg, 7, 320, 60, h, 140, scrollbarVal3,
+    scrollBarVal3 = doVertScrollBar(
+      vg, 7, 320, 60, h, 140, scrollBarVal3,
       startVal = 0.0, endVal = 100, thumbSize = 20, clickStep = 10,
-      tooltipText = "Vertical Scrollbar 1")
+      tooltipText = "Vertical ScrollBar 1")
 
-    scrollbarVal4 = doVertScrollbar(
-      vg, 8, 350, 60, h, 140, scrollbarVal4,
+    scrollBarVal4 = doVertScrollBar(
+      vg, 8, 350, 60, h, 140, scrollBarVal4,
       startVal = 1, endVal = 0, thumbSize = -1, clickStep = -1,
-      tooltipText = "Vertical Scrollbar 2")
+      tooltipText = "Vertical ScrollBar 2")
 
     y += pad
-    scrollbarVal5 = doHorizScrollbar(
-      vg, 9, x, y, w * 1.5, h, scrollbarVal5,
+    scrollBarVal5 = doHorizScrollBar(
+      vg, 9, x, y, w * 1.5, h, scrollBarVal5,
       startVal = 100, endVal = 0, thumbSize = 20, clickStep = 10.0,
-      tooltipText = "Horizontal Scrollbar 3")
+      tooltipText = "Horizontal ScrollBar 3")
 
     # Sliders
 
