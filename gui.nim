@@ -12,11 +12,13 @@ const
   TooltipFadeOutDelay    = 0.1
   TooltipFadeOutDuration = 0.3
 
-  ScrollBarFineDragDivisor      = 10.0
-  ScrollBarUltraFineDragDivisor = 100.0
-
+  ScrollBarFineDragDivisor         = 10.0
+  ScrollBarUltraFineDragDivisor    = 100.0
   ScrollBarTrackClickRepeatDelay   = 0.3
   ScrollBarTrackClickRepeatTimeout = 0.05
+
+  SliderFineDragDivisor      = 10.0
+  SliderUltraFineDragDivisor = 100.0
 
 # }}}
 
@@ -35,6 +37,10 @@ type ScrollBarState = enum
   sbsTrackClickFirst,
   sbsTrackClickDelay,
   sbsTrackClickRepeat
+
+type SliderState = enum
+  ssDefault,
+  ssDragHidden
 
 type UIState = object
   # Mouse state
@@ -55,16 +61,18 @@ type UIState = object
   activeItem:     int
   lastHotItem:    int   # TODO needed?
 
-  # General purpose internal widget state
+  # General purpose widget states
   x0, y0:       float   # for relative mouse movement calculations
   t0:           float   # for timeouts
   dragX, dragY: float   # for keeping track of the cursor in hidden drag mode
 
+  # Widget-specific states
   scrollBarState:    ScrollBarState
   scrollBarClickDir: float
 
+  sliderState:  SliderState
+
   dragMode:     DragMode    # TODO remove?
-  sliderStep:   bool  # TODO remove
 
   # Internal tooltip state
   tooltipState:     TooltipState
@@ -292,6 +300,7 @@ proc uiStatePre() =
 # {{{ uiStatePost
 
 proc scrollBarPost
+proc sliderPost
 
 proc uiStatePost(vg: NVGContext) =
   echo fmt"hotItem: {gui.hotItem}, activeItem: {gui.activeItem}, scrollBarState: {gui.scrollBarState}"
@@ -305,6 +314,7 @@ proc uiStatePost(vg: NVGContext) =
   # NOTE: These must be called before the "Active state reset" section below
   # as they usually depend on the pre-reset value of the activeItem!
   scrollBarPost()
+  sliderPost()
 
   # Active state reset
   if gui.mbLeftDown:
@@ -400,6 +410,7 @@ proc doHorizScrollBar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 
   let thumbX = calcThumbX(value)
 
+  # Hit testing
   if mouseInside(x, y, w, h):
     setHot(id)
     if gui.mbLeftDown and noActiveItem():
@@ -407,7 +418,7 @@ proc doHorizScrollBar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 
   let insideThumb = mouseInside(thumbX, y, thumbW, h)
 
-  # New thumb position & value calculation...
+  # New thumb position & value calculation
   var
     newThumbX = thumbX
     newValue = value
@@ -564,6 +575,7 @@ proc doVertScrollBar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 
   let thumbY = calcThumbY(value)
 
+  # Hit testing
   if mouseInside(x, y, w, h):
     setHot(id)
     if gui.mbLeftDown and noActiveItem():
@@ -571,7 +583,7 @@ proc doVertScrollBar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 
   let insideThumb = mouseInside(x, thumbY, w, thumbH)
 
-  # New thumb position & value calculation...
+  # New thumb position & value calculation
   var
     newThumbY = thumbY
     newValue = value
@@ -687,7 +699,7 @@ proc doVertScrollBar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     handleTooltipInsideWidget(id, tooltipText)
 
 # }}}
-# {{{ scrollBarPos
+# {{{ scrollBarPost
 
 proc scrollBarPost() =
   # Handle release active scrollbar outside of the widget
@@ -702,8 +714,10 @@ proc scrollBarPost() =
         setCursorPosY(gui.dragY)
 
     else: gui.scrollBarState = sbsDefault
+
 # }}}
 # }}}
+# {{{ Slider
 # {{{ doHorizSlider
 
 proc doHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
@@ -727,42 +741,59 @@ proc doHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
   let posX = calcPosX(value)
 
   # Hit testing
-  let inside = mouseInside(x, y, w, h)
+  if mouseInside(x, y, w, h):
+    setHot(id)
+    if gui.mbLeftDown and noActiveItem():
+      setActive(id)
 
-  if inside:
-    if not gui.mbLeftDown:
-      gui.hotItem = id
-    elif gui.mbLeftDown and gui.activeItem == 0:
-      gui.activeItem = id
-      gui.x0 = gui.mx
-      gui.dragMode = dmHidden
-      gui.dragX = gui.mx
-      gui.dragY = -1.0
-      disableCursor()
+#  if inside:
+#    if not gui.mbLeftDown:
+#      gui.hotItem = id
+#    elif gui.mbLeftDown and gui.activeItem == 0:
+#      gui.activeItem = id
+#      gui.x0 = gui.mx
+#      gui.dragMode = dmHidden
+#      gui.dragX = gui.mx
+#      gui.dragY = -1.0
+#      disableCursor()
 
   # New position & value calculation
   var
     newPosX = posX
     newValue = value
 
-  if gui.activeItem == id:
-    var dx = gui.mx - gui.x0
-    if gui.shiftDown:
-      dx /= 8
-      if gui.altDown: dx /= 8
+  if isActive(id):
+    case gui.sliderState:
+    of ssDefault:
+      gui.x0 = gui.mx
+      gui.dragX = gui.mx
+      gui.dragY = -1.0
+      disableCursor()
+      gui.sliderState = ssDragHidden
 
-    newPosX = min(max(posX + dx, posMinX), posMaxX)
-    let t = invLerp(posMinX, posMaxX, newPosX)
-    newValue = lerp(startVal, endVal, t)
-    gui.x0 = gui.mx
+    of ssDragHidden:
+      let d = if gui.shiftDown:
+        if gui.altDown: SliderUltraFineDragDivisor
+        else:           SliderFineDragDivisor
+      else: 1
+
+      let dx = (gui.mx - gui.x0) / d
+
+      newPosX = min(max(posX + dx, posMinX), posMaxX)
+      let t = invLerp(posMinX, posMaxX, newPosX)
+      newValue = lerp(startVal, endVal, t)
+      gui.x0 = gui.mx
 
   result = newValue
 
-  # Draw slider background
-  let fillColor = if gui.hotItem == id:
-    if gui.activeItem <= 0: gray(0.8)
+  # Draw slider track
+  let drawState = if isHot(id) and noActiveItem(): dsHover
+    elif isActive(id): dsActive
+    else: dsNormal
+
+  let fillColor = case drawState
+    of dsHover: gray(0.8)
     else: gray(0.60)
-  else: gray(0.60)
 
   vg.beginPath()
   vg.roundedRect(x, y, w, h, 5)
@@ -770,9 +801,10 @@ proc doHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
   vg.fill()
 
   # Draw slider
-  let sliderColor = if gui.activeItem == id: RED
-  elif inside and gui.activeItem <= 0: gray(0.35)
-  else: gray(0.25)
+  let sliderColor = case drawState
+    of dsHover: gray(0.35)
+    of dsActive: RED
+    else: gray(0.25)
 
   vg.beginPath()
   vg.roundedRect(x + SliderPad, y + SliderPad,
@@ -788,7 +820,7 @@ proc doHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
   let tw = vg.horizontalAdvance(0,0, valueString)
   discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, valueString)
 
-  if inside:
+  if isHot(id):
     handleTooltipInsideWidget(id, tooltipText)
 
 # }}}
@@ -871,6 +903,24 @@ proc doVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
   if inside:
     handleTooltipInsideWidget(id, tooltipText)
 
+# }}}
+# {{{ sliderPost
+
+proc sliderPost() =
+  # Handle release active slider outside of the widget
+  if not gui.mbLeftDown and gui.activeItem != 0:
+    case gui.sliderState:
+    of ssDragHidden:
+      gui.sliderState = ssDefault
+      enableCursor()
+      if gui.dragX > -1.0:
+        setCursorPosX(gui.dragX)
+      else:
+        setCursorPosY(gui.dragY)
+
+    else: gui.sliderState = ssDefault
+
+# }}}
 # }}}
 
 # {{{ createWindow
