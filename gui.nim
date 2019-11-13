@@ -1077,8 +1077,8 @@ proc main() =
       echo "button 1 pressed"
 
     y += pad
-#    if doButton(vg, 3, x, y, w, h, "Stop", color = gray(0.60), "Middle one..."):
-#      echo "button 2 pressed"
+    if doButton(vg, 3, x, y, w, h, "Stop", color = gray(0.60), "Middle one..."):
+      echo "button 2 pressed"
 
     y += pad
     if doButton(vg, 4, x, y, w, h, "Preferences", color = gray(0.60), "Last button"):
