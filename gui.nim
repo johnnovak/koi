@@ -27,9 +27,6 @@ const
 type TooltipState = enum
   tsOff, tsShowDelay, tsShow, tsFadeOutDelay, tsFadeOut
 
-type DragMode = enum         # TODO remove
-  dmOff, dmNormal, dmHidden
-
 type ScrollBarState = enum
   sbsDefault,
   sbsDragNormal,
@@ -59,26 +56,24 @@ type UIState = object
   # Active & hot items
   hotItem:        int
   activeItem:     int
-  lastHotItem:    int   # TODO needed?
+  lastHotItem:    int
 
   # General purpose widget states
-  x0, y0:       float   # for relative mouse movement calculations
-  t0:           float   # for timeouts
-  dragX, dragY: float   # for keeping track of the cursor in hidden drag mode
+  x0, y0:         float   # for relative mouse movement calculations
+  t0:             float   # for timeouts
+  dragX, dragY:   float   # for keeping track of the cursor in hidden drag mode
 
   # Widget-specific states
   scrollBarState:    ScrollBarState
   scrollBarClickDir: float
 
-  sliderState:  SliderState
-
-  dragMode:     DragMode    # TODO remove?
+  sliderState:       SliderState
 
   # Internal tooltip state
-  tooltipState:     TooltipState
-  lastTooltipState: TooltipState
-  tooltipT0:        float
-  tooltipText:      string
+  tooltipState:      TooltipState
+  lastTooltipState:  TooltipState
+  tooltipT0:         float
+  tooltipText:       string
 
 type DrawState = enum
   dsNormal, dsHover, dsActive
@@ -190,10 +185,12 @@ proc handleTooltipInsideWidget(id: int, tooltipText: string) =
     if cursorMoved:
       gui.tooltipT0 = getTime()
 
-  # Hide the tooltip immediately if the LMB was pressed inside the widget
+  # Hide the tooltip immediately if the LMB is pressed inside the widget
   if gui.mbLeftDown and gui.activeItem > 0:
     gui.tooltipState = tsOff
 
+  # Start the show delay if we just entered the widget with LMB up and no
+  # other tooltip is being shown
   elif gui.tooltipState == tsOff and not gui.mbLeftDown and
        gui.lastHotItem != id:
     gui.tooltipState = tsShowDelay
@@ -272,9 +269,10 @@ proc tooltipPost(vg: NVGContext) =
       drawToolTip(vg, ttx, tty, gui.tooltipText, alpha)
 
   # We reset the show delay state or move into the fade out state if the
-  # tooltip was shown to handle the case when the user just moved the cursor
-  # outside of a widget. The actual widgets are responsible to "keep alive"
-  # the state every frame by restoring the tooltip state from lastTooltipState
+  # tooltip is being shown; this is to handle the case when the user just
+  # moved the cursor outside of a widget. The actual widgets are responsible
+  # for "keeping the state alive" every frame if the widget is hot/active by
+  # restoring the tooltip state from lastTooltipState.
   gui.lastTooltipState = gui.tooltipState
 
   if gui.tooltipState == tsShowDelay:
@@ -465,6 +463,12 @@ proc doHorizScrollBar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
         gui.x0 = min(max(gui.mx, thumbMinX), thumbMaxX + thumbW)
 
     of sbsDragHidden:
+      # Technically, the cursor can move outside the widget when it's disabled
+      # in "drag hidden" mode, and then it will cease to be "hot". But in
+      # order to not break the tooltip processing logic, we're making here
+      # sure the widget is always hot in "drag hidden" mode.
+      setHot(id)
+
       if gui.shiftDown:
         let d = if gui.altDown: ScrollBarUltraFineDragDivisor
                 else:           ScrollBarFineDragDivisor
@@ -630,6 +634,12 @@ proc doVertScrollBar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
         gui.y0 = min(max(gui.my, thumbMinY), thumbMaxY + thumbH)
 
     of sbsDragHidden:
+      # Technically, the cursor can move outside the widget when it's disabled
+      # in "drag hidden" mode, and then it will cease to be "hot". But in
+      # order to not break the tooltip processing logic, we're making here
+      # sure the widget is always hot in "drag hidden" mode.
+      setHot(id)
+
       if gui.shiftDown:
         let d = if gui.altDown: ScrollBarUltraFineDragDivisor
                 else:           ScrollBarFineDragDivisor
@@ -746,17 +756,6 @@ proc doHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     if gui.mbLeftDown and noActiveItem():
       setActive(id)
 
-#  if inside:
-#    if not gui.mbLeftDown:
-#      gui.hotItem = id
-#    elif gui.mbLeftDown and gui.activeItem == 0:
-#      gui.activeItem = id
-#      gui.x0 = gui.mx
-#      gui.dragMode = dmHidden
-#      gui.dragX = gui.mx
-#      gui.dragY = -1.0
-#      disableCursor()
-
   # New position & value calculation
   var
     newPosX = posX
@@ -772,6 +771,12 @@ proc doHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
       gui.sliderState = ssDragHidden
 
     of ssDragHidden:
+      # Technically, the cursor can move outside the widget when it's disabled
+      # in "drag hidden" mode, and then it will cease to be "hot". But in
+      # order to not break the tooltip processing logic, we're making here
+      # sure the widget is always hot in "drag hidden" mode.
+      setHot(id)
+
       let d = if gui.shiftDown:
         if gui.altDown: SliderUltraFineDragDivisor
         else:           SliderFineDragDivisor
@@ -827,8 +832,8 @@ proc doHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 # {{{ doVertSlider
 
 proc doVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
-                  startVal: float = 0.0, endVal: float = 1.0,
-                  tooltipText: string = ""): float =
+                   startVal: float = 0.0, endVal: float = 1.0,
+                   tooltipText: string = ""): float =
 
   assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
          (endVal   < startVal and value >= endVal   and value <= startVal)
@@ -847,42 +852,54 @@ proc doVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
   let posY = calcPosY(value)
 
   # Hit testing
-  let inside = mouseInside(x, y, w, h)
-
-  if inside:
-    if not gui.mbLeftDown:
-      gui.hotItem = id
-    elif gui.mbLeftDown and gui.activeItem == 0:
-      gui.activeItem = id
-      gui.y0 = gui.my
-      gui.dragMode = dmHidden
-      gui.dragX = -1.0
-      gui.dragY = gui.my
-      disableCursor()
+  if mouseInside(x, y, w, h):
+    setHot(id)
+    if gui.mbLeftDown and noActiveItem():
+      setActive(id)
 
   # New position & value calculation
   var
     newPosY = posY
     newValue = value
 
-  if gui.activeItem == id:
-    var dy = gui.my - gui.y0
-    if gui.shiftDown:
-      dy /= 8
-      if gui.altDown: dy /= 8
+  if isActive(id):
+    case gui.sliderState:
+    of ssDefault:
+      gui.y0 = gui.my
+      gui.dragX = -1.0
+      gui.dragY = gui.my
+      disableCursor()
+      gui.sliderState = ssDragHidden
 
-    newPosY = min(max(posY + dy, posMaxY), posMinY)
-    let t = invLerp(posMinY, posMaxY, newPosY)
-    newValue = lerp(startVal, endVal, t)
-    gui.y0 = gui.my
+    of ssDragHidden:
+      # Technically, the cursor can move outside the widget when it's disabled
+      # in "drag hidden" mode, and then it will cease to be "hot". But in
+      # order to not break the tooltip processing logic, we're making here
+      # sure the widget is always hot in "drag hidden" mode.
+      setHot(id)
+
+      let d = if gui.shiftDown:
+        if gui.altDown: SliderUltraFineDragDivisor
+        else:           SliderFineDragDivisor
+      else: 1
+
+      let dy = (gui.my - gui.y0) / d
+
+      newPosY = min(max(posY + dy, posMaxY), posMinY)
+      let t = invLerp(posMinY, posMaxY, newPosY)
+      newValue = lerp(startVal, endVal, t)
+      gui.y0 = gui.my
 
   result = newValue
 
-  # Draw slider background
-  let fillColor = if gui.hotItem == id:
-    if gui.activeItem <= 0: gray(0.8)
+  # Draw slider track
+  let drawState = if isHot(id) and noActiveItem(): dsHover
+    elif isActive(id): dsActive
+    else: dsNormal
+
+  let fillColor = case drawState
+    of dsHover: gray(0.8)
     else: gray(0.60)
-  else: gray(0.60)
 
   vg.beginPath()
   vg.roundedRect(x, y, w, h, 5)
@@ -890,17 +907,20 @@ proc doVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
   vg.fill()
 
   # Draw slider
-  let sliderColor = if gui.activeItem == id: RED
-  elif inside and gui.activeItem <= 0: gray(0.35)
-  else: gray(0.25)
+  let sliderColor = case drawState
+    of dsHover: gray(0.35)
+    of dsActive: RED
+    else: gray(0.25)
 
   vg.beginPath()
+#  vg.roundedRect(x + SliderPad, y + SliderPad,
+#                 newPosX - x - SliderPad, h - SliderPad*2, 5)
   vg.roundedRect(x + SliderPad, newPosY,
                  w - SliderPad*2, y + h - newPosY - SliderPad, 5)
   vg.fillColor(sliderColor)
   vg.fill()
 
-  if inside:
+  if isHot(id):
     handleTooltipInsideWidget(id, tooltipText)
 
 # }}}
