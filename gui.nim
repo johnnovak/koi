@@ -577,7 +577,7 @@ proc doHorizScrollBar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 
   result = newValue
 
-  # Draw slider
+  # Draw track
   let drawState = if isHot(id) and noActiveItem(): dsHover
     elif isActive(id): dsActive
     else: dsNormal
@@ -761,7 +761,7 @@ proc doVertScrollBar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 
   result = newValue
 
-  # Draw slider
+  # Draw track
   let drawState = if isHot(id) and noActiveItem(): dsHover
     elif isActive(id): dsActive
     else: dsNormal
@@ -997,8 +997,6 @@ proc doVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     else:        GRAY_LO
 
   vg.beginPath()
-#  vg.roundedRect(x + SliderPad, y + SliderPad,
-#                 newPosX - x - SliderPad, h - SliderPad*2, 5)
   vg.roundedRect(x + SliderPad, newPosY,
                  w - SliderPad*2, y + h - newPosY - SliderPad, 5)
   vg.fillColor(sliderColor)
