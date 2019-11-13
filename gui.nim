@@ -445,8 +445,8 @@ proc doHorizScrollBar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
           gui.scrollBarState = sbsDragNormal
       else:
         let s = sgn(endVal - startVal).float
-        if gui.mx < thumbX: gui.scrollBarClickDir = -1.0 * s
-        else:               gui.scrollBarClickDir =  1.0 * s
+        if gui.mx < thumbX: gui.scrollBarClickDir = -1 * s
+        else:               gui.scrollBarClickDir =  1 * s
         gui.scrollBarState = sbsTrackClickFirst
         gui.t0 = getTime()
 
@@ -499,9 +499,22 @@ proc doHorizScrollBar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
         gui.scrollBarState = sbsTrackClickRepeat
 
     of sbsTrackClickRepeat:
-      if getTime() - gui.t0 > ScrollBarTrackClickRepeatTimeout:
-        newValue = calcNewValueTrackClick()
-        newThumbX = calcThumbX(newValue)
+      if isHot(id):
+        if getTime() - gui.t0 > ScrollBarTrackClickRepeatTimeout:
+          newValue = calcNewValueTrackClick()
+          newThumbX = calcThumbX(newValue)
+
+          if gui.scrollBarClickDir * sgn(endVal - startVal).float > 0:
+            if newThumbX + thumbW > gui.mx:
+              newThumbX = thumbX
+              newValue = value
+          else:
+            if newThumbX < gui.mx:
+              newThumbX = thumbX
+              newValue = value
+
+          gui.t0 = getTime()
+      else:
         gui.t0 = getTime()
 
   result = newValue
@@ -616,8 +629,8 @@ proc doVertScrollBar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
           gui.scrollBarState = sbsDragNormal
       else:
         let s = sgn(endVal - startVal).float
-        if gui.my < thumbY: gui.scrollBarClickDir = -1.0 * s
-        else:               gui.scrollBarClickDir =  1.0 * s
+        if gui.my < thumbY: gui.scrollBarClickDir = -1 * s
+        else:               gui.scrollBarClickDir =  1 * s
         gui.scrollBarState = sbsTrackClickFirst
         gui.t0 = getTime()
 
@@ -670,9 +683,22 @@ proc doVertScrollBar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
         gui.scrollBarState = sbsTrackClickRepeat
 
     of sbsTrackClickRepeat:
-      if getTime() - gui.t0 > ScrollBarTrackClickRepeatTimeout:
-        newValue = calcNewValueTrackClick()
-        newThumbY = calcThumbY(newValue)
+      if isHot(id):
+        if getTime() - gui.t0 > ScrollBarTrackClickRepeatTimeout:
+          newValue = calcNewValueTrackClick()
+          newThumbY = calcThumbY(newValue)
+
+          if gui.scrollBarClickDir * sgn(endVal - startVal).float > 0:
+            if newThumbY + thumbH > gui.my:
+              newThumbY = thumbY
+              newValue = value
+          else:
+            if newThumbY < gui.my:
+              newThumbY = thumbY
+              newValue = value
+
+          gui.t0 = getTime()
+      else:
         gui.t0 = getTime()
 
   result = newValue
