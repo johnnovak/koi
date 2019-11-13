@@ -18,7 +18,6 @@ const
   ScrollBarTrackClickRepeatDelay   = 0.3
   ScrollBarTrackClickRepeatTimeout = 0.05
 
-
 # }}}
 
 # {{{ Types
@@ -548,14 +547,14 @@ proc doVertScrollBar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 
   const
     ThumbPad = 3
-    thumbMinH = 10
+    ThumbMinH = 10
 
   # Calculate current thumb position
-  var thumbSize = if thumbSize < 0: 0.000001 else: thumbSize
   let
-    thumbH = max((h - ThumbPad*2) / (abs(startVal - endVal) / thumbSize),
-                thumbMinH)
+    thumbSize = if thumbSize < 0: 0.000001 else: thumbSize
     thumbW = w - ThumbPad * 2
+    thumbH = max((h - ThumbPad*2) / (abs(startVal - endVal) / thumbSize),
+                 ThumbMinH)
     thumbMinY = y + ThumbPad
     thumbMaxY = y + h - ThumbPad - thumbH
 
@@ -565,113 +564,130 @@ proc doVertScrollBar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 
   let thumbY = calcThumbY(value)
 
-  # Hit testing
-  let (insideSlider, insideThumb) =
-    if gui.dragMode == dmHidden and gui.activeItem == id:
-      (true, true)
-    else:
-      (mouseInside(x, y, w, h), mouseInside(x, thumbY, w, thumbH))
+  if mouseInside(x, y, w, h):
+    setHot(id)
+    if gui.mbLeftDown and noActiveItem():
+      setActive(id)
 
-  if insideSlider and not gui.mbLeftDown:
-    gui.hotItem = id
-
-  var sliderClicked = 0.0
-
-  if gui.mbLeftDown and gui.activeItem == 0:
-    if insideThumb and not gui.sliderStep:
-      # Active item is only set if the thumb is being dragged
-      gui.activeItem = id
-      gui.y0 = gui.my
-      if gui.shiftDown:
-        gui.dragMode = dmHidden
-        disableCursor()
-      else:
-        gui.dragMode = dmNormal
-
-    elif insideSlider and not insideThumb and not gui.sliderStep:
-      if gui.my < thumbY: sliderClicked = -1.0
-      else:               sliderClicked =  1.0
-      gui.sliderStep = true
+  let insideThumb = mouseInside(x, thumbY, w, thumbH)
 
   # New thumb position & value calculation...
   var
     newThumbY = thumbY
     newValue = value
 
-  # ...when the slider was clicked outside of the thumb
-  if sliderClicked != 0:
-    var clickStep = if clickStep < 0: abs(startVal - endVal) * 0.1
-                    else: clickStep
-    if startVal < endVal:
-      newValue = min(max(newValue + sliderClicked * clickStep, startVal),
-                     endVal)
-    else:
-      newValue = min(max(newValue - sliderClicked * clickStep, endVal),
-                     startVal)
-    newThumbY = calcThumbY(newValue)
-
-  # ...when dragging slider
-  elif gui.activeItem == id:
-    if gui.shiftDown and gui.dragMode == dmNormal:
-      gui.dragMode = dmHidden
-      disableCursor()
-
-    elif not gui.shiftDown and gui.dragMode == dmHidden:
-      gui.dragMode = dmNormal
-      enableCursor()
-      setCursorPosY(gui.dragY)
-      gui.my = gui.dragY
-      gui.y0 = gui.dragY
-
-    var dy = gui.my - gui.y0
-    if gui.shiftDown:
-      dy /= 8
-      if gui.altDown: dy /= 8
-
-    newThumbY = min(max(thumbY + dy, thumbMinY), thumbMaxY)
+  proc calcNewValue(newThumbY: float): float =
     let t = invLerp(thumbMinY, thumbMaxY, newThumbY)
-    newValue = lerp(startVal, endVal, t)
+    lerp(startVal, endVal, t)
 
-    gui.y0 = if gui.dragMode == dmHidden:
-      gui.my
-    else:
-      min(max(gui.my, thumbMinY), thumbMaxY + thumbH)
+  proc calcNewValueTrackClick(): float =
+    let clickStep = if clickStep < 0: abs(startVal - endVal) * 0.1
+                    else: clickStep
 
-    gui.dragX = -1.0
-    gui.dragY = newThumbY + thumbH*0.5
+    let (s, e) = if startVal < endVal: (startVal, endVal)
+                 else: (endVal, startVal)
+    min(max(newValue + gui.scrollBarClickDir * clickStep, s), e)
 
+  if isActive(id):
+    case gui.scrollBarState
+    of sbsDefault:
+      if insideThumb:
+        gui.y0 = gui.my
+        if gui.shiftDown:
+          disableCursor()
+          gui.scrollBarState = sbsDragHidden
+        else:
+          gui.scrollBarState = sbsDragNormal
+      else:
+        let s = sgn(endVal - startVal).float
+        if gui.my < thumbY: gui.scrollBarClickDir = -1.0 * s
+        else:               gui.scrollBarClickDir =  1.0 * s
+        gui.scrollBarState = sbsTrackClickFirst
+        gui.t0 = getTime()
+
+    of sbsDragNormal:
+      if gui.shiftDown:
+        disableCursor()
+        gui.scrollBarState = sbsDragHidden
+      else:
+        let dy = gui.my - gui.y0
+
+        newThumbY = min(max(thumbY + dy, thumbMinY), thumbMaxY)
+        newValue = calcNewValue(newThumbY)
+
+        gui.y0 = min(max(gui.my, thumbMinY), thumbMaxY + thumbH)
+
+    of sbsDragHidden:
+      if gui.shiftDown:
+        let d = if gui.altDown: ScrollBarUltraFineDragDivisor
+                else:           ScrollBarFineDragDivisor
+        let dy = (gui.my - gui.y0) / d
+
+        newThumbY = min(max(thumbY + dy, thumbMinY), thumbMaxY)
+        newValue = calcNewValue(newThumbY)
+
+        gui.y0 = gui.my
+        gui.dragX = -1.0
+        gui.dragY = newThumbY + thumbH*0.5
+      else:
+        gui.scrollBarState = sbsDragNormal
+        enableCursor()
+        setCursorPosY(gui.dragY)
+        gui.my = gui.dragY
+        gui.y0 = gui.dragY
+
+    of sbsTrackClickFirst:
+      newValue = calcNewValueTrackClick()
+      newThumbY = calcThumbY(newValue)
+
+      gui.scrollBarState = sbsTrackClickDelay
+      gui.t0 = getTime()
+
+    of sbsTrackClickDelay:
+      if getTime() - gui.t0 > ScrollBarTrackClickRepeatDelay:
+        gui.scrollBarState = sbsTrackClickRepeat
+
+    of sbsTrackClickRepeat:
+      if getTime() - gui.t0 > ScrollBarTrackClickRepeatTimeout:
+        newValue = calcNewValueTrackClick()
+        newThumbY = calcThumbY(newValue)
+        gui.t0 = getTime()
 
   result = newValue
 
   # Draw slider
-  let fillColor = if gui.hotItem == id and not insideThumb:
-    if gui.activeItem <= 0: gray(0.8)
-    else: gray(0.60)
-  else: gray(0.60)
+  let drawState = if isHot(id) and noActiveItem(): dsHover
+    elif isActive(id): dsActive
+    else: dsNormal
+
+  let trackColor = case drawState
+    of dsHover: gray(0.8)
+    of dsActive: gray(0.6)
+    else: gray(0.6)
 
   vg.beginPath()
   vg.roundedRect(x, y, w, h, 5)
-  vg.fillColor(fillColor)
+  vg.fillColor(trackColor)
   vg.fill()
 
   # Draw thumb
-  let thumbColor = if gui.activeItem == id: RED
-  elif insideThumb and gui.activeItem <= 0: gray(0.35)
-  else: gray(0.25)
+  let thumbColor = case drawState
+    of dsHover: gray(0.35)
+    of dsActive:
+      if gui.scrollBarState < sbsTrackClickFirst: RED
+      else: gray(0.25)
+    else: gray(0.25)
 
   vg.beginPath()
   vg.roundedRect(x + ThumbPad, newThumbY, thumbW, thumbH, 5)
   vg.fillColor(thumbColor)
   vg.fill()
 
-  if insideSlider:
+  if isHot(id):
     handleTooltipInsideWidget(id, tooltipText)
 
-    if gui.sliderStep:
-      gui.tooltipState = tsOff
-
 # }}}
-# {{{ scrollBarPost
+# {{{ scrollBarPos
 
 proc scrollBarPost() =
   # Handle release active scrollbar outside of the widget
