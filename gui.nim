@@ -306,7 +306,7 @@ proc scrollBarPost
 proc sliderPost
 
 proc uiStatePost(vg: NVGContext) =
-  echo fmt"hotItem: {gui.hotItem}, activeItem: {gui.activeItem}, scrollBarState: {gui.scrollBarState}"
+#  echo fmt"hotItem: {gui.hotItem}, activeItem: {gui.activeItem}, scrollBarState: {gui.scrollBarState}"
 
   tooltipPost(vg)
 
@@ -378,9 +378,12 @@ proc doButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
 
 # }}}
 # {{{ doCheckBox
-#
-proc doCheckBox(vg: NVGContext, id: int, x, y, w: float, state: bool,
+
+proc doCheckBox(vg: NVGContext, id: int, x, y, w: float, active: bool,
                 tooltipText: string = ""): bool =
+
+  const
+    CheckPad = 3
 
   # Hit testing
   if mouseInside(x, y, w, w):
@@ -389,22 +392,38 @@ proc doCheckBox(vg: NVGContext, id: int, x, y, w: float, state: bool,
       setActive(id)
 
   # LMB released over active widget means it was clicked
-  if not gui.mbLeftDown and isHotAndActive(id):
-    result = true
+  let active = if not gui.mbLeftDown and isHotAndActive(id): not active
+               else: active
+
+  result = active
 
   # Draw check box
   let drawState = if isHot(id) and noActiveItem(): dsHover
     elif isHotAndActive(id): dsActive
     else: dsNormal
 
-  let fillColor = case drawState
-    of dsHover:  GRAY_HI
-    of dsActive: RED
-    else:        GRAY_MID
+  # Draw background
+  let bgColor = case drawState
+    of dsHover, dsActive: GRAY_HI
+    else:                 GRAY_MID
 
   vg.beginPath()
   vg.roundedRect(x, y, w, w, 5)
-  vg.fillColor(fillColor)
+  vg.fillColor(bgColor)
+  vg.fill()
+
+  # Draw check mark
+  let checkColor = case drawState
+    of dsHover:
+      if active: white() else: GRAY_LOHI
+    of dsActive: RED
+    else:
+      if active: GRAY_LO else: GRAY_HI
+
+  let w = w - CheckPad*2
+  vg.beginPath()
+  vg.roundedRect(x + CheckPad, y + CheckPad, w, w, 5)
+  vg.fillColor(checkColor)
   vg.fill()
 
   if isHot(id):
@@ -1076,8 +1095,8 @@ proc main() =
     sliderVal3 = 30.0
     sliderVal4 = -20.0
 
-    checkBoxVal1 = false
-    checkBoxVal2 = true
+    checkBoxVal1 = true
+    checkBoxVal2 = false
 
   ############################################################
 
@@ -1184,9 +1203,11 @@ proc main() =
 
     # Checkboxes
     y += pad * 2
-
     checkBoxVal1 = doCheckBox(
       vg, 16, x, y, h, checkBoxVal1, tooltipText = "CheckBox 1")
+
+    checkBoxVal2 = doCheckBox(
+      vg, 17, x + 30, y, h, checkBoxVal2, tooltipText = "CheckBox 2")
 
     ############################################################
 
