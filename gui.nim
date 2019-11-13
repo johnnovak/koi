@@ -127,7 +127,12 @@ template isHotAndActive(id: int): bool =
 template noActiveItem(): bool =
   gui.activeItem == 0
 
-let RED = rgb(1.0, 0.4, 0.4)
+let
+  RED = rgb(1.0, 0.4, 0.4)
+  GRAY_MID  = gray(0.6)
+  GRAY_HI   = gray(0.8)
+  GRAY_LO   = gray(0.25)
+  GRAY_LOHI = gray(0.35)
 
 # }}}
 # {{{ Callbacks
@@ -342,7 +347,7 @@ proc doButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
     if gui.mbLeftDown and noActiveItem():
       setActive(id)
 
-  # LMB released over active button
+  # LMB released over active widget means it was clicked
   if not gui.mbLeftDown and isHotAndActive(id):
     result = true
 
@@ -352,9 +357,9 @@ proc doButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
     else: dsNormal
 
   let fillColor = case drawState
-    of dsHover: gray(0.8)
+    of dsHover:  GRAY_HI
     of dsActive: RED
-    else: color
+    else:        color
 
   vg.beginPath()
   vg.roundedRect(x, y, w, h, 5)
@@ -367,6 +372,40 @@ proc doButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
   vg.fillColor(black(0.7))
   let tw = vg.horizontalAdvance(0,0, label)
   discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, label)
+
+  if isHot(id):
+    handleTooltipInsideWidget(id, tooltipText)
+
+# }}}
+# {{{ doCheckBox
+#
+proc doCheckBox(vg: NVGContext, id: int, x, y, w: float, state: bool,
+                tooltipText: string = ""): bool =
+
+  # Hit testing
+  if mouseInside(x, y, w, w):
+    setHot(id)
+    if gui.mbLeftDown and noActiveItem():
+      setActive(id)
+
+  # LMB released over active widget means it was clicked
+  if not gui.mbLeftDown and isHotAndActive(id):
+    result = true
+
+  # Draw check box
+  let drawState = if isHot(id) and noActiveItem(): dsHover
+    elif isHotAndActive(id): dsActive
+    else: dsNormal
+
+  let fillColor = case drawState
+    of dsHover:  GRAY_HI
+    of dsActive: RED
+    else:        GRAY_MID
+
+  vg.beginPath()
+  vg.roundedRect(x, y, w, w, 5)
+  vg.fillColor(fillColor)
+  vg.fill()
 
   if isHot(id):
     handleTooltipInsideWidget(id, tooltipText)
@@ -525,9 +564,9 @@ proc doHorizScrollBar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     else: dsNormal
 
   let trackColor = case drawState
-    of dsHover: gray(0.8)
-    of dsActive: gray(0.6)
-    else: gray(0.6)
+    of dsHover:  GRAY_HI
+    of dsActive: GRAY_MID
+    else:        GRAY_MID
 
   vg.beginPath()
   vg.roundedRect(x, y, w, h, 5)
@@ -536,11 +575,11 @@ proc doHorizScrollBar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 
   # Draw thumb
   let thumbColor = case drawState
-    of dsHover: gray(0.35)
+    of dsHover: GRAY_LOHI
     of dsActive:
       if gui.scrollBarState < sbsTrackClickFirst: RED
-      else: gray(0.25)
-    else: gray(0.25)
+      else: GRAY_LO
+    else:   GRAY_LO
 
   vg.beginPath()
   vg.roundedRect(newThumbX, y + ThumbPad, thumbW, thumbH, 5)
@@ -709,9 +748,9 @@ proc doVertScrollBar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     else: dsNormal
 
   let trackColor = case drawState
-    of dsHover: gray(0.8)
-    of dsActive: gray(0.6)
-    else: gray(0.6)
+    of dsHover:  GRAY_HI
+    of dsActive: GRAY_MID
+    else:        GRAY_MID
 
   vg.beginPath()
   vg.roundedRect(x, y, w, h, 5)
@@ -720,11 +759,11 @@ proc doVertScrollBar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 
   # Draw thumb
   let thumbColor = case drawState
-    of dsHover: gray(0.35)
+    of dsHover: GRAY_LOHI
     of dsActive:
       if gui.scrollBarState < sbsTrackClickFirst: RED
-      else: gray(0.25)
-    else: gray(0.25)
+      else: GRAY_LO
+    else:   GRAY_LO
 
   vg.beginPath()
   vg.roundedRect(x + ThumbPad, newThumbY, thumbW, thumbH, 5)
@@ -823,8 +862,8 @@ proc doHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     else: dsNormal
 
   let fillColor = case drawState
-    of dsHover: gray(0.8)
-    else: gray(0.60)
+    of dsHover: GRAY_HI
+    else:       GRAY_MID
 
   vg.beginPath()
   vg.roundedRect(x, y, w, h, 5)
@@ -833,9 +872,9 @@ proc doHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 
   # Draw slider
   let sliderColor = case drawState
-    of dsHover: gray(0.35)
+    of dsHover:  GRAY_LOHI
     of dsActive: RED
-    else: gray(0.25)
+    else:        GRAY_LO
 
   vg.beginPath()
   vg.roundedRect(x + SliderPad, y + SliderPad,
@@ -924,8 +963,8 @@ proc doVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
     else: dsNormal
 
   let fillColor = case drawState
-    of dsHover: gray(0.8)
-    else: gray(0.60)
+    of dsHover: GRAY_HI
+    else:       GRAY_MID
 
   vg.beginPath()
   vg.roundedRect(x, y, w, h, 5)
@@ -934,9 +973,9 @@ proc doVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 
   # Draw slider
   let sliderColor = case drawState
-    of dsHover: gray(0.35)
+    of dsHover:  GRAY_LOHI
     of dsActive: RED
-    else: gray(0.25)
+    else:        GRAY_LO
 
   vg.beginPath()
 #  vg.roundedRect(x + SliderPad, y + SliderPad,
@@ -1037,6 +1076,9 @@ proc main() =
     sliderVal3 = 30.0
     sliderVal4 = -20.0
 
+    checkBoxVal1 = false
+    checkBoxVal2 = true
+
   ############################################################
 
   while not win.shouldClose:
@@ -1073,15 +1115,15 @@ proc main() =
     # Buttons
 
     y += pad
-    if doButton(vg, 2, x, y, w, h, "Start", color = gray(0.60), "I am the first!"):
+    if doButton(vg, 2, x, y, w, h, "Start", color = GRAY_MID, "I am the first!"):
       echo "button 1 pressed"
 
     y += pad
-    if doButton(vg, 3, x, y, w, h, "Stop", color = gray(0.60), "Middle one..."):
+    if doButton(vg, 3, x, y, w, h, "Stop", color = GRAY_MID, "Middle one..."):
       echo "button 2 pressed"
 
     y += pad
-    if doButton(vg, 4, x, y, w, h, "Preferences", color = gray(0.60), "Last button"):
+    if doButton(vg, 4, x, y, w, h, "Preferences", color = GRAY_MID, "Last button"):
       echo "button 3 pressed"
 
     # ScrollBars
@@ -1139,6 +1181,13 @@ proc main() =
 
     renderLabel(vg, 15, 400, 430, w, h, fmt"{sliderVal4:.3f}",
                 color = gray(0.90), fontSize = 19.0)
+
+    # Checkboxes
+    y += pad * 2
+
+    checkBoxVal1 = doCheckBox(
+      vg, 16, x, y, h, checkBoxVal1, tooltipText = "CheckBox 1")
+
     ############################################################
 
     uiStatePost(vg)
