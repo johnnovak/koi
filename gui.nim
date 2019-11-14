@@ -377,6 +377,70 @@ proc doButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
     handleTooltipInsideWidget(id, tooltipText)
 
 # }}}
+# {{{ doRadioButtons
+
+proc doRadioButtons(vg: NVGContext, id: int, x, y, w, h: float,
+                    activeButton: int, labels: openArray[string],
+                    tooltipText: string = ""): int =
+
+  let
+    numButtons = labels.len
+    buttonW = w / numButtons.float
+
+  # Hit testing
+  if mouseInside(x, y, w, h):
+    setHot(id)
+    if gui.mbLeftDown and noActiveItem():
+      setActive(id)
+
+  let hotButton = if isHot(id): floor((gui.mx - x) / buttonW).int
+                  else: -1
+
+  # LMB released over active widget means it was clicked
+  if not gui.mbLeftDown and isHotAndActive(id):
+    result = hotButton
+  else:
+    result = activeButton
+
+  # Draw radio buttons
+  let drawState = if isHot(id) and noActiveItem(): dsHover
+    elif isHotAndActive(id): dsActive
+    else: dsNormal
+
+  var x = x
+  const PadX = 2
+  for i in 0..labels.high:
+    let fillColor = case drawState
+      of dsHover:
+        if hotButton == i: GRAY_HI
+        else:
+          if activeButton == i: GRAY_LO else : GRAY_MID
+      of dsActive:
+        if hotButton == i: RED
+        else:
+          if activeButton == i: GRAY_LO else : GRAY_MID
+      else:
+        if activeButton == i: GRAY_LO else : GRAY_MID
+
+    vg.beginPath()
+    vg.rect(x, y, buttonW - PadX, h)
+    vg.fillColor(fillColor)
+    vg.fill()
+    x += buttonW
+
+
+
+#  vg.fontSize(19.0)
+#  vg.fontFace("sans-bold")
+#  vg.textAlign(haLeft, vaMiddle)
+#  vg.fillColor(black(0.7))
+#  let tw = vg.horizontalAdvance(0,0, label)
+#  discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, label)
+
+  if isHot(id):
+    handleTooltipInsideWidget(id, tooltipText)
+
+# }}}
 # {{{ doCheckBox
 
 proc doCheckBox(vg: NVGContext, id: int, x, y, w: float, active: bool,
@@ -390,6 +454,8 @@ proc doCheckBox(vg: NVGContext, id: int, x, y, w: float, active: bool,
     setHot(id)
     if gui.mbLeftDown and noActiveItem():
       setActive(id)
+
+  # TODO SweepCheckBox could be introduced later
 
   # LMB released over active widget means it was clicked
   let active = if not gui.mbLeftDown and isHotAndActive(id): not active
@@ -1096,6 +1162,8 @@ proc main() =
     checkBoxVal1 = true
     checkBoxVal2 = false
 
+    radioButtonsVal1 = 1
+
   ############################################################
 
   while not win.shouldClose:
@@ -1132,15 +1200,18 @@ proc main() =
     # Buttons
 
     y += pad
-    if doButton(vg, 2, x, y, w, h, "Start", color = GRAY_MID, "I am the first!"):
+    if doButton(vg, 2, x, y, w, h, "Start", color = GRAY_MID,
+                tooltipText = "I am the first!"):
       echo "button 1 pressed"
 
     y += pad
-    if doButton(vg, 3, x, y, w, h, "Stop", color = GRAY_MID, "Middle one..."):
+    if doButton(vg, 3, x, y, w, h, "Stop", color = GRAY_MID,
+                tooltipText = "Middle one..."):
       echo "button 2 pressed"
 
     y += pad
-    if doButton(vg, 4, x, y, w, h, "Preferences", color = GRAY_MID, "Last button"):
+    if doButton(vg, 4, x, y, w, h, "Preferences", color = GRAY_MID,
+                tooltipText = "Last button"):
       echo "button 3 pressed"
 
     # ScrollBars
@@ -1207,6 +1278,11 @@ proc main() =
     checkBoxVal2 = doCheckBox(
       vg, 17, x + 30, y, h, checkBoxVal2, tooltipText = "CheckBox 2")
 
+    # Radio buttons
+    y += pad * 2
+    radioButtonsVal1 = doRadioButtons(
+      vg, 18, x, y, 200, h, radioButtonsVal1,
+      labels = @["PNG", "JPG", "EXR"], tooltipText = "Radio buttons")
     ############################################################
 
     uiStatePost(vg)
