@@ -106,6 +106,9 @@ proc setCursorPosY(y: float) =
   let (currX, _) = win.cursorPos()
   win.cursorPos = (currX, y)
 
+proc truncate(vg: NVGContext, text: string, maxWidth: float): string =
+  result = text # TODO
+
 # }}}
 # {{{ Globals
 
@@ -338,11 +341,6 @@ proc uiStatePost(vg: NVGContext) =
 
 # }}}
 
-
-proc truncate(vg: NVGContext, text: string, maxWidth: float): string =
-  result = text # TODO
-
-
 # {{{ doButton
 
 proc doButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
@@ -379,6 +377,61 @@ proc doButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
   vg.fillColor(black(0.7))
   let tw = vg.horizontalAdvance(0,0, label)
   discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, label)
+
+  if isHot(id):
+    handleTooltipInsideWidget(id, tooltipText)
+
+# }}}
+# {{{ doCheckBox
+
+proc doCheckBox(vg: NVGContext, id: int, x, y, w: float, active: bool,
+                tooltipText: string = ""): bool =
+
+  const
+    CheckPad = 3
+
+  # Hit testing
+  if mouseInside(x, y, w, w):
+    setHot(id)
+    if gui.mbLeftDown and noActiveItem():
+      setActive(id)
+
+  # TODO SweepCheckBox could be introduced later
+
+  # LMB released over active widget means it was clicked
+  let active = if not gui.mbLeftDown and isHotAndActive(id): not active
+               else: active
+
+  result = active
+
+  # Draw check box
+  let drawState = if isHot(id) and noActiveItem(): dsHover
+    elif isHotAndActive(id): dsActive
+    else: dsNormal
+
+  # Draw background
+  let bgColor = case drawState
+    of dsHover, dsActive: GRAY_HI
+    else:                 GRAY_MID
+
+  vg.beginPath()
+  vg.roundedRect(x, y, w, w, 5)
+  vg.fillColor(bgColor)
+  vg.fill()
+
+  # Draw check mark
+  let checkColor = case drawState
+    of dsHover:
+      if active: white() else: GRAY_LOHI
+    of dsActive: RED
+    else:
+      if active: GRAY_LO else: GRAY_HI
+
+  let w = w - CheckPad*2
+  vg.beginPath()
+  vg.roundedRect(x + CheckPad, y + CheckPad, w, w, 5)
+  vg.fillColor(checkColor)
+  vg.fill()
 
   if isHot(id):
     handleTooltipInsideWidget(id, tooltipText)
@@ -452,61 +505,6 @@ proc doRadioButtons(vg: NVGContext, id: int, x, y, w, h: float,
 
   if isHot(id):
     handleTooltipInsideWidget(id, tooltipTexts[hotButton])
-
-# }}}
-# {{{ doCheckBox
-
-proc doCheckBox(vg: NVGContext, id: int, x, y, w: float, active: bool,
-                tooltipText: string = ""): bool =
-
-  const
-    CheckPad = 3
-
-  # Hit testing
-  if mouseInside(x, y, w, w):
-    setHot(id)
-    if gui.mbLeftDown and noActiveItem():
-      setActive(id)
-
-  # TODO SweepCheckBox could be introduced later
-
-  # LMB released over active widget means it was clicked
-  let active = if not gui.mbLeftDown and isHotAndActive(id): not active
-               else: active
-
-  result = active
-
-  # Draw check box
-  let drawState = if isHot(id) and noActiveItem(): dsHover
-    elif isHotAndActive(id): dsActive
-    else: dsNormal
-
-  # Draw background
-  let bgColor = case drawState
-    of dsHover, dsActive: GRAY_HI
-    else:                 GRAY_MID
-
-  vg.beginPath()
-  vg.roundedRect(x, y, w, w, 5)
-  vg.fillColor(bgColor)
-  vg.fill()
-
-  # Draw check mark
-  let checkColor = case drawState
-    of dsHover:
-      if active: white() else: GRAY_LOHI
-    of dsActive: RED
-    else:
-      if active: GRAY_LO else: GRAY_HI
-
-  let w = w - CheckPad*2
-  vg.beginPath()
-  vg.roundedRect(x + CheckPad, y + CheckPad, w, w, 5)
-  vg.fillColor(checkColor)
-  vg.fill()
-
-  if isHot(id):
-    handleTooltipInsideWidget(id, tooltipText)
 
 # }}}
 # {{{ ScrollBar
