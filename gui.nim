@@ -338,6 +338,11 @@ proc uiStatePost(vg: NVGContext) =
 
 # }}}
 
+
+proc truncate(vg: NVGContext, text: string, maxWidth: float): string =
+  result = text # TODO
+
+
 # {{{ doButton
 
 proc doButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
@@ -433,7 +438,7 @@ proc doRadioButtons(vg: NVGContext, id: int, x, y, w, h: float,
     vg.fill()
 
     let
-      label = labels[i]
+      label = truncate(vg, labels[i], buttonW)
       textColor = if drawState == dsHover and hotButton == i: GRAY_LO
                   else:
                     if activeButton == i: GRAY_HI
@@ -446,7 +451,6 @@ proc doRadioButtons(vg: NVGContext, id: int, x, y, w, h: float,
     x += buttonW
 
   if isHot(id):
-    echo hotButton
     handleTooltipInsideWidget(id, tooltipTexts[hotButton])
 
 # }}}
@@ -1290,7 +1294,7 @@ proc main() =
     # Radio buttons
     y += pad * 2
     radioButtonsVal1 = doRadioButtons(
-      vg, 18, x, y, 200, h, radioButtonsVal1,
+      vg, 18, x, y, 150, h, radioButtonsVal1,
       labels = @["PNG", "JPG", "EXR"],
       tooltipTexts = @["Save PNG image", "Save JPG image", "Save EXR image"])
     ############################################################
