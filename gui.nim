@@ -64,6 +64,8 @@ type UIState = object
   dragX, dragY:   float   # for keeping track of the cursor in hidden drag mode
 
   # Widget-specific states
+  radioButtonsActiveButton: int
+
   scrollBarState:    ScrollBarState
   scrollBarClickDir: float
 
@@ -381,23 +383,27 @@ proc doButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
 
 proc doRadioButtons(vg: NVGContext, id: int, x, y, w, h: float,
                     activeButton: int, labels: openArray[string],
-                    tooltipText: string = ""): int =
+                    tooltipTexts: openArray[string] = @[]): int =
+
+  assert activeButton >= 0 and activeButton <= labels.high
+  assert tooltipTexts.len == 0 or tooltipTexts.len == labels.len
 
   let
     numButtons = labels.len
     buttonW = w / numButtons.float
 
   # Hit testing
+  let hotButton = min(int(floor((gui.mx - x) / buttonW)), numButtons-1)
+
   if mouseInside(x, y, w, h):
     setHot(id)
     if gui.mbLeftDown and noActiveItem():
       setActive(id)
-
-  let hotButton = if isHot(id): floor((gui.mx - x) / buttonW).int
-                  else: -1
+      gui.radioButtonsActiveButton = hotButton
 
   # LMB released over active widget means it was clicked
-  if not gui.mbLeftDown and isHotAndActive(id):
+  if not gui.mbLeftDown and isHotAndActive(id) and
+     gui.radioButtonsActiveButton == hotButton:
     result = hotButton
   else:
     result = activeButton
@@ -409,36 +415,39 @@ proc doRadioButtons(vg: NVGContext, id: int, x, y, w, h: float,
 
   var x = x
   const PadX = 2
+
+  vg.fontSize(19.0)
+  vg.fontFace("sans-bold")
+  vg.textAlign(haLeft, vaMiddle)
+
   for i in 0..labels.high:
-    let fillColor = case drawState
-      of dsHover:
-        if hotButton == i: GRAY_HI
-        else:
-          if activeButton == i: GRAY_LO else : GRAY_MID
-      of dsActive:
-        if hotButton == i: RED
-        else:
-          if activeButton == i: GRAY_LO else : GRAY_MID
-      else:
-        if activeButton == i: GRAY_LO else : GRAY_MID
+    let fillColor = if   drawState == dsHover  and hotButton == i: GRAY_HI
+                    elif drawState == dsActive and hotButton == i and
+                         gui.radioButtonsActiveButton == i: RED
+                    else:
+                      if activeButton == i: GRAY_LO else : GRAY_MID
 
     vg.beginPath()
     vg.rect(x, y, buttonW - PadX, h)
     vg.fillColor(fillColor)
     vg.fill()
+
+    let
+      label = labels[i]
+      textColor = if drawState == dsHover and hotButton == i: GRAY_LO
+                  else:
+                    if activeButton == i: GRAY_HI
+                    else: GRAY_LO
+
+    vg.fillColor(textColor)
+    let tw = vg.horizontalAdvance(0,0, label)
+    discard vg.text(x + buttonW*0.5 - tw*0.5, y+h*0.5, label)
+
     x += buttonW
 
-
-
-#  vg.fontSize(19.0)
-#  vg.fontFace("sans-bold")
-#  vg.textAlign(haLeft, vaMiddle)
-#  vg.fillColor(black(0.7))
-#  let tw = vg.horizontalAdvance(0,0, label)
-#  discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, label)
-
   if isHot(id):
-    handleTooltipInsideWidget(id, tooltipText)
+    echo hotButton
+    handleTooltipInsideWidget(id, tooltipTexts[hotButton])
 
 # }}}
 # {{{ doCheckBox
@@ -1282,7 +1291,8 @@ proc main() =
     y += pad * 2
     radioButtonsVal1 = doRadioButtons(
       vg, 18, x, y, 200, h, radioButtonsVal1,
-      labels = @["PNG", "JPG", "EXR"], tooltipText = "Radio buttons")
+      labels = @["PNG", "JPG", "EXR"],
+      tooltipTexts = @["Save PNG image", "Save JPG image", "Save EXR image"])
     ############################################################
 
     uiStatePost(vg)
