@@ -24,8 +24,12 @@ const
 
 # {{{ Types
 
-type TooltipState = enum
-  tsOff, tsShowDelay, tsShow, tsFadeOutDelay, tsFadeOut
+type DropdownState = enum
+  dsClosed, dsOpen
+
+type SliderState = enum
+  ssDefault,
+  ssDragHidden
 
 type ScrollBarState = enum
   sbsDefault,
@@ -35,9 +39,8 @@ type ScrollBarState = enum
   sbsTrackClickDelay,
   sbsTrackClickRepeat
 
-type SliderState = enum
-  ssDefault,
-  ssDragHidden
+type TooltipState = enum
+  tsOff, tsShowDelay, tsShow, tsFadeOutDelay, tsFadeOut
 
 type UIState = object
   # Mouse state
@@ -65,6 +68,8 @@ type UIState = object
 
   # Widget-specific states
   radioButtonsActiveButton: int
+
+  dropdownState:     DropdownState
 
   scrollBarState:    ScrollBarState
   scrollBarClickDir: float
@@ -374,7 +379,7 @@ proc doButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
   vg.fontSize(19.0)
   vg.fontFace("sans-bold")
   vg.textAlign(haLeft, vaMiddle)
-  vg.fillColor(black(0.7))
+  vg.fillColor(GRAY_LO)
   let tw = vg.horizontalAdvance(0,0, label)
   discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, label)
 
@@ -478,7 +483,7 @@ proc doRadioButtons(vg: NVGContext, id: int, x, y, w, h: float,
   vg.fontFace("sans-bold")
   vg.textAlign(haLeft, vaMiddle)
 
-  for i in 0..labels.high:
+  for i, label in labels:
     let fillColor = if   drawState == dsHover  and hotButton == i: GRAY_HI
                     elif drawState == dsActive and hotButton == i and
                          gui.radioButtonsActiveButton == i: RED
@@ -491,7 +496,7 @@ proc doRadioButtons(vg: NVGContext, id: int, x, y, w, h: float,
     vg.fill()
 
     let
-      label = truncate(vg, labels[i], buttonW)
+      label = truncate(vg, label, buttonW)
       textColor = if drawState == dsHover and hotButton == i: GRAY_LO
                   else:
                     if activeButton == i: GRAY_HI
@@ -505,6 +510,138 @@ proc doRadioButtons(vg: NVGContext, id: int, x, y, w, h: float,
 
   if isHot(id):
     handleTooltipInsideWidget(id, tooltipTexts[hotButton])
+
+# }}}
+# {{{ doDropdown
+
+proc doDropdown(vg: NVGContext, id: int, x, y, w, h: float,
+                items: openArray[string], selectedItem: Natural,
+                tooltipText: string = ""): Natural =
+
+  assert items.len > 0
+  assert selectedItem <= items.high
+
+  # Calculate the position of the box around the dropdown items
+  const BoxPad = 7
+
+  var boxX, boxY, boxW, boxH: float
+  let 
+    numItems = items.len
+    itemHeight = h  # TODO just temporarily
+
+  proc calcBoxPos(items: openArray[string]) =
+    var maxItemWidth = 0.0
+    for i in items:
+      let tw = vg.horizontalAdvance(0, 0, i)
+      maxItemWidth = max(tw, maxItemWidth)
+
+    boxX = x
+    boxY = y + h
+    boxW = max(maxItemWidth + BoxPad*2, w)
+    boxH = float(items.len) * itemHeight + BoxPad*2
+
+  proc hoverItem(): int =
+    min(int(floor((gui.my - boxY - BoxPad) / itemHeight)), numItems-1)
+
+  # Optimisation so we don't calculate the box pos for every dropdown but just
+  # for the active one (if there's one).
+  if gui.dropdownState == dsOpen: calcBoxPos(items)
+
+  # Hit testing
+  case gui.dropdownState:
+  of dsClosed:
+    if mouseInside(x, y, w, h):
+      setHot(id)
+      if gui.mbLeftDown and noActiveItem():
+        setActive(id)
+
+  of dsOpen:
+    if mouseInside(x, y, w, h) or mouseInside(boxX, boxY, boxW, boxH):
+      setHot(id)
+      setActive(id)
+    else:
+      gui.dropdownState = dsClosed
+
+  # LMB released over active widget means it was clicked
+#  if not gui.mbLeftDown and isHotAndActive(id):
+
+  if isActive(id):
+    if gui.dropdownState == dsClosed:
+      gui.dropdownState = dsOpen
+      calcBoxPos(items)
+
+    # We're doing this instead of a case statement in order to not lose
+    # a frame on the dsClose->dsOpen transition
+    if gui.dropdownState == dsOpen:
+      discard
+
+  result = selectedItem
+
+  # Draw dropdown button
+  let drawState = if isHot(id) and noActiveItem(): dsHover
+    elif isHotAndActive(id): dsActive
+    else: dsNormal
+
+  let fillColor = case drawState
+    of dsHover:  GRAY_HI
+    of dsActive: GRAY_MID
+    else:        GRAY_MID
+
+  vg.beginPath()
+  vg.roundedRect(x, y, w, h, 5)
+  vg.fillColor(fillColor)
+  vg.fill()
+
+  const ItemXPad = 7
+  let
+    itemText = items[selectedItem]
+    tw = vg.horizontalAdvance(0,0, itemText)
+
+  let textColor = case drawState
+    of dsHover:  GRAY_LO
+    of dsActive: GRAY_LO
+    else:        GRAY_LO
+
+  vg.fontSize(19.0)
+  vg.fontFace("sans-bold")
+  vg.textAlign(haLeft, vaMiddle)
+  vg.fillColor(textColor)
+  discard vg.text(x + ItemXPad, y+h*0.5, itemText)
+
+  # Draw item list
+  if gui.dropdownState == dsOpen:
+    # Draw item list box
+    vg.beginPath()
+    vg.roundedRect(boxX, boxY, boxW, boxH, 5)
+    vg.fillColor(GRAY_LO)
+    vg.fill()
+
+    # Draw items
+    vg.fontSize(19.0)
+    vg.fontFace("sans-bold")
+    vg.textAlign(haLeft, vaMiddle)
+    vg.fillColor(GRAY_HI)
+
+    var
+      ix = boxX + BoxPad
+      iy = boxY + BoxPad
+
+    for i, item in items.pairs:
+      var textColor = GRAY_HI
+      let hoverItem = hoverItem()
+      if i == hoverItem:
+        vg.beginPath()
+        vg.rect(boxX, iy, boxW, h)
+        vg.fillColor(RED)
+        vg.fill()
+        textColor = GRAY_LO
+
+      vg.fillColor(textColor)
+      discard vg.text(ix, iy + h*0.5, item)
+      iy += itemHeight
+
+  if isHot(id):
+    handleTooltipInsideWidget(id, tooltipText)
 
 # }}}
 # {{{ ScrollBar
@@ -1175,6 +1312,9 @@ proc main() =
 
     radioButtonsVal1 = 1
 
+    dropdownVal1 = 0
+    dropdownVal2 = 2
+
   ############################################################
 
   while not win.shouldClose:
@@ -1295,6 +1435,18 @@ proc main() =
       vg, 18, x, y, 150, h, radioButtonsVal1,
       labels = @["PNG", "JPG", "EXR"],
       tooltipTexts = @["Save PNG image", "Save JPG image", "Save EXR image"])
+
+    # Dropdowns
+    
+    y = 50.0 + pad
+    x = 500
+    dropdownVal1 = doDropdown(
+      vg, 19, x, y, w, h, 
+      items = @["Orange", "Banana", "Blueberry", "Apricot", "Apple"],
+      dropdownVal1, tooltipText = "Select a fruit")
+
+
+
     ############################################################
 
     uiStatePost(vg)
