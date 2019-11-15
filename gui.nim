@@ -445,8 +445,8 @@ proc doCheckBox(vg: NVGContext, id: int, x, y, w: float, active: bool,
 # {{{ doRadioButtons
 
 proc doRadioButtons(vg: NVGContext, id: int, x, y, w, h: float,
-                    activeButton: int, labels: openArray[string],
-                    tooltipTexts: openArray[string] = @[]): int =
+                    activeButton: Natural, labels: openArray[string],
+                    tooltipTexts: openArray[string] = @[]): Natural =
 
   assert activeButton >= 0 and activeButton <= labels.high
   assert tooltipTexts.len == 0 or tooltipTexts.len == labels.len
@@ -1117,8 +1117,8 @@ proc doHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 # {{{ doVertSlider
 
 proc doVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
-                   startVal: float = 0.0, endVal: float = 1.0,
-                   tooltipText: string = ""): float =
+                  startVal: float = 0.0, endVal: float = 1.0,
+                  tooltipText: string = ""): float =
 
   assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
          (endVal   < startVal and value >= endVal   and value <= startVal)
