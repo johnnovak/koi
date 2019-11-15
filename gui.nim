@@ -521,95 +521,80 @@ proc doDropdown(vg: NVGContext, id: int, x, y, w, h: float,
   assert items.len > 0
   assert selectedItem <= items.high
 
-  # Calculate the position of the box around the dropdown items
-  const BoxPad = 7
+  proc drawButton(items: openArray[string]) =
+    let drawState = if isHot(id) and noActiveItem(): dsHover
+      elif isHotAndActive(id): dsActive
+      else: dsNormal
 
-  var boxX, boxY, boxW, boxH: float
-  let 
-    numItems = items.len
-    itemHeight = h  # TODO just temporarily
+    let fillColor = case drawState
+      of dsHover:  GRAY_HI
+      of dsActive: GRAY_MID
+      else:        GRAY_MID
 
-  proc calcBoxPos(items: openArray[string]) =
+    vg.beginPath()
+    vg.roundedRect(x, y, w, h, 5)
+    vg.fillColor(fillColor)
+    vg.fill()
+
+    const ItemXPad = 7
+    let
+      itemText = items[selectedItem]
+      tw = vg.horizontalAdvance(0,0, itemText)
+
+    let textColor = case drawState
+      of dsHover:  GRAY_LO
+      of dsActive: GRAY_LO
+      else:        GRAY_LO
+
+    vg.fontSize(19.0)
+    vg.fontFace("sans-bold")
+    vg.textAlign(haLeft, vaMiddle)
+    vg.fillColor(textColor)
+    discard vg.text(x + ItemXPad, y+h*0.5, itemText)
+
+
+  if gui.dropdownState == dsClosed:
+    if mouseInside(x, y, w, h):
+      setHot(id)
+      if gui.mbLeftDown and noActiveItem():
+        setActive(id)
+        gui.dropdownState = dsOpen
+
+    drawButton(items)
+
+  # We can 'fall through' to the open state to avoid a 1-frame delay when
+  # clicking the button
+  if gui.dropdownState == dsOpen:
+    let
+      numItems = items.len
+      itemHeight = h  # TODO just temporarily
+
+    # Calculate the position of the box around the dropdown items
+    const BoxPad = 7
+
     var maxItemWidth = 0.0
     for i in items:
       let tw = vg.horizontalAdvance(0, 0, i)
       maxItemWidth = max(tw, maxItemWidth)
 
-    boxX = x
-    boxY = y + h
-    boxW = max(maxItemWidth + BoxPad*2, w)
-    boxH = float(items.len) * itemHeight + BoxPad*2
+    let
+      boxX = x
+      boxY = y + h
+      boxW = max(maxItemWidth + BoxPad*2, w)
+      boxH = float(items.len) * itemHeight + BoxPad*2
 
-  proc hoverItem(): int =
-    min(int(floor((gui.my - boxY - BoxPad) / itemHeight)), numItems-1)
-
-  # Optimisation so we don't calculate the box pos for every dropdown but just
-  # for the active one (if there's one).
-  if gui.dropdownState == dsOpen: calcBoxPos(items)
-
-  # Hit testing
-  case gui.dropdownState:
-  of dsClosed:
-    if mouseInside(x, y, w, h):
-      setHot(id)
-      if gui.mbLeftDown and noActiveItem():
-        setActive(id)
-
-  of dsOpen:
+    # Hit testing
     if mouseInside(x, y, w, h) or mouseInside(boxX, boxY, boxW, boxH):
       setHot(id)
       setActive(id)
     else:
       gui.dropdownState = dsClosed
 
-  # LMB released over active widget means it was clicked
-#  if not gui.mbLeftDown and isHotAndActive(id):
+    let hoverItem = min(int(floor((gui.my - boxY - BoxPad) / itemHeight)),
+                        numItems-1)
 
-  if isActive(id):
-    if gui.dropdownState == dsClosed:
-      gui.dropdownState = dsOpen
-      calcBoxPos(items)
+    drawButton(items)
 
-    # We're doing this instead of a case statement in order to not lose
-    # a frame on the dsClose->dsOpen transition
-    if gui.dropdownState == dsOpen:
-      discard
-
-  result = selectedItem
-
-  # Draw dropdown button
-  let drawState = if isHot(id) and noActiveItem(): dsHover
-    elif isHotAndActive(id): dsActive
-    else: dsNormal
-
-  let fillColor = case drawState
-    of dsHover:  GRAY_HI
-    of dsActive: GRAY_MID
-    else:        GRAY_MID
-
-  vg.beginPath()
-  vg.roundedRect(x, y, w, h, 5)
-  vg.fillColor(fillColor)
-  vg.fill()
-
-  const ItemXPad = 7
-  let
-    itemText = items[selectedItem]
-    tw = vg.horizontalAdvance(0,0, itemText)
-
-  let textColor = case drawState
-    of dsHover:  GRAY_LO
-    of dsActive: GRAY_LO
-    else:        GRAY_LO
-
-  vg.fontSize(19.0)
-  vg.fontFace("sans-bold")
-  vg.textAlign(haLeft, vaMiddle)
-  vg.fillColor(textColor)
-  discard vg.text(x + ItemXPad, y+h*0.5, itemText)
-
-  # Draw item list
-  if gui.dropdownState == dsOpen:
     # Draw item list box
     vg.beginPath()
     vg.roundedRect(boxX, boxY, boxW, boxH, 5)
@@ -628,7 +613,6 @@ proc doDropdown(vg: NVGContext, id: int, x, y, w, h: float,
 
     for i, item in items.pairs:
       var textColor = GRAY_HI
-      let hoverItem = hoverItem()
       if i == hoverItem:
         vg.beginPath()
         vg.rect(boxX, iy, boxW, h)
@@ -639,6 +623,9 @@ proc doDropdown(vg: NVGContext, id: int, x, y, w, h: float,
       vg.fillColor(textColor)
       discard vg.text(ix, iy + h*0.5, item)
       iy += itemHeight
+
+
+  result = selectedItem
 
   if isHot(id):
     handleTooltipInsideWidget(id, tooltipText)
@@ -1437,11 +1424,11 @@ proc main() =
       tooltipTexts = @["Save PNG image", "Save JPG image", "Save EXR image"])
 
     # Dropdowns
-    
+
     y = 50.0 + pad
     x = 500
     dropdownVal1 = doDropdown(
-      vg, 19, x, y, w, h, 
+      vg, 19, x, y, w, h,
       items = @["Orange", "Banana", "Blueberry", "Apricot", "Apple"],
       dropdownVal1, tooltipText = "Select a fruit")
 
