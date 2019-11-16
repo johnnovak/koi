@@ -158,36 +158,27 @@ let
 # }}}
 # {{{ Callbacks
 
-proc mouseButtonCb*(win: Window, button: MouseButton, pressed: bool,
-                    modKeys: set[ModifierKey]) =
-
-  case button
-  of mb1: gui.mbLeftDown  = pressed
-  of mb2: gui.mbRightDown = pressed
-  of mb3: gui.mbMidDown   = pressed
-  else: discard
-
-
 proc keyCb*(win: Window, key: Key, scanCode: int32, action: KeyAction,
             modKeys: set[ModifierKey]) =
 
   if action == kaDown:
     case key
     of keyEscape: win.shouldClose = true
-
-    of keyLeftShift,   keyRightShift:   gui.shiftDown = true
-    of keyLeftControl, keyRightControl: gui.ctrlDown  = true
-    of keyLeftAlt,     keyRightAlt:     gui.altDown   = true
-    of keyLeftSuper,   keyRightSuper:   gui.superDown = true
     else: discard
 
-  elif action == kaUp:
-    case key
-    of keyLeftShift,   keyRightShift:   gui.shiftDown = false
-    of keyLeftControl, keyRightControl: gui.ctrlDown  = false
-    of keyLeftAlt,     keyRightAlt:     gui.altDown   = false
-    of keyLeftSuper,   keyRightSuper:   gui.superDown = false
-    else: discard
+#    of keyLeftShift,   keyRightShift:   gui.shiftDown = true
+#    of keyLeftControl, keyRightControl: gui.ctrlDown  = true
+#    of keyLeftAlt,     keyRightAlt:     gui.altDown   = true
+#    of keyLeftSuper,   keyRightSuper:   gui.superDown = true
+#    else: discard
+
+#  elif action == kaUp:
+#    case key
+#    of keyLeftShift,   keyRightShift:   gui.shiftDown = false
+#    of keyLeftControl, keyRightControl: gui.ctrlDown  = false
+#    of keyLeftAlt,     keyRightAlt:     gui.altDown   = false
+#    of keyLeftSuper,   keyRightSuper:   gui.superDown = false
+#    else: discard
 
 # }}}
 
@@ -307,13 +298,30 @@ proc setNvgContext*(nvg: NVGContext) =
 # {{{ beginFrame()
 
 proc beginFrame*() =
-  gui.hotItem = 0
+  let win = glfw.currentContext()
 
   gui.lastmx = gui.mx
   gui.lastmy = gui.my
 
-  (gui.mx, gui.my) = glfw.currentContext().cursorPos()
+  (gui.mx, gui.my) = win.cursorPos()
 
+  gui.mbLeftDown  = win.mouseButtonDown(mb1)
+  gui.mbRightDown = win.mouseButtonDown(mb2)
+  gui.mbMidDown   = win.mouseButtonDown(mb3)
+
+  gui.shiftDown  = win.isKeyDown(keyLeftShift) or
+                   win.isKeyDown(keyRightShift)
+
+  gui.ctrlDown   = win.isKeyDown(keyLeftControl) or
+                   win.isKeyDown(keyRightControl)
+
+  gui.altDown    = win.isKeyDown(keyLeftAlt) or
+                   win.isKeyDown(keyRightAlt)
+
+  gui.superDown  = win.isKeyDown(keyLeftSuper) or
+                   win.isKeyDown(keyRightSuper)
+
+  gui.hotItem = 0
 
 # }}}
 # {{{ endFrame
