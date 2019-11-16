@@ -3,6 +3,7 @@ import math, strformat
 import glad/gl
 import glfw
 import nanovg
+import xxhash
 
 
 # {{{ Configuration
@@ -57,9 +58,9 @@ type UIState = object
   superDown:      bool
 
   # Active & hot items
-  hotItem:        int
-  activeItem:     int
-  lastHotItem:    int
+  hotItem:        int64
+  activeItem:     int64
+  lastHotItem:    int64
 
   # General purpose widget states
   x0, y0:         float   # for relative mouse movement calculations
@@ -70,7 +71,7 @@ type UIState = object
   radioButtonsActiveButton: int
 
   dropdownState:     DropdownState
-  dropdownActive:    int
+  dropdownActive:    int64
 
   scrollBarState:    ScrollBarState
   scrollBarClickDir: float
@@ -88,6 +89,11 @@ type DrawState = enum
 
 # }}}
 # {{{ Utils
+
+template GEN_ID(): int64 =
+  let i = instantiationInfo(fullPaths = true)
+  int64(XXH32(i.filename & $i.line)) + int.low + 1
+
 
 proc lerp(a, b, t: float): float =
   a + (b - a) * t
@@ -120,19 +126,19 @@ proc truncate(vg: NVGContext, text: string, maxWidth: float): string =
 
 var gui: UIState
 
-template isHot(id: int): bool =
+template isHot(id: int64): bool =
   gui.hotItem == id
 
-template setHot(id: int) =
+template setHot(id: int64) =
   gui.hotItem = id
 
-template isActive(id: int): bool =
+template isActive(id: int64): bool =
   gui.activeItem == id
 
-template setActive(id: int) =
+template setActive(id: int64) =
   gui.activeItem = id
 
-template isHotAndActive(id: int): bool =
+template isHotAndActive(id: int64): bool =
   isHot(id) and isActive(id)
 
 template noActiveItem(): bool =
@@ -191,7 +197,7 @@ proc mouseInside(x, y, w, h: float): bool =
 # {{{ Tooltip
 # {{{ handleTooltipInsideWidget
 
-proc handleTooltipInsideWidget(id: int, tooltipText: string) =
+proc handleTooltipInsideWidget(id: int64, tooltipText: string) =
   gui.tooltipState = gui.lastTooltipState
 
   # Reset the tooltip show delay if the cursor has been moved inside a
@@ -218,7 +224,7 @@ proc handleTooltipInsideWidget(id: int, tooltipText: string) =
     gui.tooltipText = tooltipText
 
 
-proc renderLabel(vg: NVGContext, id: int, x, y, w, h: float, label: string,
+proc renderLabel(vg: NVGContext, id: int64, x, y, w, h: float, label: string,
                  color: Color,
                  fontSize: float = 19.0, fontFace = "sans-bold") =
 
@@ -349,7 +355,7 @@ proc uiStatePost(vg: NVGContext) =
 
 # {{{ doButton
 
-proc doButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
+proc doButton(vg: NVGContext, id: int64, x, y, w, h: float, label: string,
                   color: Color, tooltipText: string = ""): bool =
 
   # Hit testing
@@ -390,7 +396,7 @@ proc doButton(vg: NVGContext, id: int, x, y, w, h: float, label: string,
 # }}}
 # {{{ doCheckBox
 
-proc doCheckBox(vg: NVGContext, id: int, x, y, w: float, active: bool,
+proc doCheckBox(vg: NVGContext, id: int64, x, y, w: float, active: bool,
                 tooltipText: string = ""): bool =
 
   const
@@ -445,7 +451,7 @@ proc doCheckBox(vg: NVGContext, id: int, x, y, w: float, active: bool,
 # }}}
 # {{{ doRadioButtons
 
-proc doRadioButtons(vg: NVGContext, id: int, x, y, w, h: float,
+proc doRadioButtons(vg: NVGContext, id: int64, x, y, w, h: float,
                     activeButton: Natural, labels: openArray[string],
                     tooltipTexts: openArray[string] = @[]): Natural =
 
@@ -515,7 +521,7 @@ proc doRadioButtons(vg: NVGContext, id: int, x, y, w, h: float,
 # }}}
 # {{{ doDropdown
 
-proc doDropdown(vg: NVGContext, id: int, x, y, w, h: float,
+proc doDropdown(vg: NVGContext, id: int64, x, y, w, h: float,
                 items: openArray[string], selectedItem: Natural,
                 tooltipText: string = ""): Natural =
 
@@ -662,7 +668,7 @@ proc doDropdown(vg: NVGContext, id: int, x, y, w, h: float,
 # {{{ doHorizScrollBar
 
 # Must be kept in sync with doVertScrollBar!
-proc doHorizScrollBar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
+proc doHorizScrollBar(vg: NVGContext, id: int64, x, y, w, h: float, value: float,
                       startVal: float = 0.0, endVal: float = 1.0,
                       thumbSize: float = -1.0, clickStep: float = -1.0,
                       tooltipText: string = ""): float =
@@ -848,7 +854,7 @@ proc doHorizScrollBar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 # {{{ doVertScrollBar
 
 # Must be kept in sync with doHorizScrollBar!
-proc doVertScrollBar(vg: NVGContext, id: int, x, y, w, h: float, value: float,
+proc doVertScrollBar(vg: NVGContext, id: int64, x, y, w, h: float, value: float,
                      startVal: float = 0.0, endVal: float = 1.0,
                      thumbSize: float = -1.0, clickStep: float = -1.0,
                      tooltipText: string = ""): float =
@@ -1042,7 +1048,7 @@ proc scrollBarPost() =
 # {{{ Slider
 # {{{ doHorizSlider
 
-proc doHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
+proc doHorizSlider(vg: NVGContext, id: int64, x, y, w, h: float, value: float,
                    startVal: float = 0.0, endVal: float = 1.0,
                    tooltipText: string = ""): float =
 
@@ -1143,7 +1149,7 @@ proc doHorizSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
 # }}}
 # {{{ doVertSlider
 
-proc doVertSlider(vg: NVGContext, id: int, x, y, w, h: float, value: float,
+proc doVertSlider(vg: NVGContext, id: int64, x, y, w, h: float, value: float,
                   startVal: float = 0.0, endVal: float = 1.0,
                   tooltipText: string = ""): float =
 
@@ -1359,23 +1365,21 @@ proc main() =
       x = 100.0
       y = 50.0
 
-    renderLabel(vg, 1, x + 5, y, w, h, "Test buttons", color = gray(0.90),
+    renderLabel(vg, GEN_ID(), x + 5, y, w, h, "Test buttons", color = gray(0.90),
                 fontSize = 22.0)
 
-    # Buttons
-
     y += pad
-    if doButton(vg, 2, x, y, w, h, "Start", color = GRAY_MID,
+    if doButton(vg, GEN_ID(), x, y, w, h, "Start", color = GRAY_MID,
                 tooltipText = "I am the first!"):
       echo "button 1 pressed"
 
     y += pad
-    if doButton(vg, 3, x, y, w, h, "Stop", color = GRAY_MID,
+    if doButton(vg, GEN_ID(), x, y, w, h, "Stop", color = GRAY_MID,
                 tooltipText = "Middle one..."):
       echo "button 2 pressed"
 
     y += pad
-    if doButton(vg, 4, x, y, w, h, "Preferences", color = GRAY_MID,
+    if doButton(vg, GEN_ID(), x, y, w, h, "Preferences", color = GRAY_MID,
                 tooltipText = "Last button"):
       echo "button 3 pressed"
 
@@ -1383,29 +1387,29 @@ proc main() =
 
     y += pad * 2
     scrollBarVal1 = doHorizScrollBar(
-      vg, 5, x, y, w * 1.5, h, scrollBarVal1,
+      vg, GEN_ID(), x, y, w * 1.5, h, scrollBarVal1,
       startVal = 0, endVal = 100, thumbSize = 20, clickStep = 10.0,
       tooltipText = "Horizontal ScrollBar 1")
 
     y += pad
     scrollBarVal2 = doHorizScrollBar(
-      vg, 6, x, y, w * 1.5, h, scrollBarVal2,
+      vg, GEN_ID(), x, y, w * 1.5, h, scrollBarVal2,
       startVal = 0, endVal = 1, thumbSize = -1, clickStep = -1,
       tooltipText = "Horizontal ScrollBar 2")
 
     scrollBarVal3 = doVertScrollBar(
-      vg, 7, 320, 60, h, 140, scrollBarVal3,
+      vg, GEN_ID(), 320, 60, h, 140, scrollBarVal3,
       startVal = 0.0, endVal = 100, thumbSize = 20, clickStep = 10,
       tooltipText = "Vertical ScrollBar 1")
 
     scrollBarVal4 = doVertScrollBar(
-      vg, 8, 350, 60, h, 140, scrollBarVal4,
+      vg, GEN_ID(), 350, 60, h, 140, scrollBarVal4,
       startVal = 1, endVal = 0, thumbSize = -1, clickStep = -1,
       tooltipText = "Vertical ScrollBar 2")
 
     y += pad
     scrollBarVal5 = doHorizScrollBar(
-      vg, 9, x, y, w * 1.5, h, scrollBarVal5,
+      vg, GEN_ID(), x, y, w * 1.5, h, scrollBarVal5,
       startVal = 100, endVal = 0, thumbSize = 20, clickStep = 10.0,
       tooltipText = "Horizontal ScrollBar 3")
 
@@ -1413,40 +1417,40 @@ proc main() =
 
     y += pad * 2
     sliderVal1 = doHorizSlider(
-      vg, 10, x, y, w * 1.5, h, sliderVal1,
+      vg, GEN_ID(), x, y, w * 1.5, h, sliderVal1,
       startVal = 0, endVal = 100, tooltipText = "Horizontal Slider 1")
 
     y += pad
     sliderVal2 = doHorizSlider(
-      vg, 11, x, y, w * 1.5, h, sliderVal2,
+      vg, GEN_ID(), x, y, w * 1.5, h, sliderVal2,
       startVal = 50, endVal = -30, tooltipText = "Horizontal Slider 2")
 
     sliderVal3 = doVertSlider(
-      vg, 12, 320, 300, h, 120, sliderVal3,
+      vg, GEN_ID(), 320, 300, h, 120, sliderVal3,
       startVal = 0, endVal = 100, tooltipText = "Vertical Slider 1")
 
-    renderLabel(vg, 13, 320, 430, w, h, fmt"{sliderVal3:.3f}",
+    renderLabel(vg, GEN_ID(), 320, 430, w, h, fmt"{sliderVal3:.3f}",
                 color = gray(0.90), fontSize = 19.0)
 
     sliderVal4 = doVertSlider(
-      vg, 14, 400, 300, h, 120, sliderVal4,
+      vg, GEN_ID(), 400, 300, h, 120, sliderVal4,
       startVal = 50, endVal = -30, tooltipText = "Vertical Slider 2")
 
-    renderLabel(vg, 15, 400, 430, w, h, fmt"{sliderVal4:.3f}",
+    renderLabel(vg, GEN_ID(), 400, 430, w, h, fmt"{sliderVal4:.3f}",
                 color = gray(0.90), fontSize = 19.0)
 
     # Checkboxes
     y += pad * 2
     checkBoxVal1 = doCheckBox(
-      vg, 16, x, y, h, checkBoxVal1, tooltipText = "CheckBox 1")
+      vg, GEN_ID(), x, y, h, checkBoxVal1, tooltipText = "CheckBox 1")
 
     checkBoxVal2 = doCheckBox(
-      vg, 17, x + 30, y, h, checkBoxVal2, tooltipText = "CheckBox 2")
+      vg, GEN_ID(), x + 30, y, h, checkBoxVal2, tooltipText = "CheckBox 2")
 
     # Radio buttons
     y += pad * 2
     radioButtonsVal1 = doRadioButtons(
-      vg, 18, x, y, 150, h, radioButtonsVal1,
+      vg, GEN_ID(), x, y, 150, h, radioButtonsVal1,
       labels = @["PNG", "JPG", "EXR"],
       tooltipTexts = @["Save PNG image", "Save JPG image", "Save EXR image"])
 
@@ -1455,14 +1459,14 @@ proc main() =
     y = 50.0 + pad
     x = 500
     dropdownVal1 = doDropdown(
-      vg, 19, x, y, w, h,
+      vg, GEN_ID(), x, y, w, h,
       items = @["Orange", "Banana", "Blueberry", "Apricot", "Apple"],
       dropdownVal1, tooltipText = "Select a fruit")
 
     y = 50.0 + pad
     x = 650
     dropdownVal2 = doDropdown(
-      vg, 20, x, y, w, h,
+      vg, GEN_ID(), x, y, w, h,
       items = @["Red", "Green", "Blue", "Yellow", "Purple (with little yellow dots)"],
       dropdownVal2, tooltipText = "Select a colour")
 
