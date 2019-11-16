@@ -90,9 +90,10 @@ type DrawState = enum
 # }}}
 # {{{ Utils
 
-template GEN_ID(): int64 =
+template GEN_ID(index: int = 0): int64 =
   let i = instantiationInfo(fullPaths = true)
-  int64(XXH32(i.filename & $i.line)) + int.low + 1
+  # Make sure the IDs are always positive integers
+  int64(XXH32(i.filename & $i.line & $index)) - int32.low + 1
 
 
 proc lerp(a, b, t: float): float =
@@ -1331,6 +1332,7 @@ proc main() =
     checkBoxVal2 = false
 
     radioButtonsVal1 = 1
+    radioButtonsVal2 = 2
 
     dropdownVal1 = 0
     dropdownVal2 = 2
@@ -1454,8 +1456,13 @@ proc main() =
       labels = @["PNG", "JPG", "EXR"],
       tooltipTexts = @["Save PNG image", "Save JPG image", "Save EXR image"])
 
-    # Dropdowns
+    y += pad * 2
+    radioButtonsVal2 = doRadioButtons(
+      vg, GEN_ID(), x, y, 220, h, radioButtonsVal2,
+      labels = @["One", "Two", "Three"],
+      tooltipTexts = @["First (1)", "Second (2)", "Third (3)"])
 
+    # Dropdowns
     y = 50.0 + pad
     x = 500
     dropdownVal1 = doDropdown(
