@@ -10,7 +10,7 @@ import xxhash
 const
   TooltipShowDelay       = 0.5
   TooltipFadeOutDelay    = 0.1
-  TooltipFadeOutDuration = 0.3
+  TooltipFadeOutDuration = 5.3
 
   ScrollBarFineDragDivisor         = 10.0
   ScrollBarUltraFineDragDivisor    = 100.0
