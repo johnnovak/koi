@@ -127,8 +127,8 @@ proc truncate(vg: NVGContext, text: string, maxWidth: float): string =
 # {{{ Globals
 
 var
-  gui: GuiState
-  vg:  NVGContext
+  gui {.threadvar.}: GuiState
+  vg {.threadvar.}:  NVGContext
 
 template isHot(id: int64): bool =
   gui.hotItem == id
@@ -148,12 +148,12 @@ template isHotAndActive(id: int64): bool =
 template noActiveItem(): bool =
   gui.activeItem == 0
 
-let
-  RED* = rgb(1.0, 0.4, 0.4)
-  GRAY_MID*  = gray(0.6)
-  GRAY_HI*   = gray(0.8)
-  GRAY_LO*   = gray(0.25)
-  GRAY_LOHI* = gray(0.35)
+var
+  RED*      {.threadvar.}: Color
+  GRAY_MID* {.threadvar.}: Color
+  GRAY_HI*  {.threadvar.}: Color
+  GRAY_LO*  {.threadvar.}: Color
+  GRAY_LOHI*{.threadvar.}: Color
 
 # }}}
 # {{{ Callbacks
@@ -273,77 +273,6 @@ proc tooltipPost(vg: NVGContext) =
     gui.tooltipT0 = getTime()
 
 # }}}
-# }}}
-
-# {{{ setNvgContext()
-
-proc setNvgContext*(nvg: NVGContext) =
-  vg = nvg
-
-# }}}
-# {{{ beginFrame()
-
-proc beginFrame*() =
-  let win = glfw.currentContext()
-
-  gui.lastmx = gui.mx
-  gui.lastmy = gui.my
-
-  (gui.mx, gui.my) = win.cursorPos()
-
-  gui.mbLeftDown  = win.mouseButtonDown(mb1)
-  gui.mbRightDown = win.mouseButtonDown(mb2)
-  gui.mbMidDown   = win.mouseButtonDown(mb3)
-
-  gui.shiftDown  = win.isKeyDown(keyLeftShift) or
-                   win.isKeyDown(keyRightShift)
-
-  gui.ctrlDown   = win.isKeyDown(keyLeftControl) or
-                   win.isKeyDown(keyRightControl)
-
-  gui.altDown    = win.isKeyDown(keyLeftAlt) or
-                   win.isKeyDown(keyRightAlt)
-
-  gui.superDown  = win.isKeyDown(keyLeftSuper) or
-                   win.isKeyDown(keyRightSuper)
-
-  gui.hotItem = 0
-
-# }}}
-# {{{ endFrame
-
-proc scrollBarPost
-proc sliderPost
-
-proc endFrame*() =
-#  echo fmt"hotItem: {gui.hotItem}, activeItem: {gui.activeItem}, scrollBarState: {gui.scrollBarState}"
-
-  tooltipPost(vg)
-
-  gui.lastHotItem = gui.hotItem
-
-  # Widget specific postprocessing
-  #
-  # NOTE: These must be called before the "Active state reset" section below
-  # as they usually depend on the pre-reset value of the activeItem!
-  scrollBarPost()
-  sliderPost()
-
-  # Active state reset
-  if gui.mbLeftDown:
-    if gui.activeItem == 0 and gui.hotItem == 0:
-      # LMB was pressed outside of any widget. We need to mark this as
-      # a separate state so we can't just "drag into" a widget while the LMB
-      # is being depressed and activate it.
-      gui.activeItem = -1
-  else:
-    if gui.activeItem != 0:
-      # If the LMB was released inside the active widget, that has already
-      # been handled at this point--we're just clearing the active item here.
-      # This also takes care of the case when the LMB was depressed inside the
-      # widget but released outside of it.
-      gui.activeItem = 0
-
 # }}}
 
 # {{{ label
@@ -1406,6 +1335,80 @@ proc sliderPost() =
     else: gui.sliderState = ssDefault
 
 # }}}
+# }}}
+
+# {{{ init()
+
+proc init*(nvg: NVGContext) =
+  vg = nvg
+
+  RED       = rgb(1.0, 0.4, 0.4)
+  GRAY_MID  = gray(0.6)
+  GRAY_HI   = gray(0.8)
+  GRAY_LO   = gray(0.25)
+  GRAY_LOHI = gray(0.35)
+
+# }}}
+# {{{ beginFrame()
+
+proc beginFrame*() =
+  let win = glfw.currentContext()
+
+  gui.lastmx = gui.mx
+  gui.lastmy = gui.my
+
+  (gui.mx, gui.my) = win.cursorPos()
+
+  gui.mbLeftDown  = win.mouseButtonDown(mb1)
+  gui.mbRightDown = win.mouseButtonDown(mb2)
+  gui.mbMidDown   = win.mouseButtonDown(mb3)
+
+  gui.shiftDown  = win.isKeyDown(keyLeftShift) or
+                   win.isKeyDown(keyRightShift)
+
+  gui.ctrlDown   = win.isKeyDown(keyLeftControl) or
+                   win.isKeyDown(keyRightControl)
+
+  gui.altDown    = win.isKeyDown(keyLeftAlt) or
+                   win.isKeyDown(keyRightAlt)
+
+  gui.superDown  = win.isKeyDown(keyLeftSuper) or
+                   win.isKeyDown(keyRightSuper)
+
+  gui.hotItem = 0
+
+# }}}
+# {{{ endFrame
+
+proc endFrame*() =
+#  echo fmt"hotItem: {gui.hotItem}, activeItem: {gui.activeItem}, scrollBarState: {gui.scrollBarState}"
+
+  tooltipPost(vg)
+
+  gui.lastHotItem = gui.hotItem
+
+  # Widget specific postprocessing
+  #
+  # NOTE: These must be called before the "Active state reset" section below
+  # as they usually depend on the pre-reset value of the activeItem!
+  scrollBarPost()
+  sliderPost()
+
+  # Active state reset
+  if gui.mbLeftDown:
+    if gui.activeItem == 0 and gui.hotItem == 0:
+      # LMB was pressed outside of any widget. We need to mark this as
+      # a separate state so we can't just "drag into" a widget while the LMB
+      # is being depressed and activate it.
+      gui.activeItem = -1
+  else:
+    if gui.activeItem != 0:
+      # If the LMB was released inside the active widget, that has already
+      # been handled at this point--we're just clearing the active item here.
+      # This also takes care of the case when the LMB was depressed inside the
+      # widget but released outside of it.
+      gui.activeItem = 0
+
 # }}}
 
 # vim: et:ts=2:sw=2:fdm=marker

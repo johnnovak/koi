@@ -1,1 +1,1 @@
-nim c -r -D:glfwStaticLib -D:nvgGL3 test
+nim c -r --threads:on -D:glfwStaticLib -D:nvgGL3 test
