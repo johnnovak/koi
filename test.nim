@@ -224,7 +224,6 @@ proc init(): Window =
 
   var win = createWindow()
   win.framebufferSizeCb = render
-  win.keyCb = koi.keyCb
   win.pos = (400, 150)  # TODO for development
 
   glfw.makeContextCurrent(win)
@@ -255,7 +254,11 @@ proc main() =
   let win = init()
 
   while not win.shouldClose:
+    if koi.isKeyDown(keyEscape):
+      win.shouldClose = true
+
     render(win)
+
     glfw.pollEvents()
 
   cleanup()

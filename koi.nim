@@ -48,7 +48,7 @@ type GuiState = object
   lastmx, lastmy: float
   mbLeftDown:     bool
   mbRightDown:    bool
-  mbMidDown:      bool
+  mbMiddleDown:   bool
 
   # Keyboard
   shiftDown:      bool
@@ -128,7 +128,7 @@ proc truncate(vg: NVGContext, text: string, maxWidth: float): string =
 
 var
   gui {.threadvar.}: GuiState
-  vg {.threadvar.}:  NVGContext
+  vg:  NVGContext
 
 template isHot(id: int64): bool =
   gui.hotItem == id
@@ -156,18 +156,37 @@ var
   GRAY_LOHI*{.threadvar.}: Color
 
 # }}}
-# {{{ Callbacks
+# {{{ key handling
 
-proc keyCb*(win: Window, key: Key, scanCode: int32, action: KeyAction,
-            modKeys: set[ModifierKey]) =
+const KeyBufSize = 200
+var
+  # +1 is neeed because we want array indices correspond to keycodes
+  keyState: array[ord(glfw.Key.high) + 1, bool]
 
-  if action == kaDown:
-    case key
-    of keyEscape: win.shouldClose = true
-    else: discard
+  keyBuf: array[KeyBufSize, Key]
+  keyBufIdx: Natural
+
+
+proc keyCb(win: Window, key: Key, scanCode: int32, action: KeyAction,
+           modKeys: set[ModifierKey]) =
+
+  # TODO use char callback instead?
+  if key > keyUnknown and keyBufIdx <= keyBuf.high:
+    keyBuf[keyBufIdx] = key
+    inc(keyBufIdx)
+
+
+proc storeKeyState() =
+  let win = currentContext()
+  for key in keySpace..Key.high:
+    keyState[ord(key)] = win.isKeyDown(key)
+
+
+proc isKeyDown*(key: Key): bool =
+  if key != keyUnknown:
+    result = keyState[ord(key)]
 
 # }}}
-
 # {{{ mouseInside
 
 proc mouseInside(x, y, w, h: float): bool =
@@ -1340,13 +1359,16 @@ proc sliderPost() =
 # {{{ init()
 
 proc init*(nvg: NVGContext) =
-  vg = nvg
-
   RED       = rgb(1.0, 0.4, 0.4)
   GRAY_MID  = gray(0.6)
   GRAY_HI   = gray(0.8)
   GRAY_LO   = gray(0.25)
   GRAY_LOHI = gray(0.35)
+
+  vg = nvg
+
+  let win = currentContext()
+  win.keyCb = keyCb
 
 # }}}
 # {{{ beginFrame()
@@ -1354,15 +1376,20 @@ proc init*(nvg: NVGContext) =
 proc beginFrame*() =
   let win = glfw.currentContext()
 
+  # Store mouse state
   gui.lastmx = gui.mx
   gui.lastmy = gui.my
 
   (gui.mx, gui.my) = win.cursorPos()
 
-  gui.mbLeftDown  = win.mouseButtonDown(mb1)
-  gui.mbRightDown = win.mouseButtonDown(mb2)
-  gui.mbMidDown   = win.mouseButtonDown(mb3)
+  gui.mbLeftDown   = win.mouseButtonDown(mbLeft)
+  gui.mbRightDown  = win.mouseButtonDown(mbRight)
+  gui.mbMiddleDown = win.mouseButtonDown(mbMiddle)
 
+  # Store current state of all keys (for "isKeyPressed" type of processing)
+  storeKeyState()
+
+  # Store modifier key state (just for convenience for the GUI functions)
   gui.shiftDown  = win.isKeyDown(keyLeftShift) or
                    win.isKeyDown(keyRightShift)
 
@@ -1375,6 +1402,7 @@ proc beginFrame*() =
   gui.superDown  = win.isKeyDown(keyLeftSuper) or
                    win.isKeyDown(keyRightSuper)
 
+  # Reset hot item
   gui.hotItem = 0
 
 # }}}
