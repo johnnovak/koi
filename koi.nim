@@ -128,7 +128,7 @@ proc truncate(vg: NVGContext, text: string, maxWidth: float): string =
 
 var
   gui: GuiState
-  vg: NVGContext
+  vg:  NVGContext
 
 template isHot(id: int64): bool =
   gui.hotItem == id
@@ -165,20 +165,6 @@ proc keyCb*(win: Window, key: Key, scanCode: int32, action: KeyAction,
     case key
     of keyEscape: win.shouldClose = true
     else: discard
-
-#    of keyLeftShift,   keyRightShift:   gui.shiftDown = true
-#    of keyLeftControl, keyRightControl: gui.ctrlDown  = true
-#    of keyLeftAlt,     keyRightAlt:     gui.altDown   = true
-#    of keyLeftSuper,   keyRightSuper:   gui.superDown = true
-#    else: discard
-
-#  elif action == kaUp:
-#    case key
-#    of keyLeftShift,   keyRightShift:   gui.shiftDown = false
-#    of keyLeftControl, keyRightControl: gui.ctrlDown  = false
-#    of keyLeftAlt,     keyRightAlt:     gui.altDown   = false
-#    of keyLeftSuper,   keyRightSuper:   gui.superDown = false
-#    else: discard
 
 # }}}
 
