@@ -1,5 +1,4 @@
-import os, strformat
-import locks
+import strformat
 
 import glad/gl
 import glfw
@@ -7,14 +6,8 @@ import nanovg
 import koi
 
 
-type
-  GlobalState = object
-    win: Window
-    vg: NVGContext
-
-var gGlobalState: ref GlobalState
-
-var resizeLock: Lock
+# Global NanoVG context
+var vg: NVGContext
 
 
 ### UI DATA ################################################
@@ -68,14 +61,7 @@ proc loadData(vg: NVGContext) =
     quit "Could not add font italic.\n"
 
 
-
-
-proc render(gs: GlobalState) =
-#  if not tryAcquire(resizeLock): return
-
-  let vg = gs.vg
-  let win = gs.win
-
+proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
   let
     (winWidth, winHeight) = win.size
     (fbWidth, fbHeight) = win.framebufferSize
@@ -90,10 +76,7 @@ proc render(gs: GlobalState) =
           GL_DEPTH_BUFFER_BIT or
           GL_STENCIL_BUFFER_BIT)
 
-  #vg.beginframe(winwidth.float, winheight.float, pxratio)
-  vg.beginframe(fbwidth.float, fbheight.float, 1.0)
-
-
+  vg.beginFrame(winWidth.float, winHeight.float, pxRatio)
   koi.beginFrame()
 
   ############################################################
@@ -231,29 +214,23 @@ proc render(gs: GlobalState) =
   ############################################################
 
   koi.endFrame()
-
   vg.endFrame()
 
   glfw.swapBuffers(win)
 
-  release(resizeLock)
 
-
-
-#proc resize(win: Window, res: tuple[w, h: int32]) =
-#  (fbWidth, fbHeight) = (res.w, res.h)
-
-
-proc init(): tuple[w: Window, n: NVGcontext] = 
+proc init(): Window = 
   glfw.initialize()
 
   var win = createWindow()
-#  win.framebufferSizeCb = resize
+  win.framebufferSizeCb = render
   win.keyCb = koi.keyCb
   win.pos = (400, 150)  # TODO for development
 
+  glfw.makeContextCurrent(win)
+
   var flags = {nifStencilStrokes, nifDebug}
-  var vg = nvgInit(getProcAddress, flags)
+  vg = nvgInit(getProcAddress, flags)
   if vg == nil:
     quit "Error creating NanoVG context"
 
@@ -262,42 +239,24 @@ proc init(): tuple[w: Window, n: NVGcontext] =
 
   loadData(vg)
 
-  result = (win, vg)
+  koi.init(vg)
+
+  glfw.swapInterval(1)
+
+  result = win
 
 
 proc cleanup() = 
-#  nvgDeinit(vg)
+  nvgDeinit(vg)
   glfw.terminate()
 
 
-var renderThread: Thread[ptr GlobalState]
-var doRender = true
-
-proc renderThreadFunc(gs: ptr GlobalState) {.thread.} =
-  koi.init(gs.vg)
-  glfw.makeContextCurrent(gs.win)
-  glfw.swapInterval(1)
-
-  while doRender:
-    render(gs[])
-
-
 proc main() =
-  initLock(resizeLock)
+  let win = init()
 
-  new(gGlobalState)
-  (gGlobalState.win, gGlobalState.vg) = init()
-
-  GC_ref(gGlobalState)
-  glfw.detachCurrentContext()
-  createThread(renderThread, renderThreadFunc, gGlobalState[].addr)
-
-  while not gGlobalState.win.shouldClose:
-    glfw.waitEvents()
-
-  doRender = false
-  joinThreads(renderThread)
-  GC_unref(gGlobalState)
+  while not win.shouldClose:
+    render(win)
+    glfw.pollEvents()
 
   cleanup()
 
