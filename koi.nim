@@ -105,6 +105,8 @@ proc invLerp*(a, b, v: float): float =
 
 
 proc disableCursor*() =
+  var win = glfw.currentContext()
+  echo "DISABLE: " & $cast[int](win)
   glfw.currentContext().cursorMode = cmDisabled
 
 proc enableCursor*() =
@@ -128,7 +130,7 @@ proc truncate(vg: NVGContext, text: string, maxWidth: float): string =
 
 var
   gui {.threadvar.}: GuiState
-  vg {.threadvar.}:  NVGContext
+  vg  {.threadvar.}: NVGContext
 
 template isHot(id: int64): bool =
   gui.hotItem == id
@@ -1347,6 +1349,9 @@ proc init*(nvg: NVGContext) =
   GRAY_HI   = gray(0.8)
   GRAY_LO   = gray(0.25)
   GRAY_LOHI = gray(0.35)
+
+  let win = glfw.currentContext()
+  win.keyCb = keyCb
 
 # }}}
 # {{{ beginFrame()

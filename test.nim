@@ -1,4 +1,4 @@
-import strformat
+import os, strformat
 
 import glad/gl
 import glfw
@@ -219,15 +219,15 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
   glfw.swapBuffers(win)
 
 
+proc windowPositionCb(win: Window, pos: tuple[x, y: int32]) =
+  render(win)
+
+
 proc init(): Window = 
   glfw.initialize()
 
   var win = createWindow()
-  win.framebufferSizeCb = render
-  win.keyCb = koi.keyCb
   win.pos = (400, 150)  # TODO for development
-
-  glfw.makeContextCurrent(win)
 
   var flags = {nifStencilStrokes, nifDebug}
   vg = nvgInit(getProcAddress, flags)
@@ -240,6 +240,9 @@ proc init(): Window =
   loadData(vg)
 
   koi.init(vg)
+
+  win.windowPositionCb = windowPositionCb
+  win.framebufferSizeCb = render
 
   glfw.swapInterval(1)
 
