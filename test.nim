@@ -219,14 +219,12 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
   glfw.swapBuffers(win)
 
 
-proc init(): Window = 
+proc init(): Window =
   glfw.initialize()
 
   var win = createWindow()
   win.framebufferSizeCb = render
   win.pos = (400, 150)  # TODO for development
-
-  glfw.makeContextCurrent(win)
 
   var flags = {nifStencilStrokes, nifDebug}
   vg = nvgInit(getProcAddress, flags)
@@ -245,7 +243,7 @@ proc init(): Window =
   result = win
 
 
-proc cleanup() = 
+proc cleanup() =
   nvgDeinit(vg)
   glfw.terminate()
 
@@ -258,7 +256,6 @@ proc main() =
       win.shouldClose = true
 
     render(win)
-
     glfw.pollEvents()
 
   cleanup()
