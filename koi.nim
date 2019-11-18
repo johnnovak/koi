@@ -1,10 +1,101 @@
-import math, strformat
+import math, unicode, strformat
 
 import glfw
 import nanovg
 import xxhash
 
 
+# {{{ Types
+
+type
+  DropdownState = enum
+    dsClosed, dsOpenLMBPressed, dsOpen
+
+  SliderState = enum
+    ssDefault,
+    ssDragHidden
+
+  ScrollBarState = enum
+    sbsDefault,
+    sbsDragNormal,
+    sbsDragHidden,
+    sbsTrackClickFirst,
+    sbsTrackClickDelay,
+    sbsTrackClickRepeat
+
+  TextFieldState = enum
+    tfDefault, tfEditLMBPressed, tfEdit
+
+  TooltipState = enum
+    tsOff, tsShowDelay, tsShow, tsFadeOutDelay, tsFadeOut
+
+
+type GuiState = object
+  # Mouse state
+  mx, my:         float
+  lastmx, lastmy: float
+  mbLeftDown:     bool
+  mbRightDown:    bool
+  mbMiddleDown:   bool
+
+  # Keyboard
+  shiftDown:      bool
+  altDown:        bool
+  ctrlDown:       bool
+  superDown:      bool
+
+  # Active & hot items
+  hotItem:        int64
+  activeItem:     int64
+  lastHotItem:    int64
+
+  # Set if a widget has captured the focus (e.g. a textfield in edit mode) so
+  # all other UI interactions (hovers, tooltips, etc.) should be disabled.
+  focusCaptured:  bool
+
+  # General purpose widget states
+  x0, y0:         float   # for relative mouse movement calculations
+  t0:             float   # for timeouts
+  dragX, dragY:   float   # for keeping track of the cursor in hidden drag mode
+
+  # Widget-specific states
+  radioButtonsActiveButton: int
+
+  dropdownState:       DropdownState
+  dropdownActiveItem:  int64
+
+  sliderState:         SliderState
+
+  scrollBarState:      ScrollBarState
+  scrollBarClickDir:   float
+
+  textFieldState:      TextFieldState
+  textFieldActiveItem: int64
+
+  # Internal tooltip state
+  tooltipState:        TooltipState
+  lastTooltipState:    TooltipState
+  tooltipT0:           float
+  tooltipText:         string
+
+type DrawState = enum
+  dsNormal, dsHover, dsActive
+
+# }}}
+# {{{ Globals
+
+var
+  gui {.threadvar.}: GuiState
+  vg:  NVGContext
+
+var
+  RED*      {.threadvar.}: Color
+  GRAY_MID* {.threadvar.}: Color
+  GRAY_HI*  {.threadvar.}: Color
+  GRAY_LO*  {.threadvar.}: Color
+  GRAY_LOHI*{.threadvar.}: Color
+
+# }}}
 # {{{ Configuration
 
 const
@@ -22,80 +113,7 @@ const
 
 # }}}
 
-# {{{ Types
-
-type DropdownState = enum
-  dsClosed, dsOpenLMBPressed, dsOpen
-
-type SliderState = enum
-  ssDefault,
-  ssDragHidden
-
-type ScrollBarState = enum
-  sbsDefault,
-  sbsDragNormal,
-  sbsDragHidden,
-  sbsTrackClickFirst,
-  sbsTrackClickDelay,
-  sbsTrackClickRepeat
-
-type TooltipState = enum
-  tsOff, tsShowDelay, tsShow, tsFadeOutDelay, tsFadeOut
-
-type GuiState = object
-  # Mouse state
-  mx, my:         float
-  lastmx, lastmy: float
-  mbLeftDown:     bool
-  mbRightDown:    bool
-  mbMidDown:      bool
-
-  # Keyboard
-  shiftDown:      bool
-  altDown:        bool
-  ctrlDown:       bool
-  superDown:      bool
-
-  # Active & hot items
-  hotItem:        int64
-  activeItem:     int64
-  lastHotItem:    int64
-
-  # General purpose widget states
-  x0, y0:         float   # for relative mouse movement calculations
-  t0:             float   # for timeouts
-  dragX, dragY:   float   # for keeping track of the cursor in hidden drag mode
-
-  # Widget-specific states
-  radioButtonsActiveButton: int
-
-  dropdownState:     DropdownState
-  dropdownActive:    int64
-
-  scrollBarState:    ScrollBarState
-  scrollBarClickDir: float
-
-  sliderState:       SliderState
-
-  # Internal tooltip state
-  tooltipState:      TooltipState
-  lastTooltipState:  TooltipState
-  tooltipT0:         float
-  tooltipText:       string
-
-type DrawState = enum
-  dsNormal, dsHover, dsActive
-
-# }}}
 # {{{ Utils
-
-template generateId(filename: string, line: int, id: string): int64 =
-  let
-    hash32 = XXH32(filename & $line & id)
-
-  # Make sure the IDs are always positive integers
-  int64(hash32) - int32.low + 1
-
 
 proc lerp*(a, b, t: float): float =
   a + (b - a) * t
@@ -106,7 +124,6 @@ proc invLerp*(a, b, v: float): float =
 
 proc disableCursor*() =
   var win = glfw.currentContext()
-  echo "DISABLE: " & $cast[int](win)
   glfw.currentContext().cursorMode = cmDisabled
 
 proc enableCursor*() =
@@ -126,11 +143,19 @@ proc truncate(vg: NVGContext, text: string, maxWidth: float): string =
   result = text # TODO
 
 # }}}
-# {{{ Globals
+# {{{ UI helpers
 
-var
-  gui {.threadvar.}: GuiState
-  vg  {.threadvar.}: NVGContext
+template generateId(filename: string, line: int, id: string): int64 =
+  let
+    hash32 = XXH32(filename & $line & id)
+
+  # Make sure the IDs are always positive integers
+  int64(hash32) - int32.low + 1
+
+
+proc mouseInside(x, y, w, h: float): bool =
+  gui.mx >= x and gui.mx <= x+w and
+  gui.my >= y and gui.my <= y+h
 
 template isHot(id: int64): bool =
   gui.hotItem == id
@@ -150,34 +175,37 @@ template isHotAndActive(id: int64): bool =
 template noActiveItem(): bool =
   gui.activeItem == 0
 
+# }}}
+# {{{ Keyboard handling
+
+const CharBufSize = 200
 var
-  RED*      {.threadvar.}: Color
-  GRAY_MID* {.threadvar.}: Color
-  GRAY_HI*  {.threadvar.}: Color
-  GRAY_LO*  {.threadvar.}: Color
-  GRAY_LOHI*{.threadvar.}: Color
+  # +1 is neeed because we want array indices correspond to keycodes
+  keyState: array[ord(glfw.Key.high) + 1, bool]
+
+  charBuf: array[CharBufSize, Rune]
+  charBufIdx: Natural
+
+
+proc charCb(win: Window, codePoint: Rune) =
+  if charBufIdx <= charBuf.high:
+    charBuf[charBufIdx] = codePoint
+    inc(charBufIdx)
+
+proc resetCharBuf() =
+  charBufIdx = 0
+
+proc storeKeyState() =
+  let win = currentContext()
+  for key in keySpace..Key.high:
+    keyState[ord(key)] = win.isKeyDown(key)
+
+proc isKeyDown*(key: Key): bool =
+  if key != keyUnknown:
+    result = keyState[ord(key)]
 
 # }}}
-# {{{ Callbacks
-
-proc keyCb*(win: Window, key: Key, scanCode: int32, action: KeyAction,
-            modKeys: set[ModifierKey]) =
-
-  if action == kaDown:
-    case key
-    of keyEscape: win.shouldClose = true
-    else: discard
-
-# }}}
-
-# {{{ mouseInside
-
-proc mouseInside(x, y, w, h: float): bool =
-  gui.mx >= x and gui.mx <= x+w and
-  gui.my >= y and gui.my <= y+h
-
-# }}}
-# {{{ Tooltip
+# {{{ Tooltip handling
 # {{{ handleTooltipInsideWidget
 
 proc handleTooltipInsideWidget(id: int64, tooltip: string) =
@@ -314,7 +342,7 @@ proc button(id:         int64,
             tooltip:    string = ""): bool =
 
   # Hit testing
-  if mouseInside(x, y, w, h):
+  if not gui.focusCaptured and mouseInside(x, y, w, h):
     setHot(id)
     if gui.mbLeftDown and noActiveItem():
       setActive(id)
@@ -371,7 +399,7 @@ proc checkBox(id:      int64,
     CheckPad = 3
 
   # Hit testing
-  if mouseInside(x, y, w, w):
+  if not gui.focusCaptured and mouseInside(x, y, w, w):
     setHot(id)
     if gui.mbLeftDown and noActiveItem():
       setActive(id)
@@ -445,7 +473,7 @@ proc radioButtons(id:           int64,
   # Hit testing
   let hotButton = min(int(floor((gui.mx - x) / buttonW)), numButtons-1)
 
-  if mouseInside(x, y, w, h):
+  if not gui.focusCaptured and mouseInside(x, y, w, h):
     setHot(id)
     if gui.mbLeftDown and noActiveItem():
       setActive(id)
@@ -531,20 +559,19 @@ proc dropdown(id:           int64,
     numItems = items.len
     itemHeight = h  # TODO just temporarily
 
-
   result = selectedItem
 
   if gui.dropdownState == dsClosed:
-    if mouseInside(x, y, w, h):
+    if not gui.focusCaptured and mouseInside(x, y, w, h):
       setHot(id)
       if gui.mbLeftDown and noActiveItem():
         setActive(id)
         gui.dropdownState = dsOpenLMBPressed
-        gui.dropdownActive = id
+        gui.dropdownActiveItem = id
 
   # We 'fall through' to the open state to avoid a 1-frame delay when clicking
   # the button
-  if gui.dropdownActive == id and gui.dropdownState >= dsOpenLMBPressed:
+  if gui.dropdownActiveItem == id and gui.dropdownState >= dsOpenLMBPressed:
 
     # Calculate the position of the box around the dropdown items
     var maxItemWidth = 0.0
@@ -567,7 +594,7 @@ proc dropdown(id:           int64,
       setActive(id)
     else:
       gui.dropdownState = dsClosed
-      gui.dropdownActive = 0
+      gui.dropdownActiveItem = 0
 
     hoverItem = min(int(floor((gui.my - boxY - BoxPad) / itemHeight)),
                     numItems-1)
@@ -579,7 +606,7 @@ proc dropdown(id:           int64,
         if hoverItem >= 0:
           result = hoverItem
           gui.dropdownState = dsClosed
-          gui.dropdownActive = 0
+          gui.dropdownActiveItem = 0
         else:
           gui.dropdownState = dsOpen
     else:
@@ -587,11 +614,11 @@ proc dropdown(id:           int64,
         if hoverItem >= 0:
           result = hoverItem
           gui.dropdownState = dsClosed
-          gui.dropdownActive = 0
+          gui.dropdownActiveItem = 0
 
         elif insideButton:
           gui.dropdownState = dsClosed
-          gui.dropdownActive = 0
+          gui.dropdownActiveItem = 0
 
   # Draw button
   let drawState = if isHot(id) and noActiveItem(): dsHover
@@ -667,6 +694,80 @@ template dropdown*(x, y, w, h:   float,
   dropdown(id, x, y, w, h, items, tooltip, selectedItem)
 
 # }}}
+# {{{ textField
+
+proc textField(id:         int64,
+               x, y, w, h: float,
+               tooltip:    string = "",
+               text:       string): string =
+
+  result = text
+
+  if gui.textFieldState == tfDefault:
+    # Hit testing
+    if mouseInside(x, y, w, h):
+      setHot(id)
+      if gui.mbLeftDown and noActiveItem():
+        setActive(id)
+        gui.textFieldState = tfEditLMBPressed
+        gui.textFieldActiveItem = id
+        gui.focusCaptured = true
+
+  # We 'fall through' to the edit state to avoid a 1-frame delay when going
+  # into edit mode
+  if gui.textFieldActiveItem == id and gui.textFieldState >= tfEditLMBPressed:
+    setHot(id)
+    setActive(id)
+
+    # LMB released inside the box selects the item under the cursor and closes
+    # the dropdown
+    if gui.textFieldState == tfEditLMBPressed:
+      if not gui.mbLeftDown:
+        gui.textFieldState = tfEdit
+    else:
+      if gui.mbLeftDown and not mouseInside(x, y, w, h):
+        gui.textFieldState = tfDefault
+        gui.textFieldActiveItem = 0
+        gui.focusCaptured = false
+
+  # Draw text field
+  let drawState = if isHot(id) and noActiveItem(): dsHover
+    elif isHotAndActive(id): dsActive
+    else: dsNormal
+
+  let fillColor = case drawState
+    of dsHover:  GRAY_HI
+    of dsActive: RED
+    else:        GRAY_MID
+
+  vg.beginPath()
+  vg.roundedRect(x, y, w, h, 5)
+  vg.fillColor(fillColor)
+  vg.fill()
+
+  const PadX = 8
+
+  vg.fontSize(19.0)
+  vg.fontFace("sans-bold")
+  vg.textAlign(haLeft, vaMiddle)
+  vg.fillColor(GRAY_LO)
+  discard vg.text(x + PadX, y+h*0.5, text)
+
+  if isHot(id):
+    handleTooltipInsideWidget(id, tooltip)
+
+
+template textField*(x, y, w, h: float,
+                    tooltip:    string = "",
+                    text:       string): string =
+
+  let i = instantiationInfo(fullPaths = true)
+  let id = generateId(i.filename, i.line, "")
+
+  textField(id, x, y, w, h, tooltip, text)
+ 
+
+# }}}
 # {{{ ScrollBar
 # {{{ horizScrollBar
 
@@ -708,7 +809,7 @@ proc horizScrollBar(id:         int64,
   let thumbX = calcThumbX(value)
 
   # Hit testing
-  if mouseInside(x, y, w, h):
+  if not gui.focusCaptured and mouseInside(x, y, w, h):
     setHot(id)
     if gui.mbLeftDown and noActiveItem():
       setActive(id)
@@ -913,7 +1014,7 @@ proc vertScrollBar(id:         int64,
   let thumbY = calcThumbY(value)
 
   # Hit testing
-  if mouseInside(x, y, w, h):
+  if not gui.focusCaptured and mouseInside(x, y, w, h):
     setHot(id)
     if gui.mbLeftDown and noActiveItem():
       setActive(id)
@@ -1117,7 +1218,7 @@ proc horizSlider(id:         int64,
   let posX = calcPosX(value)
 
   # Hit testing
-  if mouseInside(x, y, w, h):
+  if not gui.focusCaptured and mouseInside(x, y, w, h):
     setHot(id)
     if gui.mbLeftDown and noActiveItem():
       setActive(id)
@@ -1235,7 +1336,7 @@ proc vertSlider(id:         int64,
   let posY = calcPosY(value)
 
   # Hit testing
-  if mouseInside(x, y, w, h):
+  if not gui.focusCaptured and mouseInside(x, y, w, h):
     setHot(id)
     if gui.mbLeftDown and noActiveItem():
       setActive(id)
@@ -1342,16 +1443,16 @@ proc sliderPost() =
 # {{{ init()
 
 proc init*(nvg: NVGContext) =
-  vg = nvg
-
   RED       = rgb(1.0, 0.4, 0.4)
   GRAY_MID  = gray(0.6)
   GRAY_HI   = gray(0.8)
   GRAY_LO   = gray(0.25)
   GRAY_LOHI = gray(0.35)
 
-  let win = glfw.currentContext()
-  win.keyCb = keyCb
+  vg = nvg
+
+  let win = currentContext()
+  win.charCb = charCb
 
 # }}}
 # {{{ beginFrame()
@@ -1359,15 +1460,20 @@ proc init*(nvg: NVGContext) =
 proc beginFrame*() =
   let win = glfw.currentContext()
 
+  # Store mouse state
   gui.lastmx = gui.mx
   gui.lastmy = gui.my
 
   (gui.mx, gui.my) = win.cursorPos()
 
-  gui.mbLeftDown  = win.mouseButtonDown(mb1)
-  gui.mbRightDown = win.mouseButtonDown(mb2)
-  gui.mbMidDown   = win.mouseButtonDown(mb3)
+  gui.mbLeftDown   = win.mouseButtonDown(mbLeft)
+  gui.mbRightDown  = win.mouseButtonDown(mbRight)
+  gui.mbMiddleDown = win.mouseButtonDown(mbMiddle)
 
+  # Store current state of all keys (for "isKeyPressed" type of processing)
+  storeKeyState()
+
+  # Store modifier key state (just for convenience for the GUI functions)
   gui.shiftDown  = win.isKeyDown(keyLeftShift) or
                    win.isKeyDown(keyRightShift)
 
@@ -1380,13 +1486,14 @@ proc beginFrame*() =
   gui.superDown  = win.isKeyDown(keyLeftSuper) or
                    win.isKeyDown(keyRightSuper)
 
+  # Reset hot item
   gui.hotItem = 0
 
 # }}}
 # {{{ endFrame
 
 proc endFrame*() =
-#  echo fmt"hotItem: {gui.hotItem}, activeItem: {gui.activeItem}, scrollBarState: {gui.scrollBarState}"
+  echo fmt"hotItem: {gui.hotItem}, activeItem: {gui.activeItem}, textFieldState: {gui.textFieldState}"
 
   tooltipPost(vg)
 
