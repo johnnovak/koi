@@ -33,7 +33,7 @@ type
 type GuiState = object
   # Mouse state
   mx, my:         float
-  lastmx, lastmy: float
+  lastmx, lastmy: float  # mouse cursor position from the last frame
   mbLeftDown:     bool
   mbRightDown:    bool
   mbMiddleDown:   bool
@@ -47,7 +47,7 @@ type GuiState = object
   # Active & hot items
   hotItem:        int64
   activeItem:     int64
-  lastHotItem:    int64
+  lastHotItem:    int64  # hot item from the last frame
 
   # Set if a widget has captured the focus (e.g. a textfield in edit mode) so
   # all other UI interactions (hovers, tooltips, etc.) should be disabled.
@@ -59,23 +59,30 @@ type GuiState = object
   dragX, dragY:   float   # for keeping track of the cursor in hidden drag mode
 
   # Widget-specific states
-  radioButtonsActiveButton: int
+  radioButtonsActiveButton: Natural
 
-  dropdownState:       DropdownState
-  dropdownActiveItem:  int64
+  dropdownState:      DropdownState
+  dropdownActiveItem: int64  # currently active dropdown (or 0)
 
-  sliderState:         SliderState
+  sliderState:        SliderState
 
-  scrollBarState:      ScrollBarState
-  scrollBarClickDir:   float
+  scrollBarState:     ScrollBarState
+  scrollBarClickDir:  float  # set when there was a LMB down inside the track
+                             # but outside of the knob:
+                             # -1 = left of the knob, 1 = right of the knob
 
-  textFieldState:      TextFieldState
-  textFieldActiveItem: int64
+  textFieldState:       TextFieldState
+  textFieldActiveItem:  int64    # text field item in edit mode (or 0)
+  textFieldCursorPos:   Natural  # the cursor is before the Rune with this index
+  textFieldSelFirst:    int      # index of start Rune, -1 if no selection
+  textFieldSelLast:     Natural  # index of last Rune in the selection
+  testFieldDisplayFrom: Natural  # the text is displayed starting from the Rune
+                                 # with this index
 
   # Internal tooltip state
   tooltipState:        TooltipState
   lastTooltipState:    TooltipState
-  tooltipT0:           float
+  tooltipT0:           float  # used for the various tooltip delays & timeouts
   tooltipText:         string
 
 type DrawState = enum
