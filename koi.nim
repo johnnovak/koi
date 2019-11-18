@@ -187,6 +187,8 @@ template noActiveItem(): bool =
 
 const CharBufSize = 200
 var
+  # TODO do we need locking around this stuff? written in the callback, read
+  # from the UI code
   charBuf: array[CharBufSize, Rune]
   charBufIdx: Natural
 
@@ -195,8 +197,14 @@ proc charCb(win: Window, codePoint: Rune) =
     charBuf[charBufIdx] = codePoint
     inc(charBufIdx)
 
-proc resetCharBuf() =
-  charBufIdx = 0
+proc clearCharBuf() = charBufIdx = 0
+
+proc charBufEmpty(): bool = charBufIdx == 0
+
+proc consumeCharBuf(): string =
+  for i in 0..<charBufIdx:
+    result &= charBuf[i]
+  clearCharBuf()
 
 # }}}
 # {{{ Tooltip handling
@@ -703,6 +711,7 @@ proc textField(id:         int64,
       setHot(id)
       if gui.mbLeftDown and noActiveItem():
         setActive(id)
+        clearCharBuf()
         gui.textFieldState = tfEditLMBPressed
         gui.textFieldActiveItem = id
         gui.focusCaptured = true
@@ -713,25 +722,35 @@ proc textField(id:         int64,
     setHot(id)
     setActive(id)
 
-    # LMB released inside the box selects the item under the cursor and closes
-    # the dropdown
     if gui.textFieldState == tfEditLMBPressed:
       if not gui.mbLeftDown:
         gui.textFieldState = tfEdit
     else:
+      # LMB pressed outside the text field exits edit mode
       if gui.mbLeftDown and not mouseInside(x, y, w, h):
         gui.textFieldState = tfDefault
         gui.textFieldActiveItem = 0
         gui.focusCaptured = false
+
+    var newText = text
+    if not charBufEmpty():
+      newText &= consumeCharBuf()
+
+    result = newText
+
 
   # Draw text field
   let drawState = if isHot(id) and noActiveItem(): dsHover
     elif isHotAndActive(id): dsActive
     else: dsNormal
 
+  let editing = gui.textFieldActiveItem == id
+
+  const PadX = 8
+
   let fillColor = case drawState
     of dsHover:  GRAY_HI
-    of dsActive: RED
+    of dsActive: GRAY_LO
     else:        GRAY_MID
 
   vg.beginPath()
@@ -739,12 +758,22 @@ proc textField(id:         int64,
   vg.fillColor(fillColor)
   vg.fill()
 
-  const PadX = 8
+  # Draw cursor
+  if editing:
+    vg.beginPath()
+    vg.strokeColor(RED)
+    vg.strokeWidth(2.0)
+    vg.moveTo(x + PadX, y + 4)
+    vg.lineTo(x + PadX, y+h - 4)
+    vg.stroke()
+
+  # Draw text
+  let textColor = if editing: GRAY_HI else: GRAY_LO
 
   vg.fontSize(19.0)
   vg.fontFace("sans-bold")
   vg.textAlign(haLeft, vaMiddle)
-  vg.fillColor(GRAY_LO)
+  vg.fillColor(textColor)
   discard vg.text(x + PadX, y+h*0.5, text)
 
   if isHot(id):

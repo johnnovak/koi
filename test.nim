@@ -178,11 +178,11 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
   # Text fields
   y += pad * 2
   textFieldVal1 = koi.textField(
-    x, y, w, h, tooltip = "Text field 1", textFieldVal1)
+    x, y, w * 1.7, h, tooltip = "Text field 1", textFieldVal1)
 
   y += pad
   textFieldVal2 = koi.textField(
-    x, y, w, h, tooltip = "Text field 2", textFieldVal2)
+    x, y, w * 1.7, h, tooltip = "Text field 2", textFieldVal2)
 
   # Checkboxes
   y += pad * 2
