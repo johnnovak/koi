@@ -1,46 +1,35 @@
-import math, strformat
+import math, unicode, strformat
 
 import glfw
 import nanovg
 import xxhash
 
 
-# {{{ Configuration
-
-const
-  TooltipShowDelay       = 0.5
-  TooltipFadeOutDelay    = 0.1
-  TooltipFadeOutDuration = 5.3
-
-  ScrollBarFineDragDivisor         = 10.0
-  ScrollBarUltraFineDragDivisor    = 100.0
-  ScrollBarTrackClickRepeatDelay   = 0.3
-  ScrollBarTrackClickRepeatTimeout = 0.05
-
-  SliderFineDragDivisor      = 10.0
-  SliderUltraFineDragDivisor = 100.0
-
-# }}}
-
 # {{{ Types
 
-type DropdownState = enum
-  dsClosed, dsOpenLMBPressed, dsOpen
+type
+  DropdownState = enum
+    dsClosed, dsOpenLMBPressed, dsOpen
 
-type SliderState = enum
-  ssDefault,
-  ssDragHidden
+  SliderState = enum
+    ssDefault,
+    ssDragHidden
 
-type ScrollBarState = enum
-  sbsDefault,
-  sbsDragNormal,
-  sbsDragHidden,
-  sbsTrackClickFirst,
-  sbsTrackClickDelay,
-  sbsTrackClickRepeat
+  ScrollBarState = enum
+    sbsDefault,
+    sbsDragNormal,
+    sbsDragHidden,
+    sbsTrackClickFirst,
+    sbsTrackClickDelay,
+    sbsTrackClickRepeat
 
-type TooltipState = enum
-  tsOff, tsShowDelay, tsShow, tsFadeOutDelay, tsFadeOut
+  TextFieldState = enum
+    tfDefault,
+    tfEdit
+
+  TooltipState = enum
+    tsOff, tsShowDelay, tsShow, tsFadeOutDelay, tsFadeOut
+
 
 type GuiState = object
   # Mouse state
@@ -72,10 +61,12 @@ type GuiState = object
   dropdownState:     DropdownState
   dropdownActive:    int64
 
+  sliderState:       SliderState
+
   scrollBarState:    ScrollBarState
   scrollBarClickDir: float
 
-  sliderState:       SliderState
+  textFieldState:    TextFieldState
 
   # Internal tooltip state
   tooltipState:      TooltipState
@@ -87,15 +78,38 @@ type DrawState = enum
   dsNormal, dsHover, dsActive
 
 # }}}
+# {{{ Globals
+
+var
+  gui {.threadvar.}: GuiState
+  vg:  NVGContext
+
+var
+  RED*      {.threadvar.}: Color
+  GRAY_MID* {.threadvar.}: Color
+  GRAY_HI*  {.threadvar.}: Color
+  GRAY_LO*  {.threadvar.}: Color
+  GRAY_LOHI*{.threadvar.}: Color
+
+# }}}
+# {{{ Configuration
+
+const
+  TooltipShowDelay       = 0.5
+  TooltipFadeOutDelay    = 0.1
+  TooltipFadeOutDuration = 5.3
+
+  ScrollBarFineDragDivisor         = 10.0
+  ScrollBarUltraFineDragDivisor    = 100.0
+  ScrollBarTrackClickRepeatDelay   = 0.3
+  ScrollBarTrackClickRepeatTimeout = 0.05
+
+  SliderFineDragDivisor      = 10.0
+  SliderUltraFineDragDivisor = 100.0
+
+# }}}
+
 # {{{ Utils
-
-template generateId(filename: string, line: int, id: string): int64 =
-  let
-    hash32 = XXH32(filename & $line & id)
-
-  # Make sure the IDs are always positive integers
-  int64(hash32) - int32.low + 1
-
 
 proc lerp*(a, b, t: float): float =
   a + (b - a) * t
@@ -124,11 +138,19 @@ proc truncate(vg: NVGContext, text: string, maxWidth: float): string =
   result = text # TODO
 
 # }}}
-# {{{ Globals
+# {{{ UI helpers
 
-var
-  gui {.threadvar.}: GuiState
-  vg:  NVGContext
+template generateId(filename: string, line: int, id: string): int64 =
+  let
+    hash32 = XXH32(filename & $line & id)
+
+  # Make sure the IDs are always positive integers
+  int64(hash32) - int32.low + 1
+
+
+proc mouseInside(x, y, w, h: float): bool =
+  gui.mx >= x and gui.mx <= x+w and
+  gui.my >= y and gui.my <= y+h
 
 template isHot(id: int64): bool =
   gui.hotItem == id
@@ -148,53 +170,37 @@ template isHotAndActive(id: int64): bool =
 template noActiveItem(): bool =
   gui.activeItem == 0
 
-var
-  RED*      {.threadvar.}: Color
-  GRAY_MID* {.threadvar.}: Color
-  GRAY_HI*  {.threadvar.}: Color
-  GRAY_LO*  {.threadvar.}: Color
-  GRAY_LOHI*{.threadvar.}: Color
-
 # }}}
-# {{{ key handling
+# {{{ Keyboard handling
 
-const KeyBufSize = 200
+const CharBufSize = 200
 var
   # +1 is neeed because we want array indices correspond to keycodes
   keyState: array[ord(glfw.Key.high) + 1, bool]
 
-  keyBuf: array[KeyBufSize, Key]
-  keyBufIdx: Natural
+  charBuf: array[CharBufSize, Rune]
+  charBufIdx: Natural
 
 
-proc keyCb(win: Window, key: Key, scanCode: int32, action: KeyAction,
-           modKeys: set[ModifierKey]) =
+proc charCb(win: Window, codePoint: Rune) =
+  if charBufIdx <= charBuf.high:
+    charBuf[charBufIdx] = codePoint
+    inc(charBufIdx)
 
-  # TODO use char callback instead?
-  if key > keyUnknown and keyBufIdx <= keyBuf.high:
-    keyBuf[keyBufIdx] = key
-    inc(keyBufIdx)
-
+proc resetCharBuf() =
+  charBufIdx = 0
 
 proc storeKeyState() =
   let win = currentContext()
   for key in keySpace..Key.high:
     keyState[ord(key)] = win.isKeyDown(key)
 
-
 proc isKeyDown*(key: Key): bool =
   if key != keyUnknown:
     result = keyState[ord(key)]
 
 # }}}
-# {{{ mouseInside
-
-proc mouseInside(x, y, w, h: float): bool =
-  gui.mx >= x and gui.mx <= x+w and
-  gui.my >= y and gui.my <= y+h
-
-# }}}
-# {{{ Tooltip
+# {{{ Tooltip handling
 # {{{ handleTooltipInsideWidget
 
 proc handleTooltipInsideWidget(id: int64, tooltip: string) =
@@ -548,7 +554,6 @@ proc dropdown(id:           int64,
     numItems = items.len
     itemHeight = h  # TODO just temporarily
 
-
   result = selectedItem
 
   if gui.dropdownState == dsClosed:
@@ -682,6 +687,71 @@ template dropdown*(x, y, w, h:   float,
   let id = generateId(i.filename, i.line, "")
 
   dropdown(id, x, y, w, h, items, tooltip, selectedItem)
+
+# }}}
+# {{{ textField
+
+
+proc textField(id:         int64,
+               x, y, w, h: float,
+               tooltip:    string = "",
+               text:       string): string =
+
+  result = text
+
+  if gui.textFieldState == tfDefault:
+    # Hit testing
+    if mouseInside(x, y, w, h):
+      setHot(id)
+      if gui.mbLeftDown and noActiveItem():
+        setActive(id)
+        gui.textFieldState = tfEdit
+
+  # We 'fall through' to the edit state to avoid a 1-frame delay when going
+  # into edit mode
+  if isActive(id) and gui.textFieldState == tfEdit:
+      setHot(id)
+      setActive(id)
+#    if gui.mbLeftDown and not mouseInside(x, y, w, h):
+#      gui.textFieldState = tfDefault
+    discard 
+
+  # Draw text field
+  let drawState = if isHot(id) and noActiveItem(): dsHover
+    elif isHotAndActive(id): dsActive
+    else: dsNormal
+
+  let fillColor = case drawState
+    of dsHover:  GRAY_HI
+    of dsActive: RED
+    else:        GRAY_MID
+
+  vg.beginPath()
+  vg.roundedRect(x, y, w, h, 5)
+  vg.fillColor(fillColor)
+  vg.fill()
+
+  const PadX = 8
+
+  vg.fontSize(19.0)
+  vg.fontFace("sans-bold")
+  vg.textAlign(haLeft, vaMiddle)
+  vg.fillColor(GRAY_LO)
+  discard vg.text(x + PadX, y+h*0.5, text)
+
+  if isHot(id):
+    handleTooltipInsideWidget(id, tooltip)
+
+
+template textField*(x, y, w, h: float,
+                    tooltip:    string = "",
+                    text:       string): string =
+
+  let i = instantiationInfo(fullPaths = true)
+  let id = generateId(i.filename, i.line, "")
+
+  textField(id, x, y, w, h, tooltip, text)
+ 
 
 # }}}
 # {{{ ScrollBar
@@ -1368,7 +1438,7 @@ proc init*(nvg: NVGContext) =
   vg = nvg
 
   let win = currentContext()
-  win.keyCb = keyCb
+  win.charCb = charCb
 
 # }}}
 # {{{ beginFrame()

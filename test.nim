@@ -32,6 +32,9 @@ var
   dropdownVal1 = 0
   dropdownVal2 = 2
 
+  textFieldVal1 = ""
+  textFieldVal2 = "edit me"
+
 ############################################################
 
 proc createWindow(): Window =
@@ -91,6 +94,7 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
   koi.label(x + 5, y, w, h, "Test buttons", color = gray(0.90),
             fontSize = 22.0)
 
+  # Buttons
   y += pad
   if koi.button(x, y, w, h, "Start", color = GRAY_MID,
                 tooltip = "I am the first!"):
@@ -193,6 +197,15 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
     labels = @["One", "Two", "Three"],
     tooltips = @["First (1)", "Second (2)", "Third (3)"],
     radioButtonsVal2)
+
+  # Text fields
+  y += pad * 2
+  textFieldVal1 = koi.textField(
+    x, y, w, h, tooltip = "Text field 1", textFieldVal1)
+
+  y += pad
+  textFieldVal2 = koi.textField(
+    x, y, w, h, tooltip = "Text field 2", textFieldVal2)
 
   # Dropdowns
   y = 50.0 + pad
