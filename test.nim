@@ -270,7 +270,7 @@ proc main() =
   let win = init()
 
   while not win.shouldClose:
-    if koi.isKeyDown(keyEscape):
+    if win.isKeyDown(keyEscape):  # TODO key buf, like char buf?
       win.shouldClose = true
 
     render(win)

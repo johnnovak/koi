@@ -187,12 +187,8 @@ template noActiveItem(): bool =
 
 const CharBufSize = 200
 var
-  # +1 is neeed because we want array indices correspond to keycodes
-  keyState: array[ord(glfw.Key.high) + 1, bool]
-
   charBuf: array[CharBufSize, Rune]
   charBufIdx: Natural
-
 
 proc charCb(win: Window, codePoint: Rune) =
   if charBufIdx <= charBuf.high:
@@ -201,15 +197,6 @@ proc charCb(win: Window, codePoint: Rune) =
 
 proc resetCharBuf() =
   charBufIdx = 0
-
-proc storeKeyState() =
-  let win = currentContext()
-  for key in keySpace..Key.high:
-    keyState[ord(key)] = win.isKeyDown(key)
-
-proc isKeyDown*(key: Key): bool =
-  if key != keyUnknown:
-    result = keyState[ord(key)]
 
 # }}}
 # {{{ Tooltip handling
@@ -1477,9 +1464,6 @@ proc beginFrame*() =
   gui.mbRightDown  = win.mouseButtonDown(mbRight)
   gui.mbMiddleDown = win.mouseButtonDown(mbMiddle)
 
-  # Store current state of all keys (for "isKeyPressed" type of processing)
-  storeKeyState()
-
   # Store modifier key state (just for convenience for the GUI functions)
   gui.shiftDown  = win.isKeyDown(keyLeftShift) or
                    win.isKeyDown(keyRightShift)
@@ -1500,7 +1484,7 @@ proc beginFrame*() =
 # {{{ endFrame
 
 proc endFrame*() =
-  echo fmt"hotItem: {gui.hotItem}, activeItem: {gui.activeItem}, textFieldState: {gui.textFieldState}"
+#  echo fmt"hotItem: {gui.hotItem}, activeItem: {gui.activeItem}, textFieldState: {gui.textFieldState}"
 
   tooltipPost(vg)
 
