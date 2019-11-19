@@ -31,58 +31,103 @@ type
 
 
 type GuiState = object
+  # General state
+  # *************
+
+  # Set if a widget has captured the focus (e.g. a textfield in edit mode) so
+  # all other UI interactions (hovers, tooltips, etc.) should be disabled.
+  focusCaptured:  bool
+
   # Mouse state
+  # -----------
   mx, my:         float
-  lastmx, lastmy: float  # mouse cursor position from the last frame
+
+  # Mouse cursor position from the last frame.
+  lastmx, lastmy: float
+
   mbLeftDown:     bool
   mbRightDown:    bool
   mbMiddleDown:   bool
 
-  # Keyboard
+  # Keyboard state
+  # --------------
   shiftDown:      bool
   altDown:        bool
   ctrlDown:       bool
   superDown:      bool
 
   # Active & hot items
+  # ------------------
   hotItem:        int64
   activeItem:     int64
-  lastHotItem:    int64  # hot item from the last frame
 
-  # Set if a widget has captured the focus (e.g. a textfield in edit mode) so
-  # all other UI interactions (hovers, tooltips, etc.) should be disabled.
-  focusCaptured:  bool
+  # Hot item from the last frame
+  lastHotItem:    int64
 
   # General purpose widget states
-  x0, y0:         float   # for relative mouse movement calculations
-  t0:             float   # for timeouts
-  dragX, dragY:   float   # for keeping track of the cursor in hidden drag mode
+  # -----------------------------
+  # For relative mouse movement calculations
+  x0, y0:         float
+
+  # For delays & timeouts
+  t0:             float
+
+  # For keeping track of the cursor in hidden drag mode
+  dragX, dragY:   float
 
   # Widget-specific states
+  # **********************
   radioButtonsActiveButton: Natural
 
+  # Dropdown
+  # --------
   dropdownState:      DropdownState
-  dropdownActiveItem: int64  # currently active dropdown (or 0)
 
+  # Dropdown in open mode, 0 if no dropdown is open currently.
+  dropdownActiveItem: int64  
+
+  # Slider
+  # ------
   sliderState:        SliderState
 
+  # Scroll bar
+  # ----------
   scrollBarState:     ScrollBarState
-  scrollBarClickDir:  float  # set when there was a LMB down inside the track
-                             # but outside of the knob:
-                             # -1 = left of the knob, 1 = right of the knob
 
+  # Set when the LMB is pressed inside the scroll bar's track but outside of
+  # the knob:
+  # -1 = LMB pressed on the left side of the knob
+  #  1 = LMB pressed on the right side of the knob
+  scrollBarClickDir:  float
+
+  # Text field
+  # ----------
   textFieldState:       TextFieldState
-  textFieldActiveItem:  int64    # text field item in edit mode (or 0)
-  textFieldCursorPos:   Natural  # the cursor is before the Rune with this index
-  textFieldSelFirst:    int      # index of start Rune, -1 if no selection
-  textFieldSelLast:     Natural  # index of last Rune in the selection
-  testFieldDisplayFrom: Natural  # the text is displayed starting from the Rune
-                                 # with this index
+
+  # Text field item in edit mode, 0 if no text field is being edited.
+  textFieldActiveItem:  int64
+
+  # The cursor is before the Rune with this index. If the cursor is at the end
+  # of the text, the cursor pos equals the lenght of the text. From this
+  # follow that the cursor position for an empty text is 0.
+  textFieldCursorPos:   Natural
+
+  # Index of the start Rune in the selection, -1 if nothing is selected.
+  textFieldSelFirst:    int
+
+  # Index of the last Rune in the selection.
+  textFieldSelLast:     Natural
+
+  # The text is displayed starting from the Rune with this index.
+  testFieldDisplayFrom: Natural
 
   # Internal tooltip state
+  # **********************
   tooltipState:        TooltipState
   lastTooltipState:    TooltipState
-  tooltipT0:           float  # used for the various tooltip delays & timeouts
+
+  # Used for the various tooltip delays & timeouts.
+  tooltipT0:           float
   tooltipText:         string
 
 type DrawState = enum
@@ -883,7 +928,7 @@ template textField*(x, y, w, h: float,
   let id = generateId(i.filename, i.line, "")
 
   textField(id, x, y, w, h, tooltip, text)
- 
+
 
 # }}}
 # {{{ ScrollBar
