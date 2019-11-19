@@ -715,6 +715,8 @@ proc textField(id:         int64,
         gui.textFieldState = tfEditLMBPressed
         gui.textFieldActiveItem = id
         gui.focusCaptured = true
+        gui.textFieldCursorPos = text.runeLen
+        gui.textFieldSelFirst = -1
 
   # We 'fall through' to the edit state to avoid a 1-frame delay when going
   # into edit mode
@@ -734,7 +736,9 @@ proc textField(id:         int64,
 
     var newText = text
     if not charBufEmpty():
-      newText &= consumeCharBuf()
+      let t = consumeCharBuf()
+      newText &= t
+      inc(gui.textFieldCursorPos, t.runeLen)
 
     result = newText
 
@@ -746,7 +750,13 @@ proc textField(id:         int64,
 
   let editing = gui.textFieldActiveItem == id
 
-  const PadX = 8
+  const
+    PadX = 8
+  let
+    textX = x + PadX
+    textY = y + h*0.5
+    textW = w - PadX*2
+
 
   let fillColor = case drawState
     of dsHover:  GRAY_HI
@@ -759,12 +769,20 @@ proc textField(id:         int64,
   vg.fill()
 
   # Draw cursor
+
   if editing:
+    var glyphs: array[1000, GlyphPosition]  # TODO is this large enough?
+    discard vg.textGlyphPositions(textX, textY, text, glyphs)
+
+    let
+      cursorPos = gui.textFieldCursorPos
+      cursorX = if cursorPos > 0: glyphs[cursorPos-1].maxX else: textX
+
     vg.beginPath()
     vg.strokeColor(RED)
     vg.strokeWidth(2.0)
-    vg.moveTo(x + PadX, y + 4)
-    vg.lineTo(x + PadX, y+h - 4)
+    vg.moveTo(cursorX, y + 4)
+    vg.lineTo(cursorX, y+h - 4)
     vg.stroke()
 
   # Draw text
@@ -774,7 +792,7 @@ proc textField(id:         int64,
   vg.fontFace("sans-bold")
   vg.textAlign(haLeft, vaMiddle)
   vg.fillColor(textColor)
-  discard vg.text(x + PadX, y+h*0.5, text)
+  discard vg.text(textX, textY, text)
 
   if isHot(id):
     handleTooltipInsideWidget(id, tooltip)
