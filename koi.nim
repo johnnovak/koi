@@ -193,6 +193,7 @@ var
   charBufIdx: Natural
 
 proc charCb(win: Window, codePoint: Rune) =
+  #echo fmt"Rune: {codePoint}"
   if charBufIdx <= charBuf.high:
     charBuf[charBufIdx] = codePoint
     inc(charBufIdx)
@@ -205,6 +206,37 @@ proc consumeCharBuf(): string =
   for i in 0..<charBufIdx:
     result &= charBuf[i]
   clearCharBuf()
+
+
+type KeyEvent = object
+  key: Key
+  mods: set[ModifierKey]
+
+const KeyBufSize = 200
+var
+  # TODO do we need locking around this stuff? written in the callback, read
+  # from the UI code
+  keyBuf: array[KeyBufSize, KeyEvent]
+  keyBufIdx: Natural
+
+const EditKeys = {
+  keyEscape, keyEnter, keyTab,
+  keyBackspace, keyDelete,
+  keyRight, keyLeft, keyDown, keyUp,
+  keyPageUp, keyPageDown,
+  keyHome, keyEnd
+}
+
+proc keyCb(win: Window, key: Key, scanCode: int32, action: KeyAction,
+           mods: set[ModifierKey]) =
+
+  #echo fmt"Key: {key} (scan code: {scanCode}): {action} - {mods}"
+  if key in EditKeys and action in {kaDown, kaRepeat}:
+    if keyBufIdx <= keyBuf.high:
+      keyBuf[keyBufIdx] = KeyEvent(key: key, mods: mods)
+      inc(keyBufIdx)
+
+proc clearKeyBuf() = keyBufIdx = 0
 
 # }}}
 # {{{ Tooltip handling
@@ -703,7 +735,7 @@ proc textField(id:         int64,
                tooltip:    string = "",
                text:       string): string =
 
-  result = text
+  var text = text
 
   if gui.textFieldState == tfDefault:
     # Hit testing
@@ -712,11 +744,18 @@ proc textField(id:         int64,
       if gui.mbLeftDown and noActiveItem():
         setActive(id)
         clearCharBuf()
+        clearKeyBuf()
+
         gui.textFieldState = tfEditLMBPressed
         gui.textFieldActiveItem = id
-        gui.focusCaptured = true
         gui.textFieldCursorPos = text.runeLen
         gui.textFieldSelFirst = -1
+        gui.focusCaptured = true
+
+  proc exitEditMode() =
+    gui.textFieldState = tfDefault
+    gui.textFieldActiveItem = 0
+    gui.focusCaptured = false
 
   # We 'fall through' to the edit state to avoid a 1-frame delay when going
   # into edit mode
@@ -730,18 +769,56 @@ proc textField(id:         int64,
     else:
       # LMB pressed outside the text field exits edit mode
       if gui.mbLeftDown and not mouseInside(x, y, w, h):
-        gui.textFieldState = tfDefault
-        gui.textFieldActiveItem = 0
-        gui.focusCaptured = false
+        exitEditMode()
 
-    var newText = text
+    # Handle cursor movement, Enter & Esc keys
+    for i in 0..<keyBufIdx:
+      let k = keyBuf[i]
+      if k.key == keyEscape:
+        exitEditMode()  # TODO cancel
+
+      elif k.key == keyEnter:
+        exitEditMode()
+
+      elif k.key == keyTab: discard
+
+      elif k.key == keyBackspace:
+        if gui.textFieldCursorPos > 0:
+          text = text.runeSubStr(0, gui.textFieldCursorPos - 1) &
+                 text.runeSubStr(gui.textFieldCursorPos)
+          dec(gui.textFieldCursorPos)
+
+      elif k.key == keyDelete:
+        text = text.runeSubStr(0, gui.textFieldCursorPos) &
+               text.runeSubStr(gui.textFieldCursorPos + 1)
+
+      elif k.key in {keyHome, keyUp} or
+           k.key == keyLeft and k.mods == {mkCtrl}:
+        gui.textFieldCursorPos = 0
+
+      elif k.key in {keyEnd, keyDown} or
+           k.key == keyRight and k.mods == {mkCtrl}:
+        gui.textFieldCursorPos = text.runeLen
+
+      elif k.key == keyRight:
+        gui.textFieldCursorPos = min(gui.textFieldCursorPos + 1, text.runeLen)
+
+      elif k.key == keyLeft:
+        gui.textFieldCursorPos = max(gui.textFieldCursorPos - 1, 0)
+
+    clearKeyBuf()
+
+    # Splice newly entered characters into the string
     if not charBufEmpty():
-      let t = consumeCharBuf()
-      newText &= t
-      inc(gui.textFieldCursorPos, t.runeLen)
+      let newChars = consumeCharBuf()
 
-    result = newText
+      let before = text.runeSubStr(0, gui.textFieldCursorPos)
+      let after = text.runeSubStr(gui.textFieldCursorPos)
 
+      text = before & newChars & after
+      inc(gui.textFieldCursorPos, newChars.runeLen)
+
+  result = text
 
   # Draw text field
   let drawState = if isHot(id) and noActiveItem(): dsHover
@@ -1493,6 +1570,7 @@ proc init*(nvg: NVGContext) =
   vg = nvg
 
   let win = currentContext()
+  win.keyCb  = keyCb
   win.charCb = charCb
 
 # }}}
