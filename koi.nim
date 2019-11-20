@@ -7,6 +7,8 @@ import xxhash
 
 # {{{ Types
 
+type ItemId = int64
+
 type
   DropdownState = enum
     dsClosed, dsOpenLMBPressed, dsOpen
@@ -58,11 +60,11 @@ type GuiState = object
 
   # Active & hot items
   # ------------------
-  hotItem:        int64
-  activeItem:     int64
+  hotItem:        ItemId
+  activeItem:     ItemId
 
   # Hot item from the last frame
-  lastHotItem:    int64
+  lastHotItem:    ItemId
 
   # General purpose widget states
   # -----------------------------
@@ -84,7 +86,7 @@ type GuiState = object
   dropdownState:      DropdownState
 
   # Dropdown in open mode, 0 if no dropdown is open currently.
-  dropdownActiveItem: int64  
+  dropdownActiveItem: ItemId
 
   # Slider
   # ------
@@ -102,28 +104,29 @@ type GuiState = object
 
   # Text field
   # ----------
-  textFieldState:        TextFieldState
+  textFieldState:           TextFieldState
 
   # Text field item in edit mode, 0 if no text field is being edited.
-  textFieldActiveItem:   int64
+  textFieldActiveItem:      ItemId
 
   # The cursor is before the Rune with this index. If the cursor is at the end
   # of the text, the cursor pos equals the lenght of the text. From this
   # follow that the cursor position for an empty text is 0.
-  textFieldCursorPos:    Natural
+  textFieldCursorPos:       Natural
 
   # Index of the start Rune in the selection, -1 if nothing is selected.
-  textFieldSelFirst:     int
+  textFieldSelFirst:        int
 
   # Index of the last Rune in the selection.
-  textFieldSelLast:      Natural
+  textFieldSelLast:         Natural
 
   # The text is displayed starting from the Rune with this index.
-  textFieldDisplayFrom:  Natural
+  textFieldDisplayStartPos: Natural
+  textFieldDisplayStartX:   float
 
   # The original text is stored when going into edit mode so it can be
   # restored if the editing is cancelled.
-  textFieldOriginalText: string
+  textFieldOriginalText:    string
 
   # Internal tooltip state
   # **********************
@@ -142,14 +145,14 @@ type DrawState = enum
 
 var
   gui {.threadvar.}: GuiState
-  vg:  NVGContext
+  vg: NVGContext
 
 var
-  RED*      {.threadvar.}: Color
-  GRAY_MID* {.threadvar.}: Color
-  GRAY_HI*  {.threadvar.}: Color
-  GRAY_LO*  {.threadvar.}: Color
-  GRAY_LOHI*{.threadvar.}: Color
+  RED*       {.threadvar.}: Color
+  GRAY_MID*  {.threadvar.}: Color
+  GRAY_HI*   {.threadvar.}: Color
+  GRAY_LO*   {.threadvar.}: Color
+  GRAY_LOHI* {.threadvar.}: Color
 
 # }}}
 # {{{ Configuration
@@ -195,13 +198,17 @@ proc setCursorPosY*(y: float) =
   let (currX, _) = win.cursorPos()
   win.cursorPos = (currX, y)
 
+
+template `++`(s: string, offset: int): cstring =
+  cast[cstring](cast[int](cstring(s)) + offset)
+
 proc truncate(vg: NVGContext, text: string, maxWidth: float): string =
   result = text # TODO
 
 # }}}
 # {{{ UI helpers
 
-template generateId(filename: string, line: int, id: string): int64 =
+template generateId(filename: string, line: int, id: string): ItemId =
   let
     hash32 = XXH32(filename & $line & id)
 
@@ -213,19 +220,19 @@ proc mouseInside(x, y, w, h: float): bool =
   gui.mx >= x and gui.mx <= x+w and
   gui.my >= y and gui.my <= y+h
 
-template isHot(id: int64): bool =
+template isHot(id: ItemId): bool =
   gui.hotItem == id
 
-template setHot(id: int64) =
+template setHot(id: ItemId) =
   gui.hotItem = id
 
-template isActive(id: int64): bool =
+template isActive(id: ItemId): bool =
   gui.activeItem == id
 
-template setActive(id: int64) =
+template setActive(id: ItemId) =
   gui.activeItem = id
 
-template isHotAndActive(id: int64): bool =
+template isHotAndActive(id: ItemId): bool =
   isHot(id) and isActive(id)
 
 template noActiveItem(): bool =
@@ -299,7 +306,7 @@ proc clearKeyBuf() = keyBufIdx = 0
 # {{{ Tooltip handling
 # {{{ handleTooltipInsideWidget
 
-proc handleTooltipInsideWidget(id: int64, tooltip: string) =
+proc handleTooltipInsideWidget(id: ItemId, tooltip: string) =
   gui.tooltipState = gui.lastTooltipState
 
   # Reset the tooltip show delay if the cursor has been moved inside a
@@ -397,7 +404,7 @@ proc tooltipPost(vg: NVGContext) =
 # }}}
 
 # {{{ label
-proc textLabel(id:         int64,
+proc textLabel(id:         ItemId,
                x, y, w, h: float,
                label:      string,
                color:      Color,
@@ -426,7 +433,7 @@ template label*(x, y, w, h: float,
 # }}}
 # {{{ button
 
-proc button(id:         int64,
+proc button(id:         ItemId,
             x, y, w, h: float,
             label:      string,
             color:      Color,
@@ -481,7 +488,7 @@ template button*(x, y, w, h: float,
 # }}}
 # {{{ checkBox
 
-proc checkBox(id:      int64,
+proc checkBox(id:      ItemId,
               x, y, w: float,
               tooltip: string = "",
               active:  bool): bool =
@@ -548,7 +555,7 @@ template checkBox*(x, y, w: float,
 # }}}
 # {{{ radioButtons
 
-proc radioButtons(id:           int64,
+proc radioButtons(id:           ItemId,
                   x, y, w, h:   float,
                   labels:       openArray[string],
                   tooltips:     openArray[string] = @[],
@@ -631,7 +638,7 @@ template radioButtons*(x, y, w, h:   float,
 # }}}
 # {{{ dropdown
 
-proc dropdown(id:           int64,
+proc dropdown(id:           ItemId,
               x, y, w, h:   float,
               items:        openArray[string],
               tooltip:      string = "",
@@ -787,12 +794,25 @@ template dropdown*(x, y, w, h:   float,
 # }}}
 # {{{ textField
 
-proc textField(id:         int64,
+proc textField(id:         ItemId,
                x, y, w, h: float,
                tooltip:    string = "",
                text:       string): string =
 
   var text = text
+
+  # The text is displayed within this rectangle (used for drawing later)
+  const
+    PadX = 8
+  let
+    textBoxX = x + PadX
+    textBoxW = w - PadX*2
+    textBoxY = y
+    textBoxH = h
+
+  # TODO only calculate glyph positions if needed
+  var glyphs: array[1000, GlyphPosition]  # TODO is this buffer large enough?
+  discard vg.textGlyphPositions(0, 0, text, glyphs)
 
   if gui.textFieldState == tfDefault:
     # Hit testing
@@ -809,6 +829,8 @@ proc textField(id:         int64,
         gui.textFieldActiveItem = id
         gui.textFieldCursorPos = text.runeLen
         gui.textFieldSelFirst = -1
+        gui.textFieldDisplayStartPos = 0
+        gui.textFieldDisplayStartX = textBoxX
         gui.textFieldOriginalText = text
 
   proc exitEditMode() =
@@ -903,31 +925,43 @@ proc textField(id:         int64,
 
   let editing = gui.textFieldActiveItem == id
 
-  const
-    PadX = 8
-  let
-    textX = x + PadX
-    textY = y + h*0.5
-    textW = w - PadX*2
-
   let fillColor = case drawState
     of dsHover:  GRAY_HI
     of dsActive: GRAY_LO
     else:        GRAY_MID
+
 
   vg.beginPath()
   vg.roundedRect(x, y, w, h, 5)
   vg.fillColor(fillColor)
   vg.fill()
 
-  var glyphs: array[1000, GlyphPosition]  # TODO is this large enough?
-  discard vg.textGlyphPositions(textX, textY, text, glyphs)
+  # Calculate text stuff
+  var
+    textX = textBoxX
+    textY = y + h*0.5
 
   # Draw cursor
   if editing:
-    let
-      cursorPos = gui.textFieldCursorPos
-      cursorX = if cursorPos > 0: glyphs[cursorPos-1].maxX else: textX
+    let cursorPos = gui.textFieldCursorPos
+    var
+      p = min(cursorPos, text.runeLen-1)
+      x0 = glyphs[p].maxX
+
+    while p > 0 and x0 - glyphs[p].minX < textBoxW: dec(p)
+
+    gui.textFieldDisplayStartPos = p
+    gui.textFieldDisplayStartX = min(
+      textBoxX - ((x0 - glyphs[p].minX) - textBoxW), textBoxX)
+
+    textX = gui.textFieldDisplayStartX
+
+    # Draw cursor
+    let cursorX = if cursorPos > 0:
+      gui.textFieldDisplayStartX + glyphs[cursorPos-1].x - glyphs[p].x
+    else: textBoxX
+
+    #text ++ text.runeOffset(gui.textFieldDisplayStartPos)
 
     vg.beginPath()
     vg.strokeColor(RED)
@@ -943,7 +977,11 @@ proc textField(id:         int64,
   vg.fontFace("sans-bold")
   vg.textAlign(haLeft, vaMiddle)
   vg.fillColor(textColor)
-  discard vg.text(textX, textY, text)
+
+#  vg.scissor(textBoxX, textBoxY, textBoxW, textBoxH)
+  discard vg.text(textX, textY,
+                  text.runeSubStr(gui.textFieldDisplayStartPos))
+#  vg.resetScissor()
 
   if isHot(id):
     handleTooltipInsideWidget(id, tooltip)
@@ -964,7 +1002,7 @@ template textField*(x, y, w, h: float,
 # {{{ horizScrollBar
 
 # Must be kept in sync with vertScrollBar!
-proc horizScrollBar(id:         int64,
+proc horizScrollBar(id:         ItemId,
                     x, y, w, h: float,
                     startVal:   float =  0.0,
                     endVal:     float =  1.0,
@@ -1171,7 +1209,7 @@ template horizScrollBar*(x, y, w, h: float,
 # {{{ vertScrollBar
 
 # Must be kept in sync with horizScrollBar!
-proc vertScrollBar(id:         int64,
+proc vertScrollBar(id:         ItemId,
                    x, y, w, h: float,
                    startVal:   float =  0.0,
                    endVal:     float =  1.0,
@@ -1386,7 +1424,7 @@ proc scrollBarPost() =
 # {{{ Slider
 # {{{ horizSlider
 
-proc horizSlider(id:         int64,
+proc horizSlider(id:         ItemId,
                  x, y, w, h: float,
                  startVal:   float = 0.0,
                  endVal:     float = 1.0,
@@ -1504,7 +1542,7 @@ template horizSlider*(x, y, w, h: float,
 # }}}
 # {{{ vertSlider
 
-proc vertSlider(id:         int64,
+proc vertSlider(id:         ItemId,
                 x, y, w, h: float,
                 startVal:   float = 0.0,
                 endVal:     float = 1.0,
