@@ -810,9 +810,13 @@ proc textField(id:         ItemId,
     textBoxY = y
     textBoxH = h
 
-  # TODO only calculate glyph positions if needed
-  var glyphs: array[1000, GlyphPosition]  # TODO is this buffer large enough?
-  discard vg.textGlyphPositions(0, 0, text, glyphs)
+  var
+    glyphs: array[1000, GlyphPosition]  # TODO is this buffer large enough?
+    glyphsCalculated = false
+
+  proc calcGlyphPos(force: bool = false) =
+    if force or not glyphsCalculated:
+      discard vg.textGlyphPositions(0, 0, text, glyphs)
 
   if gui.textFieldState == tfDefault:
     # Hit testing
@@ -832,7 +836,6 @@ proc textField(id:         ItemId,
         gui.textFieldDisplayStartX = textBoxX
         gui.textFieldOriginalText = text
         gui.focusCaptured = true
-
 
   proc exitEditMode() =
     gui.textFieldState = tfDefault
@@ -936,6 +939,10 @@ proc textField(id:         ItemId,
       text = before & newChars & after
       inc(gui.textFieldCursorPos, newChars.runeLen)
 
+      # We need to force glyp position recalculation here because the
+      # text has changed.
+      calcGlyphPos(force = true)
+
   result = text
 
   # Draw text field
@@ -962,6 +969,8 @@ proc textField(id:         ItemId,
 
   # Scroll content into view & draw cursor when editing
   if editing:
+    calcGlyphPos()
+
     var
       p = min(gui.textFieldCursorPos, text.runeLen-1)
       x0 = glyphs[p].maxX
@@ -989,8 +998,7 @@ proc textField(id:         ItemId,
     vg.stroke()
 
   # Draw text
-#  let textColor = if editing: GRAY_HI else: GRAY_LO
-  let textColor = rgb(0, 0.8, 0)
+  let textColor = if editing: GRAY_HI else: GRAY_LO
 
   vg.fontSize(19.0)
   vg.fontFace("sans-bold")
