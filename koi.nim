@@ -958,16 +958,16 @@ proc textField(id:         ItemId,
 
     # Draw cursor
     let cursorX = if cursorPos > 0:
-      gui.textFieldDisplayStartX + glyphs[cursorPos-1].x - glyphs[p].x
+      gui.textFieldDisplayStartX + glyphs[cursorPos].x - glyphs[p].x
     else: textBoxX
 
     #text ++ text.runeOffset(gui.textFieldDisplayStartPos)
 
     vg.beginPath()
     vg.strokeColor(RED)
-    vg.strokeWidth(2.0)
-    vg.moveTo(cursorX, y + 4)
-    vg.lineTo(cursorX, y+h - 4)
+    vg.strokeWidth(1.0)
+    vg.moveTo(cursorX, y + 2)
+    vg.lineTo(cursorX, y+h - 2)
     vg.stroke()
 
   # Draw text
@@ -978,10 +978,10 @@ proc textField(id:         ItemId,
   vg.textAlign(haLeft, vaMiddle)
   vg.fillColor(textColor)
 
-#  vg.scissor(textBoxX, textBoxY, textBoxW, textBoxH)
+  vg.scissor(textBoxX, textBoxY, textBoxW, textBoxH)
   discard vg.text(textX, textY,
                   text.runeSubStr(gui.textFieldDisplayStartPos))
-#  vg.resetScissor()
+  vg.resetScissor()
 
   if isHot(id):
     handleTooltipInsideWidget(id, tooltip)
