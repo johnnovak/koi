@@ -823,20 +823,29 @@ proc textField(id:         ItemId,
         clearCharBuf()
         clearKeyBuf()
 
-        gui.focusCaptured = true
-
         gui.textFieldState = tfEditLMBPressed
         gui.textFieldActiveItem = id
         gui.textFieldCursorPos = text.runeLen
         gui.textFieldSelFirst = -1
+        gui.textFieldSelLast = 0
         gui.textFieldDisplayStartPos = 0
         gui.textFieldDisplayStartX = textBoxX
         gui.textFieldOriginalText = text
+        gui.focusCaptured = true
+
 
   proc exitEditMode() =
     gui.textFieldState = tfDefault
     gui.textFieldActiveItem = 0
+    gui.textFieldCursorPos = 0
+    gui.textFieldSelFirst = -1
+    gui.textFieldSelLast = 0
+    gui.textFieldDisplayStartPos = 0
+    gui.textFieldDisplayStartX = textBoxX
+    gui.textFieldOriginalText = ""
     gui.focusCaptured = false
+    clearKeyBuf()
+    clearCharBuf()
 
   # We 'fall through' to the edit state to avoid a 1-frame delay when going
   # into edit mode
@@ -852,15 +861,24 @@ proc textField(id:         ItemId,
       if gui.mbLeftDown and not mouseInside(x, y, w, h):
         exitEditMode()
 
-    # Handle cursor movement, Enter & Esc keys
+    # Handle text field shortcuts
+    # (If we exited edit mode above key handler, this will result in a noop as
+    # exitEditMode() clears the key buffer.)
     for i in 0..<keyBufIdx:
       let k = keyBuf[i]
+
+      # TODO OS specific shortcuts
+
       if k.key == keyEscape:   # Cancel edits
         text = gui.textFieldOriginalText
         exitEditMode()
+        # Note we won't process any remaining characters in the buffer
+        # because exitEditMode() clears the key buffer.
 
       elif k.key == keyEnter:  # Persist edits
         exitEditMode()
+        # Note we won't process any remaining characters in the buffer
+        # because exitEditMode() clears the key buffer.
 
       elif k.key == keyTab: discard
 
@@ -906,7 +924,9 @@ proc textField(id:         ItemId,
 
     clearKeyBuf()
 
-    # Splice newly entered characters into the string
+    # Splice newly entered characters into the string.
+    # (If we exited edit mode in the above key handler, this will result in
+    # a noop as exitEditMode() clears the char buffer.)
     if not charBufEmpty():
       let newChars = consumeCharBuf()
 
@@ -919,33 +939,31 @@ proc textField(id:         ItemId,
   result = text
 
   # Draw text field
+  let editing = gui.textFieldActiveItem == id
+
   let drawState = if isHot(id) and noActiveItem(): dsHover
-    elif isHotAndActive(id): dsActive
+    elif editing: dsActive
     else: dsNormal
 
-  let editing = gui.textFieldActiveItem == id
+  var
+    textX = textBoxX
+    textY = y + h*0.5
 
   let fillColor = case drawState
     of dsHover:  GRAY_HI
     of dsActive: GRAY_LO
     else:        GRAY_MID
 
-
+  # Draw text field background
   vg.beginPath()
   vg.roundedRect(x, y, w, h, 5)
   vg.fillColor(fillColor)
   vg.fill()
 
-  # Calculate text stuff
-  var
-    textX = textBoxX
-    textY = y + h*0.5
-
-  # Draw cursor
+  # Scroll content into view & draw cursor when editing
   if editing:
-    let cursorPos = gui.textFieldCursorPos
     var
-      p = min(cursorPos, text.runeLen-1)
+      p = min(gui.textFieldCursorPos, text.runeLen-1)
       x0 = glyphs[p].maxX
 
     while p > 0 and x0 - glyphs[p].minX < textBoxW: dec(p)
@@ -957,10 +975,10 @@ proc textField(id:         ItemId,
     textX = gui.textFieldDisplayStartX
 
     # Draw cursor
-    let cursorX = if cursorPos > 0:
-      gui.textFieldDisplayStartX + glyphs[cursorPos].x - glyphs[p].x
+    let cursorX = if gui.textFieldCursorPos > 0:
+      gui.textFieldDisplayStartX + glyphs[gui.textFieldCursorPos].x -
+                                   glyphs[p].x
     else: textBoxX
-
     #text ++ text.runeOffset(gui.textFieldDisplayStartPos)
 
     vg.beginPath()
@@ -971,7 +989,8 @@ proc textField(id:         ItemId,
     vg.stroke()
 
   # Draw text
-  let textColor = if editing: GRAY_HI else: GRAY_LO
+#  let textColor = if editing: GRAY_HI else: GRAY_LO
+  let textColor = rgb(0, 0.8, 0)
 
   vg.fontSize(19.0)
   vg.fontFace("sans-bold")
@@ -979,8 +998,8 @@ proc textField(id:         ItemId,
   vg.fillColor(textColor)
 
   vg.scissor(textBoxX, textBoxY, textBoxW, textBoxH)
-  discard vg.text(textX, textY,
-                  text.runeSubStr(gui.textFieldDisplayStartPos))
+  let txt = text.runeSubStr(gui.textFieldDisplayStartPos)
+  discard vg.text(textX, textY, txt)
   vg.resetScissor()
 
   if isHot(id):
@@ -1684,6 +1703,8 @@ proc init*(nvg: NVGContext) =
   let win = currentContext()
   win.keyCb  = keyCb
   win.charCb = charCb
+
+  win.stickyMouseButtons = true
 
 # }}}
 # {{{ beginFrame()

@@ -33,6 +33,7 @@ var
   dropdownVal2 = 2
 
   textFieldVal1 = ""
+  #textFieldVal2 = "Nobody expects the Spanish Inquisition!"
   textFieldVal2 = "Nobody expects the Spanish Inquisition!"
 
 ############################################################
@@ -256,7 +257,7 @@ proc init(): Window =
 
   win.windowPositionCb = windowPositionCb
 
-  glfw.swapInterval(1)
+  glfw.swapInterval(16)
 
   result = win
 
