@@ -1,4 +1,4 @@
-import os, strformat
+import strformat
 
 import glad/gl
 import glfw
@@ -270,8 +270,8 @@ proc main() =
   let win = init()
 
   while not win.shouldClose:
-    if win.isKeyDown(keyEscape):  # TODO key buf, like char buf?
-      win.shouldClose = true
+#    if win.isKeyDown(keyEscape):  # TODO key buf, like char buf?
+#      win.shouldClose = true
 
     render(win)
     glfw.pollEvents()

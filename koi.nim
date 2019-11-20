@@ -102,33 +102,37 @@ type GuiState = object
 
   # Text field
   # ----------
-  textFieldState:       TextFieldState
+  textFieldState:        TextFieldState
 
   # Text field item in edit mode, 0 if no text field is being edited.
-  textFieldActiveItem:  int64
+  textFieldActiveItem:   int64
 
   # The cursor is before the Rune with this index. If the cursor is at the end
   # of the text, the cursor pos equals the lenght of the text. From this
   # follow that the cursor position for an empty text is 0.
-  textFieldCursorPos:   Natural
+  textFieldCursorPos:    Natural
 
   # Index of the start Rune in the selection, -1 if nothing is selected.
-  textFieldSelFirst:    int
+  textFieldSelFirst:     int
 
   # Index of the last Rune in the selection.
-  textFieldSelLast:     Natural
+  textFieldSelLast:      Natural
 
   # The text is displayed starting from the Rune with this index.
-  testFieldDisplayFrom: Natural
+  textFieldDisplayFrom:  Natural
+
+  # The original text is stored when going into edit mode so it can be
+  # restored if the editing is cancelled.
+  textFieldOriginalText: string
 
   # Internal tooltip state
   # **********************
-  tooltipState:        TooltipState
-  lastTooltipState:    TooltipState
+  tooltipState:     TooltipState
+  lastTooltipState: TooltipState
 
   # Used for the various tooltip delays & timeouts.
-  tooltipT0:           float
-  tooltipText:         string
+  tooltipT0:        float
+  tooltipText:      string
 
 type DrawState = enum
   dsNormal, dsHover, dsActive
@@ -229,6 +233,14 @@ template noActiveItem(): bool =
 
 # }}}
 # {{{ Keyboard handling
+
+# Helpers to map Ctrl consistently to Cmd on OS X
+when defined(macosx):
+  const CtrlModSet = {mkSuper}
+  const CtrlMod    = mkSuper
+else:
+  const CtrlModSet = {mkCtrl}
+  const CtrlMod    = mkCtrl
 
 const CharBufSize = 200
 var
@@ -791,11 +803,13 @@ proc textField(id:         int64,
         clearCharBuf()
         clearKeyBuf()
 
+        gui.focusCaptured = true
+
         gui.textFieldState = tfEditLMBPressed
         gui.textFieldActiveItem = id
         gui.textFieldCursorPos = text.runeLen
         gui.textFieldSelFirst = -1
-        gui.focusCaptured = true
+        gui.textFieldOriginalText = text
 
   proc exitEditMode() =
     gui.textFieldState = tfDefault
@@ -819,37 +833,54 @@ proc textField(id:         int64,
     # Handle cursor movement, Enter & Esc keys
     for i in 0..<keyBufIdx:
       let k = keyBuf[i]
-      if k.key == keyEscape:
-        exitEditMode()  # TODO cancel
+      if k.key == keyEscape:   # Cancel edits
+        text = gui.textFieldOriginalText
+        exitEditMode()
 
-      elif k.key == keyEnter:
+      elif k.key == keyEnter:  # Persist edits
         exitEditMode()
 
       elif k.key == keyTab: discard
 
       elif k.key == keyBackspace:
         if gui.textFieldCursorPos > 0:
-          text = text.runeSubStr(0, gui.textFieldCursorPos - 1) &
-                 text.runeSubStr(gui.textFieldCursorPos)
-          dec(gui.textFieldCursorPos)
+          if k.mods == CtrlModSet:
+            text = ""
+            gui.textFieldCursorPos = 0
+          else:
+            text = text.runeSubStr(0, gui.textFieldCursorPos - 1) &
+                   text.runeSubStr(gui.textFieldCursorPos)
+            dec(gui.textFieldCursorPos)
 
       elif k.key == keyDelete:
         text = text.runeSubStr(0, gui.textFieldCursorPos) &
                text.runeSubStr(gui.textFieldCursorPos + 1)
 
       elif k.key in {keyHome, keyUp} or
-           k.key == keyLeft and k.mods == {mkCtrl}:
+           k.key == keyLeft and k.mods == CtrlModSet:   # TODO allow alt?
         gui.textFieldCursorPos = 0
 
       elif k.key in {keyEnd, keyDown} or
-           k.key == keyRight and k.mods == {mkCtrl}:
+           k.key == keyRight and k.mods == CtrlModSet:  # TODO allow alt?
         gui.textFieldCursorPos = text.runeLen
 
       elif k.key == keyRight:
-        gui.textFieldCursorPos = min(gui.textFieldCursorPos + 1, text.runeLen)
+        if k.mods == {mkAlt}:
+          var p = gui.textFieldCursorPos
+          while p < text.runeLen and     text.runeAt(p).isWhiteSpace: inc(p)
+          while p < text.runeLen and not text.runeAt(p).isWhiteSpace: inc(p)
+          gui.textFieldCursorPos = p
+        else:
+          gui.textFieldCursorPos = min(gui.textFieldCursorPos + 1, text.runeLen)
 
       elif k.key == keyLeft:
-        gui.textFieldCursorPos = max(gui.textFieldCursorPos - 1, 0)
+        if k.mods == {mkAlt}:
+          var p = gui.textFieldCursorPos
+          while p > 0 and     text.runeAt(p-1).isWhiteSpace: dec(p)
+          while p > 0 and not text.runeAt(p-1).isWhiteSpace: dec(p)
+          gui.textFieldCursorPos = p
+        else:
+          gui.textFieldCursorPos = max(gui.textFieldCursorPos - 1, 0)
 
     clearKeyBuf()
 
@@ -879,7 +910,6 @@ proc textField(id:         int64,
     textY = y + h*0.5
     textW = w - PadX*2
 
-
   let fillColor = case drawState
     of dsHover:  GRAY_HI
     of dsActive: GRAY_LO
@@ -890,12 +920,11 @@ proc textField(id:         int64,
   vg.fillColor(fillColor)
   vg.fill()
 
+  var glyphs: array[1000, GlyphPosition]  # TODO is this large enough?
+  discard vg.textGlyphPositions(textX, textY, text, glyphs)
+
   # Draw cursor
-
   if editing:
-    var glyphs: array[1000, GlyphPosition]  # TODO is this large enough?
-    discard vg.textGlyphPositions(textX, textY, text, glyphs)
-
     let
       cursorPos = gui.textFieldCursorPos
       cursorX = if cursorPos > 0: glyphs[cursorPos-1].maxX else: textX
