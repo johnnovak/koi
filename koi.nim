@@ -973,19 +973,26 @@ proc textField(id:         ItemId,
   if editing:
     calcGlyphPos()
 
-    var
-      p = min(gui.textFieldCursorPos, text.runeLen-1)
-      x0 = glyphs[p].maxX
+    let startOffsetX = textBoxX - gui.textFieldDisplayStartX 
 
-    while p > 0 and x0 - glyphs[p].minX < textBoxW: dec(p)
-    gui.textFieldDisplayStartPos = p
+    if glyphs[gui.textFieldCursorPos].minX >
+       glyphs[gui.textFieldDisplayStartPos].minX + textBoxW + startOffsetX:
 
-    let
-      textW = x0 - glyphs[p].minX
-      startOffsetX = textW - textBoxW
+      var
+        p = min(gui.textFieldCursorPos, text.runeLen-1)
+        x0 = glyphs[p].maxX
 
-    gui.textFieldDisplayStartX = min(textBoxX - startOffsetX, textBoxX)
-    textX = gui.textFieldDisplayStartX
+      while p > 0 and x0 - glyphs[p].minX < textBoxW: dec(p)
+      gui.textFieldDisplayStartPos = p
+
+      let
+        textW = x0 - glyphs[p].minX
+        startOffsetX = textW - textBoxW
+
+      gui.textFieldDisplayStartX = min(textBoxX - startOffsetX, textBoxX)
+      textX = gui.textFieldDisplayStartX
+    else:
+      discard
 
     # Draw cursor
     let cursorX = if gui.textFieldCursorPos == text.runeLen:
