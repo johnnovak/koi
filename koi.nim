@@ -82,12 +82,8 @@ type
     # **********************
     radioButtonsActiveButton: Natural
 
-    # Dropdown
-    # --------
-    dropdownState:      DropdownState
-
-    # Dropdown in open mode, 0 if no dropdown is open currently.
-    dropdownActiveItem: ItemId
+    dropdownState:      DropdownStateVars
+    textFieldState:     TextFieldStateVars
 
     # Slider
     # ------
@@ -103,9 +99,6 @@ type
     #  1 = LMB pressed on the right side of the knob
     scrollBarClickDir:  float
 
-    # Text field
-    # ----------
-    textFieldState:           TextFieldStateVars
 
     # Internal tooltip state
     # **********************
@@ -115,6 +108,13 @@ type
     # Used for the various tooltip delays & timeouts.
     tooltipT0:        float
     tooltipText:      string
+
+
+  DropdownStateVars = object
+    state:      DropdownState
+
+    # Dropdown in open mode, 0 if no dropdown is open currently.
+    activeItem: ItemId
 
 
   TextFieldStateVars = object
@@ -653,6 +653,8 @@ proc dropdown(id:           ItemId,
               tooltip:      string = "",
               selectedItem: Natural): Natural =
 
+  alias(ds, gui.dropdownState)
+
   assert items.len > 0
   assert selectedItem <= items.high
 
@@ -668,17 +670,17 @@ proc dropdown(id:           ItemId,
 
   result = selectedItem
 
-  if gui.dropdownState == dsClosed:
+  if ds.state == dsClosed:
     if not gui.focusCaptured and mouseInside(x, y, w, h):
       setHot(id)
       if gui.mbLeftDown and noActiveItem():
         setActive(id)
-        gui.dropdownState = dsOpenLMBPressed
-        gui.dropdownActiveItem = id
+        ds.state = dsOpenLMBPressed
+        ds.activeItem = id
 
   # We 'fall through' to the open state to avoid a 1-frame delay when clicking
   # the button
-  if gui.dropdownActiveItem == id and gui.dropdownState >= dsOpenLMBPressed:
+  if ds.activeItem == id and ds.state >= dsOpenLMBPressed:
 
     # Calculate the position of the box around the dropdown items
     var maxItemWidth = 0.0
@@ -700,32 +702,32 @@ proc dropdown(id:           ItemId,
       setHot(id)
       setActive(id)
     else:
-      gui.dropdownState = dsClosed
-      gui.dropdownActiveItem = 0
+      ds.state = dsClosed
+      ds.activeItem = 0
 
     hoverItem = min(int(floor((gui.my - boxY - BoxPad) / itemHeight)),
                     numItems-1)
 
     # LMB released inside the box selects the item under the cursor and closes
     # the dropdown
-    if gui.dropdownState == dsOpenLMBPressed:
+    if ds.state == dsOpenLMBPressed:
       if not gui.mbLeftDown:
         if hoverItem >= 0:
           result = hoverItem
-          gui.dropdownState = dsClosed
-          gui.dropdownActiveItem = 0
+          ds.state = dsClosed
+          ds.activeItem = 0
         else:
-          gui.dropdownState = dsOpen
+          ds.state = dsOpen
     else:
       if gui.mbLeftDown:
         if hoverItem >= 0:
           result = hoverItem
-          gui.dropdownState = dsClosed
-          gui.dropdownActiveItem = 0
+          ds.state = dsClosed
+          ds.activeItem = 0
 
         elif insideButton:
-          gui.dropdownState = dsClosed
-          gui.dropdownActiveItem = 0
+          ds.state = dsClosed
+          ds.activeItem = 0
 
   # Draw button
   let drawState = if isHot(id) and noActiveItem(): dsHover
@@ -763,7 +765,7 @@ proc dropdown(id:           ItemId,
   vg.fill()
 
   # Draw items
-  if isActive(id) and gui.dropdownState >= dsOpenLMBPressed:
+  if isActive(id) and ds.state >= dsOpenLMBPressed:
     vg.fontSize(19.0)
     vg.fontFace("sans-bold")
     vg.textAlign(haLeft, vaMiddle)
@@ -808,6 +810,8 @@ proc textField(id:         ItemId,
                tooltip:    string = "",
                text:       string): string =
 
+  alias(tf, gui.textFieldState)
+
   var text = text
 
   # The text is displayed within this rectangle (used for drawing later)
@@ -826,8 +830,6 @@ proc textField(id:         ItemId,
   proc calcGlyphPos(force: bool = false) =
     if force or not glyphsCalculated:
       discard vg.textGlyphPositions(0, 0, text, glyphs)
-
-  alias(tf, gui.textFieldState)
 
   if tf.state == tfDefault:
     # Hit testing
