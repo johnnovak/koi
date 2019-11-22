@@ -32,110 +32,116 @@ type
     tsOff, tsShowDelay, tsShow, tsFadeOutDelay, tsFadeOut
 
 
-type GuiState = object
-  # General state
-  # *************
+type
+  GuiState = object
+    # General state
+    # *************
 
-  # Set if a widget has captured the focus (e.g. a textfield in edit mode) so
-  # all other UI interactions (hovers, tooltips, etc.) should be disabled.
-  focusCaptured:  bool
+    # Set if a widget has captured the focus (e.g. a textfield in edit mode) so
+    # all other UI interactions (hovers, tooltips, etc.) should be disabled.
+    focusCaptured:  bool
 
-  # Mouse state
-  # -----------
-  mx, my:         float
+    # Mouse state
+    # -----------
+    mx, my:         float
 
-  # Mouse cursor position from the last frame.
-  lastmx, lastmy: float
+    # Mouse cursor position from the last frame.
+    lastmx, lastmy: float
 
-  mbLeftDown:     bool
-  mbRightDown:    bool
-  mbMiddleDown:   bool
+    mbLeftDown:     bool
+    mbRightDown:    bool
+    mbMiddleDown:   bool
 
-  # Keyboard state
-  # --------------
-  shiftDown:      bool
-  altDown:        bool
-  ctrlDown:       bool
-  superDown:      bool
+    # Keyboard state
+    # --------------
+    shiftDown:      bool
+    altDown:        bool
+    ctrlDown:       bool
+    superDown:      bool
 
-  # Active & hot items
-  # ------------------
-  hotItem:        ItemId
-  activeItem:     ItemId
+    # Active & hot items
+    # ------------------
+    hotItem:        ItemId
+    activeItem:     ItemId
 
-  # Hot item from the last frame
-  lastHotItem:    ItemId
+    # Hot item from the last frame
+    lastHotItem:    ItemId
 
-  # General purpose widget states
-  # -----------------------------
-  # For relative mouse movement calculations
-  x0, y0:         float
+    # General purpose widget states
+    # -----------------------------
+    # For relative mouse movement calculations
+    x0, y0:         float
 
-  # For delays & timeouts
-  t0:             float
+    # For delays & timeouts
+    t0:             float
 
-  # For keeping track of the cursor in hidden drag mode
-  dragX, dragY:   float
+    # For keeping track of the cursor in hidden drag mode
+    dragX, dragY:   float
 
-  # Widget-specific states
-  # **********************
-  radioButtonsActiveButton: Natural
+    # Widget-specific states
+    # **********************
+    radioButtonsActiveButton: Natural
 
-  # Dropdown
-  # --------
-  dropdownState:      DropdownState
+    # Dropdown
+    # --------
+    dropdownState:      DropdownState
 
-  # Dropdown in open mode, 0 if no dropdown is open currently.
-  dropdownActiveItem: ItemId
+    # Dropdown in open mode, 0 if no dropdown is open currently.
+    dropdownActiveItem: ItemId
 
-  # Slider
-  # ------
-  sliderState:        SliderState
+    # Slider
+    # ------
+    sliderState:        SliderState
 
-  # Scroll bar
-  # ----------
-  scrollBarState:     ScrollBarState
+    # Scroll bar
+    # ----------
+    scrollBarState:     ScrollBarState
 
-  # Set when the LMB is pressed inside the scroll bar's track but outside of
-  # the knob:
-  # -1 = LMB pressed on the left side of the knob
-  #  1 = LMB pressed on the right side of the knob
-  scrollBarClickDir:  float
+    # Set when the LMB is pressed inside the scroll bar's track but outside of
+    # the knob:
+    # -1 = LMB pressed on the left side of the knob
+    #  1 = LMB pressed on the right side of the knob
+    scrollBarClickDir:  float
 
-  # Text field
-  # ----------
-  textFieldState:           TextFieldState
+    # Text field
+    # ----------
+    textFieldState:           TextFieldStateVars
 
-  # Text field item in edit mode, 0 if no text field is being edited.
-  textFieldActiveItem:      ItemId
+    # Internal tooltip state
+    # **********************
+    tooltipState:     TooltipState
+    lastTooltipState: TooltipState
 
-  # The cursor is before the Rune with this index. If the cursor is at the end
-  # of the text, the cursor pos equals the lenght of the text. From this
-  # follow that the cursor position for an empty text is 0.
-  textFieldCursorPos:       Natural
+    # Used for the various tooltip delays & timeouts.
+    tooltipT0:        float
+    tooltipText:      string
 
-  # Index of the start Rune in the selection, -1 if nothing is selected.
-  textFieldSelFirst:        int
 
-  # Index of the last Rune in the selection.
-  textFieldSelLast:         Natural
+  TextFieldStateVars = object
+    state:           TextFieldState
 
-  # The text is displayed starting from the Rune with this index.
-  textFieldDisplayStartPos: Natural
-  textFieldDisplayStartX:   float
+    # Text field item in edit mode, 0 if no text field is being edited.
+    activeItem:      ItemId
 
-  # The original text is stored when going into edit mode so it can be
-  # restored if the editing is cancelled.
-  textFieldOriginalText:    string
+    # The cursor is before the Rune with this index. If the cursor is at the end
+    # of the text, the cursor pos equals the lenght of the text. From this
+    # follow that the cursor position for an empty text is 0.
+    cursorPos:       Natural
 
-  # Internal tooltip state
-  # **********************
-  tooltipState:     TooltipState
-  lastTooltipState: TooltipState
+    # Index of the start Rune in the selection, -1 if nothing is selected.
+    selFirst:        int
 
-  # Used for the various tooltip delays & timeouts.
-  tooltipT0:        float
-  tooltipText:      string
+    # Index of the last Rune in the selection.
+    selLast:         Natural
+
+    # The text is displayed starting from the Rune with this index.
+    displayStartPos: Natural
+    displayStartX:   float
+
+    # The original text is stored when going into edit mode so it can be
+    # restored if the editing is cancelled.
+    originalText:    string
+
 
 type DrawState = enum
   dsNormal, dsHover, dsActive
@@ -173,6 +179,9 @@ const
 # }}}
 
 # {{{ Utils
+
+template alias(newName: untyped, call: untyped) =
+  template newName(): untyped = call
 
 proc lerp*(a, b, t: float): float =
   a + (b - a) * t
@@ -818,7 +827,9 @@ proc textField(id:         ItemId,
     if force or not glyphsCalculated:
       discard vg.textGlyphPositions(0, 0, text, glyphs)
 
-  if gui.textFieldState == tfDefault:
+  alias(tf, gui.textFieldState)
+
+  if tf.state == tfDefault:
     # Hit testing
     if mouseInside(x, y, w, h):
       setHot(id)
@@ -827,38 +838,38 @@ proc textField(id:         ItemId,
         clearCharBuf()
         clearKeyBuf()
 
-        gui.textFieldState = tfEditLMBPressed
-        gui.textFieldActiveItem = id
-        gui.textFieldCursorPos = text.runeLen
-        gui.textFieldSelFirst = -1
-        gui.textFieldSelLast = 0
-        gui.textFieldDisplayStartPos = 0
-        gui.textFieldDisplayStartX = textBoxX
-        gui.textFieldOriginalText = text
+        tf.state = tfEditLMBPressed
+        tf.activeItem = id
+        tf.cursorPos = text.runeLen
+        tf.selFirst = -1
+        tf.selLast = 0
+        tf.displayStartPos = 0
+        tf.displayStartX = textBoxX
+        tf.originalText = text
         gui.focusCaptured = true
 
   proc exitEditMode() =
-    gui.textFieldState = tfDefault
-    gui.textFieldActiveItem = 0
-    gui.textFieldCursorPos = 0
-    gui.textFieldSelFirst = -1
-    gui.textFieldSelLast = 0
-    gui.textFieldDisplayStartPos = 0
-    gui.textFieldDisplayStartX = textBoxX
-    gui.textFieldOriginalText = ""
+    tf.state = tfDefault
+    tf.activeItem = 0
+    tf.cursorPos = 0
+    tf.selFirst = -1
+    tf.selLast = 0
+    tf.displayStartPos = 0
+    tf.displayStartX = textBoxX
+    tf.originalText = ""
     gui.focusCaptured = false
     clearKeyBuf()
     clearCharBuf()
 
   # We 'fall through' to the edit state to avoid a 1-frame delay when going
   # into edit mode
-  if gui.textFieldActiveItem == id and gui.textFieldState >= tfEditLMBPressed:
+  if tf.activeItem == id and tf.state >= tfEditLMBPressed:
     setHot(id)
     setActive(id)
 
-    if gui.textFieldState == tfEditLMBPressed:
+    if tf.state == tfEditLMBPressed:
       if not gui.mbLeftDown:
-        gui.textFieldState = tfEdit
+        tf.state = tfEdit
     else:
       # LMB pressed outside the text field exits edit mode
       if gui.mbLeftDown and not mouseInside(x, y, w, h):
@@ -873,7 +884,7 @@ proc textField(id:         ItemId,
       # TODO OS specific shortcuts
 
       if k.key == keyEscape:   # Cancel edits
-        text = gui.textFieldOriginalText
+        text = tf.originalText
         exitEditMode()
         # Note we won't process any remaining characters in the buffer
         # because exitEditMode() clears the key buffer.
@@ -886,45 +897,45 @@ proc textField(id:         ItemId,
       elif k.key == keyTab: discard
 
       elif k.key == keyBackspace:
-        if gui.textFieldCursorPos > 0:
+        if tf.cursorPos > 0:
           if k.mods == CtrlModSet:
             text = ""
-            gui.textFieldCursorPos = 0
+            tf.cursorPos = 0
           else:
-            text = text.runeSubStr(0, gui.textFieldCursorPos - 1) &
-                   text.runeSubStr(gui.textFieldCursorPos)
-            dec(gui.textFieldCursorPos)
+            text = text.runeSubStr(0, tf.cursorPos - 1) &
+                   text.runeSubStr(tf.cursorPos)
+            dec(tf.cursorPos)
 
       elif k.key == keyDelete:
         if text.len > 0:
-          text = text.runeSubStr(0, gui.textFieldCursorPos) &
-                 text.runeSubStr(gui.textFieldCursorPos + 1)
+          text = text.runeSubStr(0, tf.cursorPos) &
+                 text.runeSubStr(tf.cursorPos + 1)
 
       elif k.key in {keyHome, keyUp} or
            k.key == keyLeft and k.mods == CtrlModSet:   # TODO allow alt?
-        gui.textFieldCursorPos = 0
+        tf.cursorPos = 0
 
       elif k.key in {keyEnd, keyDown} or
            k.key == keyRight and k.mods == CtrlModSet:  # TODO allow alt?
-        gui.textFieldCursorPos = text.runeLen
+        tf.cursorPos = text.runeLen
 
       elif k.key == keyRight:
         if k.mods == {mkAlt}:
-          var p = gui.textFieldCursorPos
+          var p = tf.cursorPos
           while p < text.runeLen and     text.runeAt(p).isWhiteSpace: inc(p)
           while p < text.runeLen and not text.runeAt(p).isWhiteSpace: inc(p)
-          gui.textFieldCursorPos = p
+          tf.cursorPos = p
         else:
-          gui.textFieldCursorPos = min(gui.textFieldCursorPos + 1, text.runeLen)
+          tf.cursorPos = min(tf.cursorPos + 1, text.runeLen)
 
       elif k.key == keyLeft:
         if k.mods == {mkAlt}:
-          var p = gui.textFieldCursorPos
+          var p = tf.cursorPos
           while p > 0 and     text.runeAt(p-1).isWhiteSpace: dec(p)
           while p > 0 and not text.runeAt(p-1).isWhiteSpace: dec(p)
-          gui.textFieldCursorPos = p
+          tf.cursorPos = p
         else:
-          gui.textFieldCursorPos = max(gui.textFieldCursorPos - 1, 0)
+          tf.cursorPos = max(tf.cursorPos - 1, 0)
 
     clearKeyBuf()
 
@@ -934,13 +945,13 @@ proc textField(id:         ItemId,
     if not charBufEmpty():
       let newChars = consumeCharBuf()
 
-      let insertPos = gui.textFieldCursorPos
+      let insertPos = tf.cursorPos
       if insertPos == text.runeLen:
         text.add(newChars)
       else:
         text.insert(newChars, text.runeOffset(insertPos))
 
-      inc(gui.textFieldCursorPos, newChars.runeLen)
+      inc(tf.cursorPos, newChars.runeLen)
 
       # We need to force glyp position recalculation here because the
       # text has changed.
@@ -949,7 +960,7 @@ proc textField(id:         ItemId,
   result = text
 
   # Draw text field
-  let editing = gui.textFieldActiveItem == id
+  let editing = tf.activeItem == id
 
   let drawState = if isHot(id) and noActiveItem(): dsHover
     elif editing: dsActive
@@ -974,67 +985,67 @@ proc textField(id:         ItemId,
   if editing:
     calcGlyphPos()
 
-    var p = min(gui.textFieldCursorPos, text.runeLen-1)
-    let startOffsetX = textBoxX - gui.textFieldDisplayStartX
+    var p = min(tf.cursorPos, text.runeLen-1)
+    let startOffsetX = textBoxX - tf.displayStartX
 
 #[
     echo "---------------------------------------------"
-    echo fmt"State           {gui.textFieldState}"
-    echo fmt"ActiveItem      {gui.textFieldActiveItem}"
-    echo fmt"CursorPos       {gui.textFieldCursorPos}"
-    echo fmt"SelFirst        {gui.textFieldSelFirst}"
-    echo fmt"SelLast         {gui.textFieldSelLast}"
-    echo fmt"DisplayStartPos {gui.textFieldDisplayStartPos}"
-    echo fmt"DisplayStartX   {gui.textFieldDisplayStartX}"
-    echo fmt"OriginalText    {gui.textFieldOriginalText}"
+    echo fmt"State           {tf.State}"
+    echo fmt"ActiveItem      {tf.ActiveItem}"
+    echo fmt"CursorPos       {tf.CursorPos}"
+    echo fmt"SelFirst        {tf.SelFirst}"
+    echo fmt"SelLast         {tf.SelLast}"
+    echo fmt"DisplayStartPos {tf.DisplayStartPos}"
+    echo fmt"DisplayStartX   {tf.DisplayStartX}"
+    echo fmt"OriginalText    {tf.OriginalText}"
 ]#
     if text.len == 0:
-      gui.textFieldCursorPos = 0
-      gui.textFieldSelFirst = -1
-      gui.textFieldSelLast = 0
-      gui.textFieldDisplayStartPos = 0
-      gui.textFieldDisplayStartX = textBoxX
+      tf.cursorPos = 0
+      tf.selFirst = -1
+      tf.selLast = 0
+      tf.displayStartPos = 0
+      tf.displayStartX = textBoxX
 
-    elif glyphs[p].maxX - glyphs[gui.textFieldDisplayStartPos].minX -
+    elif glyphs[p].maxX - glyphs[tf.displayStartPos].minX -
        startOffsetX > textBoxW:
 
       var x0 = glyphs[p].maxX
 
       while p > 0 and x0 - glyphs[p].minX < textBoxW: dec(p)
-      gui.textFieldDisplayStartPos = p
+      tf.displayStartPos = p
 
       let
         textW = x0 - glyphs[p].minX
         startOffsetX = textW - textBoxW
 
-      gui.textFieldDisplayStartX = min(textBoxX - startOffsetX, textBoxX)
-      textX = gui.textFieldDisplayStartX
+      tf.displayStartX = min(textBoxX - startOffsetX, textBoxX)
+      textX = tf.displayStartX
 
     elif glyphs[p].minX <
-         glyphs[gui.textFieldDisplayStartPos].minX + startOffsetX:
+         glyphs[tf.displayStartPos].minX + startOffsetX:
 
-      gui.textFieldDisplayStartX = textBoxX
-      gui.textFieldDisplayStartPos = min(gui.textFieldDisplayStartPos, p)
-      textX = gui.textFieldDisplayStartX
+      tf.displayStartX = textBoxX
+      tf.displayStartPos = min(tf.displayStartPos, p)
+      textX = tf.displayStartX
 
     elif glyphs[p].maxX < textBoxW:
-      gui.textFieldDisplayStartPos = 0
-      gui.textFieldDisplayStartX = textBoxX
+      tf.displayStartPos = 0
+      tf.displayStartX = textBoxX
 
     else:
-      textX = gui.textFieldDisplayStartX
+      textX = tf.displayStartX
 
     # Draw cursor
-    let cursorX = if gui.textFieldCursorPos == 0:
+    let cursorX = if tf.cursorPos == 0:
       textBoxX
 
-    elif gui.textFieldCursorPos == text.runeLen:
-      gui.textFieldDisplayStartX + glyphs[gui.textFieldCursorPos-1].maxX -
-                                   glyphs[gui.textFieldDisplayStartPos].x
+    elif tf.cursorPos == text.runeLen:
+      tf.displayStartX + glyphs[tf.cursorPos-1].maxX -
+                         glyphs[tf.displayStartPos].x
 
-    elif gui.textFieldCursorPos > 0:
-      gui.textFieldDisplayStartX + glyphs[gui.textFieldCursorPos].x -
-                                   glyphs[gui.textFieldDisplayStartPos].x
+    elif tf.cursorPos > 0:
+      tf.displayStartX + glyphs[tf.cursorPos].x -
+                         glyphs[tf.displayStartPos].x
     else: textBoxX
 
     vg.beginPath()
@@ -1044,7 +1055,7 @@ proc textField(id:         ItemId,
     vg.lineTo(cursorX, y+h - 2)
     vg.stroke()
 
-    text = text.runeSubStr(gui.textFieldDisplayStartPos)
+    text = text.runeSubStr(tf.displayStartPos)
 
   # Draw text
   let textColor = if editing: GRAY_HI else: GRAY_LO
