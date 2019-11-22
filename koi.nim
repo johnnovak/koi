@@ -10,13 +10,14 @@ import xxhash
 type ItemId = int64
 
 type
-  DropdownState = enum
-    dsClosed, dsOpenLMBPressed, dsOpen
-
   SliderState = enum
     ssDefault,
     ssDragHidden
 
+  TooltipState = enum
+    tsOff, tsShowDelay, tsShow, tsFadeOutDelay, tsFadeOut
+
+type
   ScrollBarState = enum
     sbsDefault,
     sbsDragNormal,
@@ -25,12 +26,53 @@ type
     sbsTrackClickDelay,
     sbsTrackClickRepeat
 
+  ScrollBarStateVars = object
+    state:    ScrollBarState
+
+    # Set when the LMB is pressed inside the scroll bar's track but outside of
+    # the knob:
+    # -1 = LMB pressed on the left side of the knob
+    #  1 = LMB pressed on the right side of the knob
+    clickDir: float
+
+type
+  DropdownState = enum
+    dsClosed, dsOpenLMBPressed, dsOpen
+
+  DropdownStateVars = object
+    state:      DropdownState
+
+    # Dropdown in open mode, 0 if no dropdown is open currently.
+    activeItem: ItemId
+
+type
   TextFieldState = enum
     tfDefault, tfEditLMBPressed, tfEdit
 
-  TooltipState = enum
-    tsOff, tsShowDelay, tsShow, tsFadeOutDelay, tsFadeOut
+  TextFieldStateVars = object
+    state:           TextFieldState
 
+    # Text field item in edit mode, 0 if no text field is being edited.
+    activeItem:      ItemId
+
+    # The cursor is before the Rune with this index. If the cursor is at the end
+    # of the text, the cursor pos equals the lenght of the text. From this
+    # follow that the cursor position for an empty text is 0.
+    cursorPos:       Natural
+
+    # Index of the start Rune in the selection, -1 if nothing is selected.
+    selFirst:        int
+
+    # Index of the last Rune in the selection.
+    selLast:         Natural
+
+    # The text is displayed starting from the Rune with this index.
+    displayStartPos: Natural
+    displayStartX:   float
+
+    # The original text is stored when going into edit mode so it can be
+    # restored if the editing is cancelled.
+    originalText:    string
 
 type
   GuiState = object
@@ -82,22 +124,14 @@ type
     # **********************
     radioButtonsActiveButton: Natural
 
-    dropdownState:      DropdownStateVars
-    textFieldState:     TextFieldStateVars
+    dropdownState:  DropdownStateVars
+    textFieldState: TextFieldStateVars
+    scrollBarState: ScrollBarStateVars
 
     # Slider
     # ------
     sliderState:        SliderState
 
-    # Scroll bar
-    # ----------
-    scrollBarState:     ScrollBarState
-
-    # Set when the LMB is pressed inside the scroll bar's track but outside of
-    # the knob:
-    # -1 = LMB pressed on the left side of the knob
-    #  1 = LMB pressed on the right side of the knob
-    scrollBarClickDir:  float
 
 
     # Internal tooltip state
@@ -108,39 +142,6 @@ type
     # Used for the various tooltip delays & timeouts.
     tooltipT0:        float
     tooltipText:      string
-
-
-  DropdownStateVars = object
-    state:      DropdownState
-
-    # Dropdown in open mode, 0 if no dropdown is open currently.
-    activeItem: ItemId
-
-
-  TextFieldStateVars = object
-    state:           TextFieldState
-
-    # Text field item in edit mode, 0 if no text field is being edited.
-    activeItem:      ItemId
-
-    # The cursor is before the Rune with this index. If the cursor is at the end
-    # of the text, the cursor pos equals the lenght of the text. From this
-    # follow that the cursor position for an empty text is 0.
-    cursorPos:       Natural
-
-    # Index of the start Rune in the selection, -1 if nothing is selected.
-    selFirst:        int
-
-    # Index of the last Rune in the selection.
-    selLast:         Natural
-
-    # The text is displayed starting from the Rune with this index.
-    displayStartPos: Natural
-    displayStartX:   float
-
-    # The original text is stored when going into edit mode so it can be
-    # restored if the editing is cancelled.
-    originalText:    string
 
 
 type DrawState = enum
@@ -653,10 +654,10 @@ proc dropdown(id:           ItemId,
               tooltip:      string = "",
               selectedItem: Natural): Natural =
 
-  alias(ds, gui.dropdownState)
-
   assert items.len > 0
   assert selectedItem <= items.high
+
+  alias(ds, gui.dropdownState)
 
   const BoxPad = 7
 
@@ -1105,6 +1106,8 @@ proc horizScrollBar(id:         ItemId,
   assert thumbSize < 0.0 or thumbSize < abs(startVal - endVal)
   assert clickStep < 0.0 or clickStep < abs(startVal - endVal)
 
+  alias(sb, gui.scrollBarState)
+
   const
     ThumbPad = 3
     ThumbMinW = 10
@@ -1149,29 +1152,29 @@ proc horizScrollBar(id:         ItemId,
 
     let (s, e) = if startVal < endVal: (startVal, endVal)
                  else: (endVal, startVal)
-    clamp(newValue + gui.scrollBarClickDir * clickStep, s, e)
+    clamp(newValue + sb.clickDir * clickStep, s, e)
 
   if isActive(id):
-    case gui.scrollBarState
+    case sb.state
     of sbsDefault:
       if insideThumb:
         gui.x0 = gui.mx
         if gui.shiftDown:
           disableCursor()
-          gui.scrollBarState = sbsDragHidden
+          sb.state = sbsDragHidden
         else:
-          gui.scrollBarState = sbsDragNormal
+          sb.state = sbsDragNormal
       else:
         let s = sgn(endVal - startVal).float
-        if gui.mx < thumbX: gui.scrollBarClickDir = -1 * s
-        else:               gui.scrollBarClickDir =  1 * s
-        gui.scrollBarState = sbsTrackClickFirst
+        if gui.mx < thumbX: sb.clickDir = -1 * s
+        else:               sb.clickDir =  1 * s
+        sb.state = sbsTrackClickFirst
         gui.t0 = getTime()
 
     of sbsDragNormal:
       if gui.shiftDown:
         disableCursor()
-        gui.scrollBarState = sbsDragHidden
+        sb.state = sbsDragHidden
       else:
         let dx = gui.mx - gui.x0
 
@@ -1199,7 +1202,7 @@ proc horizScrollBar(id:         ItemId,
         gui.dragX = newThumbX + thumbW*0.5
         gui.dragY = -1.0
       else:
-        gui.scrollBarState = sbsDragNormal
+        sb.state = sbsDragNormal
         enableCursor()
         setCursorPosX(gui.dragX)
         gui.mx = gui.dragX
@@ -1209,12 +1212,12 @@ proc horizScrollBar(id:         ItemId,
       newValue = calcNewValueTrackClick()
       newThumbX = calcThumbX(newValue)
 
-      gui.scrollBarState = sbsTrackClickDelay
+      sb.state = sbsTrackClickDelay
       gui.t0 = getTime()
 
     of sbsTrackClickDelay:
       if getTime() - gui.t0 > ScrollBarTrackClickRepeatDelay:
-        gui.scrollBarState = sbsTrackClickRepeat
+        sb.state = sbsTrackClickRepeat
 
     of sbsTrackClickRepeat:
       if isHot(id):
@@ -1222,7 +1225,7 @@ proc horizScrollBar(id:         ItemId,
           newValue = calcNewValueTrackClick()
           newThumbX = calcThumbX(newValue)
 
-          if gui.scrollBarClickDir * sgn(endVal - startVal).float > 0:
+          if sb.clickDir * sgn(endVal - startVal).float > 0:
             if newThumbX + thumbW > gui.mx:
               newThumbX = thumbX
               newValue = value
@@ -1256,7 +1259,7 @@ proc horizScrollBar(id:         ItemId,
   let thumbColor = case drawState
     of dsHover: GRAY_LOHI
     of dsActive:
-      if gui.scrollBarState < sbsTrackClickFirst: RED
+      if sb.state < sbsTrackClickFirst: RED
       else: GRAY_LO
     else:   GRAY_LO
 
@@ -1312,6 +1315,8 @@ proc vertScrollBar(id:         ItemId,
   assert thumbSize < 0.0 or thumbSize < abs(startVal - endVal)
   assert clickStep < 0.0 or clickStep < abs(startVal - endVal)
 
+  alias(sb, gui.scrollBarState)
+
   const
     ThumbPad = 3
     ThumbMinH = 10
@@ -1354,29 +1359,29 @@ proc vertScrollBar(id:         ItemId,
 
     let (s, e) = if startVal < endVal: (startVal, endVal)
                  else: (endVal, startVal)
-    clamp(newValue + gui.scrollBarClickDir * clickStep, s, e)
+    clamp(newValue + sb.clickDir * clickStep, s, e)
 
   if isActive(id):
-    case gui.scrollBarState
+    case sb.state
     of sbsDefault:
       if insideThumb:
         gui.y0 = gui.my
         if gui.shiftDown:
           disableCursor()
-          gui.scrollBarState = sbsDragHidden
+          sb.state = sbsDragHidden
         else:
-          gui.scrollBarState = sbsDragNormal
+          sb.state = sbsDragNormal
       else:
         let s = sgn(endVal - startVal).float
-        if gui.my < thumbY: gui.scrollBarClickDir = -1 * s
-        else:               gui.scrollBarClickDir =  1 * s
-        gui.scrollBarState = sbsTrackClickFirst
+        if gui.my < thumbY: sb.clickDir = -1 * s
+        else:               sb.clickDir =  1 * s
+        sb.state = sbsTrackClickFirst
         gui.t0 = getTime()
 
     of sbsDragNormal:
       if gui.shiftDown:
         disableCursor()
-        gui.scrollBarState = sbsDragHidden
+        sb.state = sbsDragHidden
       else:
         let dy = gui.my - gui.y0
 
@@ -1404,7 +1409,7 @@ proc vertScrollBar(id:         ItemId,
         gui.dragX = -1.0
         gui.dragY = newThumbY + thumbH*0.5
       else:
-        gui.scrollBarState = sbsDragNormal
+        sb.state = sbsDragNormal
         enableCursor()
         setCursorPosY(gui.dragY)
         gui.my = gui.dragY
@@ -1414,12 +1419,12 @@ proc vertScrollBar(id:         ItemId,
       newValue = calcNewValueTrackClick()
       newThumbY = calcThumbY(newValue)
 
-      gui.scrollBarState = sbsTrackClickDelay
+      sb.state = sbsTrackClickDelay
       gui.t0 = getTime()
 
     of sbsTrackClickDelay:
       if getTime() - gui.t0 > ScrollBarTrackClickRepeatDelay:
-        gui.scrollBarState = sbsTrackClickRepeat
+        sb.state = sbsTrackClickRepeat
 
     of sbsTrackClickRepeat:
       if isHot(id):
@@ -1427,7 +1432,7 @@ proc vertScrollBar(id:         ItemId,
           newValue = calcNewValueTrackClick()
           newThumbY = calcThumbY(newValue)
 
-          if gui.scrollBarClickDir * sgn(endVal - startVal).float > 0:
+          if sb.clickDir * sgn(endVal - startVal).float > 0:
             if newThumbY + thumbH > gui.my:
               newThumbY = thumbY
               newValue = value
@@ -1461,7 +1466,7 @@ proc vertScrollBar(id:         ItemId,
   let thumbColor = case drawState
     of dsHover: GRAY_LOHI
     of dsActive:
-      if gui.scrollBarState < sbsTrackClickFirst: RED
+      if sb.state < sbsTrackClickFirst: RED
       else: GRAY_LO
     else:   GRAY_LO
 
@@ -1494,18 +1499,20 @@ template vertScrollBar*(x, y, w, h: float,
 # {{{ scrollBarPost
 
 proc scrollBarPost() =
+  alias(sb, gui.scrollBarState)
+
   # Handle release active scrollbar outside of the widget
   if not gui.mbLeftDown and gui.activeItem != 0:
-    case gui.scrollBarState:
+    case sb.state:
     of sbsDragHidden:
-      gui.scrollBarState = sbsDefault
+      sb.state = sbsDefault
       enableCursor()
       if gui.dragX > -1.0:
         setCursorPosX(gui.dragX)
       else:
         setCursorPosY(gui.dragY)
 
-    else: gui.scrollBarState = sbsDefault
+    else: sb.state = sbsDefault
 
 # }}}
 # }}}
