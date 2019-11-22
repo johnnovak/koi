@@ -1088,7 +1088,7 @@ proc horizScrollBar(id:         ItemId,
 
     let (s, e) = if startVal < endVal: (startVal, endVal)
                  else: (endVal, startVal)
-    min(max(newValue + gui.scrollBarClickDir * clickStep, s), e)
+    clamp(newValue + gui.scrollBarClickDir * clickStep, s, e)
 
   if isActive(id):
     case gui.scrollBarState
@@ -1114,10 +1114,10 @@ proc horizScrollBar(id:         ItemId,
       else:
         let dx = gui.mx - gui.x0
 
-        newThumbX = min(max(thumbX + dx, thumbMinX), thumbMaxX)
+        newThumbX = clamp(thumbX + dx, thumbMinX, thumbMaxX)
         newValue = calcNewValue(newThumbX)
 
-        gui.x0 = min(max(gui.mx, thumbMinX), thumbMaxX + thumbW)
+        gui.x0 = clamp(gui.mx, thumbMinX, thumbMaxX + thumbW)
 
     of sbsDragHidden:
       # Technically, the cursor can move outside the widget when it's disabled
@@ -1131,7 +1131,7 @@ proc horizScrollBar(id:         ItemId,
                 else:           ScrollBarFineDragDivisor
         let dx = (gui.mx - gui.x0) / d
 
-        newThumbX = min(max(thumbX + dx, thumbMinX), thumbMaxX)
+        newThumbX = clamp(thumbX + dx, thumbMinX, thumbMaxX)
         newValue = calcNewValue(newThumbX)
 
         gui.x0 = gui.mx
@@ -1293,7 +1293,7 @@ proc vertScrollBar(id:         ItemId,
 
     let (s, e) = if startVal < endVal: (startVal, endVal)
                  else: (endVal, startVal)
-    min(max(newValue + gui.scrollBarClickDir * clickStep, s), e)
+    clamp(newValue + gui.scrollBarClickDir * clickStep, s, e)
 
   if isActive(id):
     case gui.scrollBarState
@@ -1319,10 +1319,10 @@ proc vertScrollBar(id:         ItemId,
       else:
         let dy = gui.my - gui.y0
 
-        newThumbY = min(max(thumbY + dy, thumbMinY), thumbMaxY)
+        newThumbY = clamp(thumbY + dy, thumbMinY, thumbMaxY)
         newValue = calcNewValue(newThumbY)
 
-        gui.y0 = min(max(gui.my, thumbMinY), thumbMaxY + thumbH)
+        gui.y0 = clamp(gui.my, thumbMinY, thumbMaxY + thumbH)
 
     of sbsDragHidden:
       # Technically, the cursor can move outside the widget when it's disabled
@@ -1336,7 +1336,7 @@ proc vertScrollBar(id:         ItemId,
                 else:           ScrollBarFineDragDivisor
         let dy = (gui.my - gui.y0) / d
 
-        newThumbY = min(max(thumbY + dy, thumbMinY), thumbMaxY)
+        newThumbY = clamp(thumbY + dy, thumbMinY, thumbMaxY)
         newValue = calcNewValue(newThumbY)
 
         gui.y0 = gui.my
@@ -1508,7 +1508,7 @@ proc horizSlider(id:         ItemId,
 
       let dx = (gui.mx - gui.x0) / d
 
-      newPosX = min(max(posX + dx, posMinX), posMaxX)
+      newPosX = clamp(posX + dx, posMinX, posMaxX)
       let t = invLerp(posMinX, posMaxX, newPosX)
       newValue = lerp(startVal, endVal, t)
       gui.x0 = gui.mx
@@ -1626,7 +1626,7 @@ proc vertSlider(id:         ItemId,
 
       let dy = (gui.my - gui.y0) / d
 
-      newPosY = min(max(posY + dy, posMaxY), posMinY)
+      newPosY = clamp(posY + dy, posMaxY, posMinY)
       let t = invLerp(posMinY, posMaxY, newPosY)
       newValue = lerp(startVal, endVal, t)
       gui.y0 = gui.my
