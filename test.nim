@@ -257,7 +257,7 @@ proc init(): Window =
 
   win.windowPositionCb = windowPositionCb
 
-  glfw.swapInterval(16)
+  glfw.swapInterval(1)
 
   result = win
 

@@ -933,10 +933,12 @@ proc textField(id:         ItemId,
     if not charBufEmpty():
       let newChars = consumeCharBuf()
 
-      let before = text.runeSubStr(0, gui.textFieldCursorPos)
-      let after = text.runeSubStr(gui.textFieldCursorPos)
+      let insertPos = gui.textFieldCursorPos
+      if insertPos == text.runeLen:
+        text.add(newChars)
+      else:
+        text.insert(newChars, text.runeOffset(insertPos))
 
-      text = before & newChars & after
       inc(gui.textFieldCursorPos, newChars.runeLen)
 
       # We need to force glyp position recalculation here because the
@@ -976,19 +978,24 @@ proc textField(id:         ItemId,
       x0 = glyphs[p].maxX
 
     while p > 0 and x0 - glyphs[p].minX < textBoxW: dec(p)
-
     gui.textFieldDisplayStartPos = p
-    gui.textFieldDisplayStartX = min(
-      textBoxX - ((x0 - glyphs[p].minX) - textBoxW), textBoxX)
 
+    let
+      textW = x0 - glyphs[p].minX
+      startOffsetX = textW - textBoxW
+
+    gui.textFieldDisplayStartX = min(textBoxX - startOffsetX, textBoxX)
     textX = gui.textFieldDisplayStartX
 
     # Draw cursor
-    let cursorX = if gui.textFieldCursorPos > 0:
+    let cursorX = if gui.textFieldCursorPos == text.runeLen:
+      gui.textFieldDisplayStartX + glyphs[gui.textFieldCursorPos-1].maxX -
+                                   glyphs[gui.textFieldDisplayStartPos].x
+
+    elif gui.textFieldCursorPos > 0:
       gui.textFieldDisplayStartX + glyphs[gui.textFieldCursorPos].x -
-                                   glyphs[p].x
+                                   glyphs[gui.textFieldDisplayStartPos].x
     else: textBoxX
-    #text ++ text.runeOffset(gui.textFieldDisplayStartPos)
 
     vg.beginPath()
     vg.strokeColor(RED)
