@@ -896,8 +896,9 @@ proc textField(id:         ItemId,
             dec(gui.textFieldCursorPos)
 
       elif k.key == keyDelete:
-        text = text.runeSubStr(0, gui.textFieldCursorPos) &
-               text.runeSubStr(gui.textFieldCursorPos + 1)
+        if text.len > 0:
+          text = text.runeSubStr(0, gui.textFieldCursorPos) &
+                 text.runeSubStr(gui.textFieldCursorPos + 1)
 
       elif k.key in {keyHome, keyUp} or
            k.key == keyLeft and k.mods == CtrlModSet:   # TODO allow alt?
@@ -973,14 +974,31 @@ proc textField(id:         ItemId,
   if editing:
     calcGlyphPos()
 
-    let startOffsetX = textBoxX - gui.textFieldDisplayStartX 
+    var p = min(gui.textFieldCursorPos, text.runeLen-1)
+    let startOffsetX = textBoxX - gui.textFieldDisplayStartX
 
-    if glyphs[gui.textFieldCursorPos].minX >
-       glyphs[gui.textFieldDisplayStartPos].minX + textBoxW + startOffsetX:
+#[
+    echo "---------------------------------------------"
+    echo fmt"State           {gui.textFieldState}"
+    echo fmt"ActiveItem      {gui.textFieldActiveItem}"
+    echo fmt"CursorPos       {gui.textFieldCursorPos}"
+    echo fmt"SelFirst        {gui.textFieldSelFirst}"
+    echo fmt"SelLast         {gui.textFieldSelLast}"
+    echo fmt"DisplayStartPos {gui.textFieldDisplayStartPos}"
+    echo fmt"DisplayStartX   {gui.textFieldDisplayStartX}"
+    echo fmt"OriginalText    {gui.textFieldOriginalText}"
+]#
+    if text.len == 0:
+      gui.textFieldCursorPos = 0
+      gui.textFieldSelFirst = -1
+      gui.textFieldSelLast = 0
+      gui.textFieldDisplayStartPos = 0
+      gui.textFieldDisplayStartX = textBoxX
 
-      var
-        p = min(gui.textFieldCursorPos, text.runeLen-1)
-        x0 = glyphs[p].maxX
+    elif glyphs[p].maxX - glyphs[gui.textFieldDisplayStartPos].minX -
+       startOffsetX > textBoxW:
+
+      var x0 = glyphs[p].maxX
 
       while p > 0 and x0 - glyphs[p].minX < textBoxW: dec(p)
       gui.textFieldDisplayStartPos = p
@@ -991,11 +1009,26 @@ proc textField(id:         ItemId,
 
       gui.textFieldDisplayStartX = min(textBoxX - startOffsetX, textBoxX)
       textX = gui.textFieldDisplayStartX
+
+    elif glyphs[p].minX <
+         glyphs[gui.textFieldDisplayStartPos].minX + startOffsetX:
+
+      gui.textFieldDisplayStartX = textBoxX
+      gui.textFieldDisplayStartPos = min(gui.textFieldDisplayStartPos, p)
+      textX = gui.textFieldDisplayStartX
+
+    elif glyphs[p].maxX < textBoxW:
+      gui.textFieldDisplayStartPos = 0
+      gui.textFieldDisplayStartX = textBoxX
+
     else:
-      discard
+      textX = gui.textFieldDisplayStartX
 
     # Draw cursor
-    let cursorX = if gui.textFieldCursorPos == text.runeLen:
+    let cursorX = if gui.textFieldCursorPos == 0:
+      textBoxX
+
+    elif gui.textFieldCursorPos == text.runeLen:
       gui.textFieldDisplayStartX + glyphs[gui.textFieldCursorPos-1].maxX -
                                    glyphs[gui.textFieldDisplayStartPos].x
 
@@ -1011,6 +1044,8 @@ proc textField(id:         ItemId,
     vg.lineTo(cursorX, y+h - 2)
     vg.stroke()
 
+    text = text.runeSubStr(gui.textFieldDisplayStartPos)
+
   # Draw text
   let textColor = if editing: GRAY_HI else: GRAY_LO
 
@@ -1020,8 +1055,7 @@ proc textField(id:         ItemId,
   vg.fillColor(textColor)
 
   vg.scissor(textBoxX, textBoxY, textBoxW, textBoxH)
-  let txt = text.runeSubStr(gui.textFieldDisplayStartPos)
-  discard vg.text(textX, textY, txt)
+  discard vg.text(textX, textY, text)
   vg.resetScissor()
 
   if isHot(id):
