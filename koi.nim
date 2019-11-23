@@ -255,6 +255,9 @@ template isHotAndActive(id: ItemId): bool =
 template noActiveItem(): bool =
   gui.activeItem == 0
 
+template hasActiveItem(): bool =
+  gui.activeItem > 0
+
 # }}}
 # {{{ Keyboard handling
 
@@ -336,7 +339,7 @@ proc handleTooltipInsideWidget(id: ItemId, tooltip: string) =
       tt.t0 = getTime()
 
   # Hide the tooltip immediately if the LMB is pressed inside the widget
-  if gui.mbLeftDown and gui.activeItem > 0:
+  if gui.mbLeftDown and hasActiveItem():
     tt.state = tsOff
 
   # Start the show delay if we just entered the widget with LMB up and no
@@ -1538,7 +1541,7 @@ proc scrollBarPost() =
   alias(sb, gui.scrollBarState)
 
   # Handle release active scrollbar outside of the widget
-  if not gui.mbLeftDown and gui.activeItem != 0:
+  if not gui.mbLeftDown and hasActiveItem():
     case sb.state:
     of sbsDragHidden:
       sb.state = sbsDefault
@@ -1786,7 +1789,7 @@ template vertSlider*(x, y, w, h: float,
 
 proc sliderPost() =
   # Handle release active slider outside of the widget
-  if not gui.mbLeftDown and gui.activeItem != 0:
+  if not gui.mbLeftDown and hasActiveItem():
     case gui.sliderState:
     of ssDragHidden:
       gui.sliderState = ssDefault
