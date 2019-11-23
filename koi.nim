@@ -744,10 +744,19 @@ proc dropdown(id:           ItemId,
   alias(gui, g_uiState)
   alias(ds, gui.dropdownState)
 
-  const BoxPad = 7
+  const
+    TextBoxPadX = 8
+    SelBoxPadX = 7
+    SelBoxPadY = 7
+
+  let
+    textBoxX = x + TextBoxPadX
+    textBoxW = w - TextBoxPadX*2
+    textBoxY = y
+    textBoxH = h
 
   var
-    boxX, boxY, boxW, boxH: float
+    selBoxX, selBoxY, selBoxW, selBoxH: float
     hoverItem = -1
 
   let
@@ -785,15 +794,15 @@ proc dropdown(id:           ItemId,
       let tw = g_nvgContext.horizontalAdvance(0, 0, i)
       maxItemWidth = max(tw, maxItemWidth)
 
-    boxX = x
-    boxY = y + h
-    boxW = max(maxItemWidth + BoxPad*2, w)
-    boxH = float(items.len) * itemHeight + BoxPad*2
+    selBoxX = x
+    selBoxY = y + h
+    selBoxW = max(maxItemWidth + SelBoxPadX*2, w)
+    selBoxH = float(items.len) * itemHeight + SelBoxPadY*2
 
     # Hit testing
     let
       insideButton = mouseInside(x, y, w, h)
-      insideBox = mouseInside(boxX, boxY, boxW, boxH)
+      insideBox = mouseInside(selBoxX, selBoxY, selBoxW, selBoxH)
 
     if insideButton or insideBox:
       setHot(id)
@@ -801,7 +810,7 @@ proc dropdown(id:           ItemId,
     else:
       closeDropdown()
 
-    hoverItem = min(int(floor((gui.my - boxY - BoxPad) / itemHeight)),
+    hoverItem = min(int(floor((gui.my - selBoxY - SelBoxPadY) / itemHeight)),
                     numItems-1)
 
     # LMB released inside the box selects the item under the cursor and closes
@@ -846,11 +855,15 @@ proc dropdown(id:           ItemId,
       of dsActive: GRAY_LO
       else:        GRAY_LO
 
+    vg.scissor(textBoxX, textBoxY, textBoxW, textBoxH)
+
     vg.fontSize(19.0)
     vg.fontFace("sans-bold")
     vg.textAlign(haLeft, vaMiddle)
     vg.fillColor(textColor)
     discard vg.text(x + ItemXPad, y+h*0.5, itemText)
+
+    vg.resetScissor()
   )
 
   # Dropdown items
@@ -858,7 +871,7 @@ proc dropdown(id:           ItemId,
     if isActive(id) and ds.state >= dsOpenLMBPressed:
       # Draw item list box
       vg.beginPath()
-      vg.roundedRect(boxX, boxY, boxW, boxH, 5)
+      vg.roundedRect(selBoxX, selBoxY, selBoxW, selBoxH, 5)
       vg.fillColor(GRAY_LO)
       vg.fill()
 
@@ -869,14 +882,14 @@ proc dropdown(id:           ItemId,
       vg.fillColor(GRAY_HI)
 
       var
-        ix = boxX + BoxPad
-        iy = boxY + BoxPad
+        ix = selBoxX + SelBoxPadX
+        iy = selBoxY + SelBoxPadY
 
       for i, item in items.pairs:
         var textColor = GRAY_HI
         if i == hoverItem:
           vg.beginPath()
-          vg.rect(boxX, iy, boxW, h)
+          vg.rect(selBoxX, iy, selBoxW, h)
           vg.fillColor(RED)
           vg.fill()
           textColor = GRAY_LO
@@ -913,7 +926,7 @@ proc textField(id:         ItemId,
 
   const
     MaxTextLen = 1000
-    PadX = 8
+    TextBoxPadX = 8
 
   assert text.runeLen <= MaxTextLen
 
@@ -924,8 +937,8 @@ proc textField(id:         ItemId,
 
   # The text is displayed within this rectangle (used for drawing later)
   let
-    textBoxX = x + PadX
-    textBoxW = w - PadX*2
+    textBoxX = x + TextBoxPadX
+    textBoxW = w - TextBoxPadX*2
     textBoxY = y
     textBoxH = h
 
