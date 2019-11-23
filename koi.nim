@@ -844,7 +844,7 @@ proc textField(id:         ItemId,
   # TODO only int & float parameter
 
   const
-    MaxTextLen = 50
+    MaxTextLen = 1000
     PadX = 8
 
   assert text.runeLen <= MaxTextLen
@@ -950,6 +950,12 @@ proc textField(id:         ItemId,
         tf.selEndPos   = tf.cursorPos
       tf.selEndPos = newCursorPos
 
+    proc deleteSelection() =
+      let (startPos, endPos) = getSelection()
+      text = text.runeSubStr(0, startPos) & text.runeSubStr(endPos)
+      tf.cursorPos = startPos
+      clearSelection()
+
     for i in 0..<keyBufIdx:
       let ke = keyBuf[i]
       let keNoShift = withoutShift(ke)
@@ -987,13 +993,19 @@ proc textField(id:         ItemId,
         tf.cursorPos = newCursorPos
 
       elif ke in DeleteWordToRight:
-        let p = findNextWordEnd()
-        text = text.runeSubStr(0, tf.cursorPos) & text.runeSubStr(p)
+        if hasSelection():
+          deleteSelection()
+        else:
+          let p = findNextWordEnd()
+          text = text.runeSubStr(0, tf.cursorPos) & text.runeSubStr(p)
 
       elif ke in DeleteWordToLeft:
-        let p = findPrevWordStart()
-        text = text.runeSubStr(0, p) & text.runeSubStr(tf.cursorPos)
-        tf.cursorPos = p
+        if hasSelection():
+          deleteSelection()
+        else:
+          let p = findPrevWordStart()
+          text = text.runeSubStr(0, p) & text.runeSubStr(tf.cursorPos)
+          tf.cursorPos = p
 
       elif ke.key == keyRight:
         let newCursorPos = min(tf.cursorPos + 1, text.runeLen)
@@ -1012,15 +1024,19 @@ proc textField(id:         ItemId,
         tf.cursorPos = newCursorPos
 
       elif ke.key == keyBackspace:
-        if tf.cursorPos > 0:
+        if hasSelection():
+          deleteSelection()
+        elif tf.cursorPos > 0:
           text = text.runeSubStr(0, tf.cursorPos - 1) &
                  text.runeSubStr(tf.cursorPos)
           dec(tf.cursorPos)
 
       elif ke.key == keyDelete:
-        if text.len > 0:
-          text = text.runeSubStr(0, tf.cursorPos) &
-                 text.runeSubStr(tf.cursorPos + 1)
+        if hasSelection():
+          deleteSelection()
+        elif text.len > 0:
+            text = text.runeSubStr(0, tf.cursorPos) &
+                   text.runeSubStr(tf.cursorPos + 1)
 
       elif ke.key == keyEscape:   # Cancel edits
         text = tf.originalText
@@ -1041,22 +1057,25 @@ proc textField(id:         ItemId,
     # (If we exited edit mode in the above key handler, this will result in
     # a noop as exitEditMode() clears the char buffer.)
     if not charBufEmpty():
-      let textLen = text.runeLen
-      var
-        newChars = consumeCharBuf()
-        newCharsLen = newChars.runeLen
+      var newChars = consumeCharBuf()
 
-      if textLen + newCharsLen > MaxTextLen:
-        newCharsLen = max(MaxTextLen - textLen, 0)
-        newChars = newChars.runeSubStr(0, newCharsLen)
-
-      let insertPos = tf.cursorPos
-      if insertPos == textLen:
-        text.add(newChars)
+      if hasSelection():
+        let (startPos, endPos) = getSelection()
+        text = text.runeSubStr(0, startPos) & newChars & text.runeSubStr(endPos)
+        tf.cursorPos = startPos + newChars.runeLen()
+        clearSelection()
       else:
-        text.insert(newChars, text.runeOffset(insertPos))
+        let insertPos = tf.cursorPos
+        if insertPos == text.runeLen():
+          text.add(newChars)
+        else:
+          text.insert(newChars, text.runeOffset(insertPos))
 
-      inc(tf.cursorPos, newCharsLen)
+        inc(tf.cursorPos, newChars.runeLen())
+
+      if text.runeLen > MaxTextLen:
+        text = text.runeSubStr(0, MaxTextLen)
+        tf.cursorPos = MaxTextLen
 
       # We need to force glyp position recalculation here because the
       # text has changed.
