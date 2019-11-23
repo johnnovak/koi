@@ -756,6 +756,11 @@ proc dropdown(id:           ItemId,
 
   result = selectedItem
 
+  proc closeDropdown() =
+    ds.state = dsClosed
+    ds.activeItem = 0
+    gui.focusCaptured = false
+
   if ds.state == dsClosed:
     if not gui.focusCaptured and mouseInside(x, y, w, h):
       setHot(id)
@@ -763,6 +768,7 @@ proc dropdown(id:           ItemId,
         setActive(id)
         ds.state = dsOpenLMBPressed
         ds.activeItem = id
+        gui.focusCaptured = true
 
   # We 'fall through' to the open state to avoid a 1-frame delay when clicking
   # the button
@@ -793,8 +799,7 @@ proc dropdown(id:           ItemId,
       setHot(id)
       setActive(id)
     else:
-      ds.state = dsClosed
-      ds.activeItem = 0
+      closeDropdown()
 
     hoverItem = min(int(floor((gui.my - boxY - BoxPad) / itemHeight)),
                     numItems-1)
@@ -805,20 +810,16 @@ proc dropdown(id:           ItemId,
       if not gui.mbLeftDown:
         if hoverItem >= 0:
           result = hoverItem
-          ds.state = dsClosed
-          ds.activeItem = 0
+          closeDropdown()
         else:
           ds.state = dsOpen
     else:
       if gui.mbLeftDown:
         if hoverItem >= 0:
           result = hoverItem
-          ds.state = dsClosed
-          ds.activeItem = 0
-
+          closeDropdown()
         elif insideButton:
-          ds.state = dsClosed
-          ds.activeItem = 0
+          closeDropdown()
 
   # Draw button
   let drawState = if isHot(id) and noActiveItem(): dsHover
