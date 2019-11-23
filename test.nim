@@ -160,20 +160,34 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
     sliderVal2)
 
   sliderVal3 = koi.vertSlider(
-    320, 300, h, 120,
+    320, 460, h, 120,
     startVal = 0, endVal = 100, tooltip = "Vertical Slider 1",
     sliderVal3)
 
-  koi.label(320, 430, w, h, fmt"{sliderVal3:.3f}",
+  koi.label(300, 590, w, h, fmt"{sliderVal3:.3f}",
             color = gray(0.90), fontSize = 19.0)
 
   sliderVal4 = koi.vertSlider(
-    400, 300, h, 120,
+    400, 460, h, 120,
     startVal = 50, endVal = -30, tooltip = "Vertical Slider 2",
     sliderVal4)
 
-  koi.label(400, 430, w, h, fmt"{sliderVal4:.3f}",
+  koi.label(380, 590, w, h, fmt"{sliderVal4:.3f}",
             color = gray(0.90), fontSize = 19.0)
+
+  # Dropdowns
+  y += pad * 2
+  dropdownVal1 = koi.dropdown(
+    x, y, w, h,
+    items = @["Orange", "Banana", "Blueberry", "Apricot", "Apple"],
+    tooltip = "Select a fruit",
+    dropdownVal1)
+
+  dropdownVal2 = koi.dropdown(
+    280, y, w, h,
+    items = @["Red", "Green", "Blue", "Yellow", "Purple (with little yellow dots)"],
+    tooltip = "Select a colour",
+    dropdownVal2)
 
   # Text fields
   y += pad * 2
@@ -206,23 +220,6 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
     labels = @["One", "Two", "Three"],
     tooltips = @["First (1)", "Second (2)", "Third (3)"],
     radioButtonsVal2)
-
-  # Dropdowns
-  y = 50.0 + pad
-  x = 500
-  dropdownVal1 = koi.dropdown(
-    x, y, w, h,
-    items = @["Orange", "Banana", "Blueberry", "Apricot", "Apple"],
-    tooltip = "Select a fruit",
-    dropdownVal1)
-
-  y = 50.0 + pad
-  x = 650
-  dropdownVal2 = koi.dropdown(
-    x, y, w, h,
-    items = @["Red", "Green", "Blue", "Yellow", "Purple (with little yellow dots)"],
-    tooltip = "Select a colour",
-    dropdownVal2)
 
   ############################################################
 
@@ -259,7 +256,7 @@ proc init(): Window =
   win.windowPositionCb = windowPosCb
   win.framebufferSizeCb = framebufSizeCb
 
-  glfw.swapInterval(0)
+  glfw.swapInterval(1)
 
   result = win
 

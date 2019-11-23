@@ -173,6 +173,8 @@ type DrawState = enum
 var
   gui {.threadvar.}: GuiState
   vg: NVGContext
+  drawList: seq[proc (vg: NVGContext)]
+  drawList2: seq[proc (vg: NVGContext)]
 
 var
   RED*       {.threadvar.}: Color
@@ -450,12 +452,14 @@ proc textLabel(id:         ItemId,
                fontSize:   float = 19.0,
                fontFace:   string = "sans-bold") =
 
-  vg.fontSize(fontSize)
-  vg.fontFace(fontFace)
-  vg.textAlign(haLeft, vaMiddle)
-  vg.fillColor(color)
-#  let tw = vg.horizontalAdvance(0,0, label)
-  discard vg.text(x, y+h*0.5, label)
+  drawList.add(proc (vg: NVGContext) =
+    vg.fontSize(fontSize)
+    vg.fontFace(fontFace)
+    vg.textAlign(haLeft, vaMiddle)
+    vg.fillColor(color)
+  #  let tw = vg.horizontalAdvance(0,0, label)
+    discard vg.text(x, y+h*0.5, label)
+  )
 
 
 template label*(x, y, w, h: float,
@@ -498,17 +502,19 @@ proc button(id:         ItemId,
     of dsActive: RED
     else:        color
 
-  vg.beginPath()
-  vg.roundedRect(x, y, w, h, 5)
-  vg.fillColor(fillColor)
-  vg.fill()
+  drawList.add(proc (vg: NVGContext) =
+    vg.beginPath()
+    vg.roundedRect(x, y, w, h, 5)
+    vg.fillColor(fillColor)
+    vg.fill()
 
-  vg.fontSize(19.0)
-  vg.fontFace("sans-bold")
-  vg.textAlign(haLeft, vaMiddle)
-  vg.fillColor(GRAY_LO)
-  let tw = vg.horizontalAdvance(0,0, label)
-  discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, label)
+    vg.fontSize(19.0)
+    vg.fontFace("sans-bold")
+    vg.textAlign(haLeft, vaMiddle)
+    vg.fillColor(GRAY_LO)
+    let tw = vg.horizontalAdvance(0,0, label)
+    discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, label)
+  )
 
   if isHot(id):
     handleTooltipInsideWidget(id, tooltip)
@@ -559,24 +565,26 @@ proc checkBox(id:      ItemId,
     of dsHover, dsActive: GRAY_HI
     else:                 GRAY_MID
 
-  vg.beginPath()
-  vg.roundedRect(x, y, w, w, 5)
-  vg.fillColor(bgColor)
-  vg.fill()
+  drawList.add(proc (vg: NVGContext) =
+    vg.beginPath()
+    vg.roundedRect(x, y, w, w, 5)
+    vg.fillColor(bgColor)
+    vg.fill()
 
-  # Draw check mark
-  let checkColor = case drawState
-    of dsHover:
-      if active: white() else: GRAY_LOHI
-    of dsActive: RED
-    else:
-      if active: GRAY_LO else: GRAY_HI
+    # Draw check mark
+    let checkColor = case drawState
+      of dsHover:
+        if active: white() else: GRAY_LOHI
+      of dsActive: RED
+      else:
+        if active: GRAY_LO else: GRAY_HI
 
-  let w = w - CheckPad*2
-  vg.beginPath()
-  vg.roundedRect(x + CheckPad, y + CheckPad, w, w, 5)
-  vg.fillColor(checkColor)
-  vg.fill()
+    let w = w - CheckPad*2
+    vg.beginPath()
+    vg.roundedRect(x + CheckPad, y + CheckPad, w, w, 5)
+    vg.fillColor(checkColor)
+    vg.fill()
+  )
 
   if isHot(id):
     handleTooltipInsideWidget(id, tooltip)
@@ -596,8 +604,8 @@ template checkBox*(x, y, w: float,
 
 proc radioButtons(id:           ItemId,
                   x, y, w, h:   float,
-                  labels:       openArray[string],
-                  tooltips:     openArray[string] = @[],
+                  labels:       seq[string],
+                  tooltips:     seq[string] = @[],
                   activeButton: Natural): Natural =
 
   assert activeButton >= 0 and activeButton <= labels.high
@@ -631,42 +639,44 @@ proc radioButtons(id:           ItemId,
   var x = x
   const PadX = 2
 
-  vg.fontSize(19.0)
-  vg.fontFace("sans-bold")
-  vg.textAlign(haLeft, vaMiddle)
+  drawList.add(proc (vg: NVGContext) =
+    vg.fontSize(19.0)
+    vg.fontFace("sans-bold")
+    vg.textAlign(haLeft, vaMiddle)
 
-  for i, label in labels:
-    let fillColor = if   drawState == dsHover  and hotButton == i: GRAY_HI
-                    elif drawState == dsActive and hotButton == i and
-                         gui.radioButtonsActiveItem == i: RED
+    for i, label in labels:
+      let fillColor = if   drawState == dsHover  and hotButton == i: GRAY_HI
+                      elif drawState == dsActive and hotButton == i and
+                           gui.radioButtonsActiveItem == i: RED
+                      else:
+                        if activeButton == i: GRAY_LO else : GRAY_MID
+
+      vg.beginPath()
+      vg.rect(x, y, buttonW - PadX, h)
+      vg.fillColor(fillColor)
+      vg.fill()
+
+      let
+        label = truncate(vg, label, buttonW)
+        textColor = if drawState == dsHover and hotButton == i: GRAY_LO
                     else:
-                      if activeButton == i: GRAY_LO else : GRAY_MID
+                      if activeButton == i: GRAY_HI
+                      else: GRAY_LO
 
-    vg.beginPath()
-    vg.rect(x, y, buttonW - PadX, h)
-    vg.fillColor(fillColor)
-    vg.fill()
+      vg.fillColor(textColor)
+      let tw = vg.horizontalAdvance(0,0, label)
+      discard vg.text(x + buttonW*0.5 - tw*0.5, y+h*0.5, label)
 
-    let
-      label = truncate(vg, label, buttonW)
-      textColor = if drawState == dsHover and hotButton == i: GRAY_LO
-                  else:
-                    if activeButton == i: GRAY_HI
-                    else: GRAY_LO
-
-    vg.fillColor(textColor)
-    let tw = vg.horizontalAdvance(0,0, label)
-    discard vg.text(x + buttonW*0.5 - tw*0.5, y+h*0.5, label)
-
-    x += buttonW
+      x += buttonW
+  )
 
   if isHot(id):
     handleTooltipInsideWidget(id, tooltips[hotButton])
 
 
 template radioButtons*(x, y, w, h:   float,
-                       labels:       openArray[string],
-                       tooltips:     openArray[string] = @[],
+                       labels:       seq[string],
+                       tooltips:     seq[string] = @[],
                        activeButton: Natural): Natural =
 
   let i = instantiationInfo(fullPaths = true)
@@ -679,7 +689,7 @@ template radioButtons*(x, y, w, h:   float,
 
 proc dropdown(id:           ItemId,
               x, y, w, h:   float,
-              items:        openArray[string],
+              items:        seq[string],
               tooltip:      string = "",
               selectedItem: Natural): Natural =
 
@@ -769,61 +779,65 @@ proc dropdown(id:           ItemId,
     of dsActive: GRAY_MID
     else:        GRAY_MID
 
-  vg.beginPath()
-  vg.roundedRect(x, y, w, h, 5)
-  vg.fillColor(fillColor)
-  vg.fill()
+  drawList.add(proc (vg: NVGContext) =
+    vg.beginPath()
+    vg.roundedRect(x, y, w, h, 5)
+    vg.fillColor(fillColor)
+    vg.fill()
 
-  const ItemXPad = 7
-  let itemText = items[selectedItem]
+    const ItemXPad = 7
+    let itemText = items[selectedItem]
 
-  let textColor = case drawState
-    of dsHover:  GRAY_LO
-    of dsActive: GRAY_LO
-    else:        GRAY_LO
+    let textColor = case drawState
+      of dsHover:  GRAY_LO
+      of dsActive: GRAY_LO
+      else:        GRAY_LO
 
-  vg.fontSize(19.0)
-  vg.fontFace("sans-bold")
-  vg.textAlign(haLeft, vaMiddle)
-  vg.fillColor(textColor)
-  discard vg.text(x + ItemXPad, y+h*0.5, itemText)
-
-  # Draw item list box
-  vg.beginPath()
-  vg.roundedRect(boxX, boxY, boxW, boxH, 5)
-  vg.fillColor(GRAY_LO)
-  vg.fill()
-
-  # Draw items
-  if isActive(id) and ds.state >= dsOpenLMBPressed:
     vg.fontSize(19.0)
     vg.fontFace("sans-bold")
     vg.textAlign(haLeft, vaMiddle)
-    vg.fillColor(GRAY_HI)
+    vg.fillColor(textColor)
+    discard vg.text(x + ItemXPad, y+h*0.5, itemText)
+  )
 
-    var
-      ix = boxX + BoxPad
-      iy = boxY + BoxPad
+  drawList2.add(proc (vg: NVGContext) =
+    if isActive(id) and ds.state >= dsOpenLMBPressed:
+      # Draw item list box
+      vg.beginPath()
+      vg.roundedRect(boxX, boxY, boxW, boxH, 5)
+      vg.fillColor(GRAY_LO)
+      vg.fill()
 
-    for i, item in items.pairs:
-      var textColor = GRAY_HI
-      if i == hoverItem:
-        vg.beginPath()
-        vg.rect(boxX, iy, boxW, h)
-        vg.fillColor(RED)
-        vg.fill()
-        textColor = GRAY_LO
+      # Draw items
+      vg.fontSize(19.0)
+      vg.fontFace("sans-bold")
+      vg.textAlign(haLeft, vaMiddle)
+      vg.fillColor(GRAY_HI)
 
-      vg.fillColor(textColor)
-      discard vg.text(ix, iy + h*0.5, item)
-      iy += itemHeight
+      var
+        ix = boxX + BoxPad
+        iy = boxY + BoxPad
+
+      for i, item in items.pairs:
+        var textColor = GRAY_HI
+        if i == hoverItem:
+          vg.beginPath()
+          vg.rect(boxX, iy, boxW, h)
+          vg.fillColor(RED)
+          vg.fill()
+          textColor = GRAY_LO
+
+        vg.fillColor(textColor)
+        discard vg.text(ix, iy + h*0.5, item)
+        iy += itemHeight
+  )
 
   if isHot(id):
     handleTooltipInsideWidget(id, tooltip)
 
 
 template dropdown*(x, y, w, h:   float,
-                   items:        openArray[string],
+                   items:        seq[string],
                    tooltip:      string = "",
                    selectedItem: Natural): Natural =
 
@@ -1100,118 +1114,120 @@ proc textField(id:         ItemId,
     else:        GRAY_MID
 
   # Draw text field background
-  vg.beginPath()
-  vg.roundedRect(x, y, w, h, 5)
-  vg.fillColor(fillColor)
-  vg.fill()
+  drawList.add(proc (vg: NVGContext) =
+    vg.beginPath()
+    vg.roundedRect(x, y, w, h, 5)
+    vg.fillColor(fillColor)
+    vg.fill()
 
-  vg.scissor(textBoxX, textBoxY, textBoxW, textBoxH)
+    vg.scissor(textBoxX, textBoxY, textBoxW, textBoxH)
 
-  # Scroll content into view & draw cursor when editing
-  if editing:
-    calcGlyphPos()
-    let textLen = text.runeLen
+    # Scroll content into view & draw cursor when editing
+    if editing:
+      calcGlyphPos()
+      let textLen = text.runeLen
 
-    if textLen == 0:
-      tf.cursorPos = 0
-      tf.selStartPos = -1
-      tf.selEndPos = 0
-      tf.displayStartPos = 0
-      tf.displayStartX = textBoxX
-
-    else:
-      # Text fits into the text box
-      if glyphs[textLen-1].maxX < textBoxW:
+      if textLen == 0:
+        tf.cursorPos = 0
+        tf.selStartPos = -1
+        tf.selEndPos = 0
         tf.displayStartPos = 0
         tf.displayStartX = textBoxX
+
       else:
-        var p = min(tf.cursorPos, textLen-1)
-        let startOffsetX = textBoxX - tf.displayStartX
-
-        proc calcDisplayStart(fromPos: Natural): (Natural, float) =
-          let x0 = glyphs[fromPos].maxX
-          var p = fromPos
-
-          while p > 0 and x0 - glyphs[p].minX < textBoxW: dec(p)
-
-          let
-            displayStartPos = p
-            textW = x0 - glyphs[p].minX
-            startOffsetX = textW - textBoxW
-            displayStartX = min(textBoxX - startOffsetX, textBoxX)
-
-          (displayStartPos, displayStartX)
-
-        # Cursor past the right edge of the text box
-        if glyphs[p].maxX -
-           glyphs[tf.displayStartPos].minX - startOffsetX > textBoxW:
-
-          (tf.displayStartPos, tf.displayStartX) = calcDisplayStart(p)
-
-        # Make sure the text is always aligned to the right edge of the text
-        # box
-        elif glyphs[textLen-1].maxX -
-             glyphs[tf.displayStartPos].minX - startOffsetX < textBoxW:
-
-          (tf.displayStartPos, tf.displayStartX) = calcDisplayStart(textLen-1)
-
-        # Cursor past the left edge of the text box
-        elif glyphs[p].minX < glyphs[tf.displayStartPos].minX + startOffsetX:
+        # Text fits into the text box
+        if glyphs[textLen-1].maxX < textBoxW:
+          tf.displayStartPos = 0
           tf.displayStartX = textBoxX
-          tf.displayStartPos = min(tf.displayStartPos, p)
+        else:
+          var p = min(tf.cursorPos, textLen-1)
+          let startOffsetX = textBoxX - tf.displayStartX
 
-    textX = tf.displayStartX
+          proc calcDisplayStart(fromPos: Natural): (Natural, float) =
+            let x0 = glyphs[fromPos].maxX
+            var p = fromPos
 
-    # Draw selection
-    if hasSelection():
-      var (startPos, endPos) = getSelection()
-      endPos = max(endPos - 1, 0)
+            while p > 0 and x0 - glyphs[p].minX < textBoxW: dec(p)
 
-      let
-        selStartX = tf.displayStartX + glyphs[startPos].minX -
+            let
+              displayStartPos = p
+              textW = x0 - glyphs[p].minX
+              startOffsetX = textW - textBoxW
+              displayStartX = min(textBoxX - startOffsetX, textBoxX)
+
+            (displayStartPos, displayStartX)
+
+          # Cursor past the right edge of the text box
+          if glyphs[p].maxX -
+             glyphs[tf.displayStartPos].minX - startOffsetX > textBoxW:
+
+            (tf.displayStartPos, tf.displayStartX) = calcDisplayStart(p)
+
+          # Make sure the text is always aligned to the right edge of the text
+          # box
+          elif glyphs[textLen-1].maxX -
+               glyphs[tf.displayStartPos].minX - startOffsetX < textBoxW:
+
+            (tf.displayStartPos, tf.displayStartX) = calcDisplayStart(textLen-1)
+
+          # Cursor past the left edge of the text box
+          elif glyphs[p].minX < glyphs[tf.displayStartPos].minX + startOffsetX:
+            tf.displayStartX = textBoxX
+            tf.displayStartPos = min(tf.displayStartPos, p)
+
+      textX = tf.displayStartX
+
+      # Draw selection
+      if hasSelection():
+        var (startPos, endPos) = getSelection()
+        endPos = max(endPos - 1, 0)
+
+        let
+          selStartX = tf.displayStartX + glyphs[startPos].minX -
+                                         glyphs[tf.displayStartPos].x
+
+          selEndX = tf.displayStartX + glyphs[endPos].maxX -
                                        glyphs[tf.displayStartPos].x
 
-        selEndX = tf.displayStartX + glyphs[endPos].maxX -
-                                     glyphs[tf.displayStartPos].x
+        vg.beginPath()
+        vg.rect(selStartX, y + 2, selEndX - selStartX, h - 4)
+        vg.fillColor(rgb(0.5, 0.15, 0.15))
+        vg.fill()
+
+      # Draw cursor
+      let cursorX = if tf.cursorPos == 0:
+        textBoxX
+
+      elif tf.cursorPos == text.runeLen:
+        tf.displayStartX + glyphs[tf.cursorPos-1].maxX -
+                           glyphs[tf.displayStartPos].x
+
+      elif tf.cursorPos > 0:
+        tf.displayStartX + glyphs[tf.cursorPos].x -
+                           glyphs[tf.displayStartPos].x
+      else: textBoxX
 
       vg.beginPath()
-      vg.rect(selStartX, y + 2, selEndX - selStartX, h - 4)
-      vg.fillColor(rgb(0.5, 0.15, 0.15))
-      vg.fill()
+      vg.strokeColor(RED)
+      vg.strokeWidth(1.0)
+      vg.moveTo(cursorX, y + 2)
+      vg.lineTo(cursorX, y+h - 2)
+      vg.stroke()
 
-    # Draw cursor
-    let cursorX = if tf.cursorPos == 0:
-      textBoxX
+      text = text.runeSubStr(tf.displayStartPos)
 
-    elif tf.cursorPos == text.runeLen:
-      tf.displayStartX + glyphs[tf.cursorPos-1].maxX -
-                         glyphs[tf.displayStartPos].x
+    # Draw text
+    let textColor = if editing: GRAY_HI else: GRAY_LO
 
-    elif tf.cursorPos > 0:
-      tf.displayStartX + glyphs[tf.cursorPos].x -
-                         glyphs[tf.displayStartPos].x
-    else: textBoxX
+    vg.fontSize(19.0)
+    vg.fontFace("sans-bold")
+    vg.textAlign(haLeft, vaMiddle)
+    vg.fillColor(textColor)
 
-    vg.beginPath()
-    vg.strokeColor(RED)
-    vg.strokeWidth(1.0)
-    vg.moveTo(cursorX, y + 2)
-    vg.lineTo(cursorX, y+h - 2)
-    vg.stroke()
+    discard vg.text(textX, textY, text)
 
-    text = text.runeSubStr(tf.displayStartPos)
-
-  # Draw text
-  let textColor = if editing: GRAY_HI else: GRAY_LO
-
-  vg.fontSize(19.0)
-  vg.fontFace("sans-bold")
-  vg.textAlign(haLeft, vaMiddle)
-  vg.fillColor(textColor)
-
-  discard vg.text(textX, textY, text)
-
-  vg.resetScissor()
+    vg.resetScissor()
+  )
 
   if isHot(id):
     handleTooltipInsideWidget(id, tooltip)
@@ -1391,31 +1407,33 @@ proc horizScrollBar(id:         ItemId,
     of dsActive: GRAY_MID
     else:        GRAY_MID
 
-  vg.beginPath()
-  vg.roundedRect(x, y, w, h, 5)
-  vg.fillColor(trackColor)
-  vg.fill()
+  drawList.add(proc (vg: NVGContext) =
+    vg.beginPath()
+    vg.roundedRect(x, y, w, h, 5)
+    vg.fillColor(trackColor)
+    vg.fill()
 
-  # Draw thumb
-  let thumbColor = case drawState
-    of dsHover: GRAY_LOHI
-    of dsActive:
-      if sb.state < sbsTrackClickFirst: RED
-      else: GRAY_LO
-    else:   GRAY_LO
+    # Draw thumb
+    let thumbColor = case drawState
+      of dsHover: GRAY_LOHI
+      of dsActive:
+        if sb.state < sbsTrackClickFirst: RED
+        else: GRAY_LO
+      else:   GRAY_LO
 
-  vg.beginPath()
-  vg.roundedRect(newThumbX, y + ThumbPad, thumbW, thumbH, 5)
-  vg.fillColor(thumbColor)
-  vg.fill()
+    vg.beginPath()
+    vg.roundedRect(newThumbX, y + ThumbPad, thumbW, thumbH, 5)
+    vg.fillColor(thumbColor)
+    vg.fill()
 
-  vg.fontSize(19.0)
-  vg.fontFace("sans-bold")
-  vg.textAlign(haLeft, vaMiddle)
-  vg.fillColor(white())
-  let valueString = fmt"{result:.3f}"
-  let tw = vg.horizontalAdvance(0,0, valueString)
-  discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, valueString)
+    vg.fontSize(19.0)
+    vg.fontFace("sans-bold")
+    vg.textAlign(haLeft, vaMiddle)
+    vg.fillColor(white())
+    let valueString = fmt"{newValue:.3f}"
+    let tw = vg.horizontalAdvance(0,0, valueString)
+    discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, valueString)
+  )
 
   if isHot(id):
     handleTooltipInsideWidget(id, tooltip)
@@ -1598,23 +1616,25 @@ proc vertScrollBar(id:         ItemId,
     of dsActive: GRAY_MID
     else:        GRAY_MID
 
-  vg.beginPath()
-  vg.roundedRect(x, y, w, h, 5)
-  vg.fillColor(trackColor)
-  vg.fill()
+  drawList.add(proc (vg: NVGContext) =
+    vg.beginPath()
+    vg.roundedRect(x, y, w, h, 5)
+    vg.fillColor(trackColor)
+    vg.fill()
 
-  # Draw thumb
-  let thumbColor = case drawState
-    of dsHover: GRAY_LOHI
-    of dsActive:
-      if sb.state < sbsTrackClickFirst: RED
-      else: GRAY_LO
-    else:   GRAY_LO
+    # Draw thumb
+    let thumbColor = case drawState
+      of dsHover: GRAY_LOHI
+      of dsActive:
+        if sb.state < sbsTrackClickFirst: RED
+        else: GRAY_LO
+      else:   GRAY_LO
 
-  vg.beginPath()
-  vg.roundedRect(x + ThumbPad, newThumbY, thumbW, thumbH, 5)
-  vg.fillColor(thumbColor)
-  vg.fill()
+    vg.beginPath()
+    vg.roundedRect(x + ThumbPad, newThumbY, thumbW, thumbH, 5)
+    vg.fillColor(thumbColor)
+    vg.fill()
+  )
 
   if isHot(id):
     handleTooltipInsideWidget(id, tooltip)
@@ -1733,30 +1753,32 @@ proc horizSlider(id:         ItemId,
     of dsHover: GRAY_HI
     else:       GRAY_MID
 
-  vg.beginPath()
-  vg.roundedRect(x, y, w, h, 5)
-  vg.fillColor(fillColor)
-  vg.fill()
+  drawList.add(proc (vg: NVGContext) =
+    vg.beginPath()
+    vg.roundedRect(x, y, w, h, 5)
+    vg.fillColor(fillColor)
+    vg.fill()
 
-  # Draw slider
-  let sliderColor = case drawState
-    of dsHover:  GRAY_LOHI
-    of dsActive: RED
-    else:        GRAY_LO
+    # Draw slider
+    let sliderColor = case drawState
+      of dsHover:  GRAY_LOHI
+      of dsActive: RED
+      else:        GRAY_LO
 
-  vg.beginPath()
-  vg.roundedRect(x + SliderPad, y + SliderPad,
-                 newPosX - x - SliderPad, h - SliderPad*2, 5)
-  vg.fillColor(sliderColor)
-  vg.fill()
+    vg.beginPath()
+    vg.roundedRect(x + SliderPad, y + SliderPad,
+                   newPosX - x - SliderPad, h - SliderPad*2, 5)
+    vg.fillColor(sliderColor)
+    vg.fill()
 
-  vg.fontSize(19.0)
-  vg.fontFace("sans-bold")
-  vg.textAlign(haLeft, vaMiddle)
-  vg.fillColor(white())
-  let valueString = fmt"{result:.3f}"
-  let tw = vg.horizontalAdvance(0,0, valueString)
-  discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, valueString)
+    vg.fontSize(19.0)
+    vg.fontFace("sans-bold")
+    vg.textAlign(haLeft, vaMiddle)
+    vg.fillColor(white())
+    let valueString = fmt"{newValue:.3f}"
+    let tw = vg.horizontalAdvance(0,0, valueString)
+    discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, valueString)
+  )
 
   if isHot(id):
     handleTooltipInsideWidget(id, tooltip)
@@ -1851,22 +1873,24 @@ proc vertSlider(id:         ItemId,
     of dsHover: GRAY_HI
     else:       GRAY_MID
 
-  vg.beginPath()
-  vg.roundedRect(x, y, w, h, 5)
-  vg.fillColor(fillColor)
-  vg.fill()
+  drawList.add(proc (vg: NVGContext) =
+    vg.beginPath()
+    vg.roundedRect(x, y, w, h, 5)
+    vg.fillColor(fillColor)
+    vg.fill()
 
-  # Draw slider
-  let sliderColor = case drawState
-    of dsHover:  GRAY_LOHI
-    of dsActive: RED
-    else:        GRAY_LO
+    # Draw slider
+    let sliderColor = case drawState
+      of dsHover:  GRAY_LOHI
+      of dsActive: RED
+      else:        GRAY_LO
 
-  vg.beginPath()
-  vg.roundedRect(x + SliderPad, newPosY,
-                 w - SliderPad*2, y + h - newPosY - SliderPad, 5)
-  vg.fillColor(sliderColor)
-  vg.fill()
+    vg.beginPath()
+    vg.roundedRect(x + SliderPad, newPosY,
+                   w - SliderPad*2, y + h - newPosY - SliderPad, 5)
+    vg.fillColor(sliderColor)
+    vg.fill()
+  )
 
   if isHot(id):
     handleTooltipInsideWidget(id, tooltip)
@@ -1955,11 +1979,17 @@ proc beginFrame*() =
   # Reset hot item
   gui.hotItem = 0
 
+  drawList = @[]
+  drawList2 = @[]
+
 # }}}
 # {{{ endFrame
 
 proc endFrame*() =
 #  echo fmt"hotItem: {gui.hotItem}, activeItem: {gui.activeItem}, textFieldState: {gui.textFieldState}"
+
+  for drawFunc in drawList: drawFunc(vg)
+  for drawFunc in drawList2: drawFunc(vg)
 
   tooltipPost(vg)
 
