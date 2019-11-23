@@ -70,10 +70,10 @@ type
     cursorPos:       Natural
 
     # Index of the start Rune in the selection, -1 if nothing is selected.
-    selFirst:        int
+    selStartPos:     int
 
     # Index of the last Rune in the selection.
-    selLast:         Natural
+    selEndPos:       Natural
 
     # The text is displayed starting from the Rune with this index.
     displayStartPos: Natural
@@ -287,6 +287,9 @@ proc consumeCharBuf(): string =
 type KeyEvent = object
   key:  Key
   mods: set[ModifierKey]
+
+proc withoutShift(k: KeyEvent): KeyEvent =
+  KeyEvent(key: k.key, mods: k.mods - {mkShift})
 
 const KeyBufSize = 200
 var
@@ -861,6 +864,19 @@ proc textField(id:         ItemId,
     glyphs: array[MaxTextLen, GlyphPosition]  # TODO is this buffer large enough?
     glyphsCalculated = false
 
+  proc hasSelection(): bool =
+    tf.selStartPos > -1 and tf.selStartPos != tf.selEndPos
+
+  proc getSelection(): (int, int) =
+    if (tf.selStartPos < tf.selEndPos):
+      (tf.selStartPos, tf.selEndPos.int)
+    else:
+      (tf.selEndPos.int, tf.selStartPos)
+
+  proc clearSelection() =
+    tf.selStartPos = -1
+    tf.selEndPos = 0
+
   proc calcGlyphPos(force: bool = false) =
     if force or not glyphsCalculated:
       discard vg.textGlyphPositions(0, 0, text, glyphs)
@@ -877,25 +893,26 @@ proc textField(id:         ItemId,
         tf.state = tfEditLMBPressed
         tf.activeItem = id
         tf.cursorPos = text.runeLen
-        tf.selFirst = -1
-        tf.selLast = 0
         tf.displayStartPos = 0
         tf.displayStartX = textBoxX
         tf.originalText = text
+        clearSelection()
+
         gui.focusCaptured = true
 
   proc exitEditMode() =
+    clearKeyBuf()
+    clearCharBuf()
+
     tf.state = tfDefault
     tf.activeItem = 0
     tf.cursorPos = 0
-    tf.selFirst = -1
-    tf.selLast = 0
     tf.displayStartPos = 0
     tf.displayStartX = textBoxX
     tf.originalText = ""
+    clearSelection()
+
     gui.focusCaptured = false
-    clearKeyBuf()
-    clearCharBuf()
 
   # We 'fall through' to the edit state to avoid a 1-frame delay when going
   # into edit mode
@@ -927,59 +944,96 @@ proc textField(id:         ItemId,
       while p > 0 and not text.runeAt(p-1).isWhiteSpace: dec(p)
       result = p
 
+    proc updateSelection(newCursorPos: Natural) =
+      if tf.selStartPos == -1:
+        tf.selStartPos = tf.cursorPos
+        tf.selEndPos   = tf.cursorPos
+      tf.selEndPos = newCursorPos
+
     for i in 0..<keyBufIdx:
-      let k = keyBuf[i]
+      let ke = keyBuf[i]
+      let keNoShift = withoutShift(ke)
 
-      if k in GoToNextWord:
-        tf.cursorPos = findNextWordEnd()
+      if keNoShift in GoToNextWord:
+        let newCursorPos = findNextWordEnd()
+        if mkShift in ke.mods:
+          updateSelection(newCursorPos)
+        else:
+          clearSelection()
+        tf.cursorPos = newCursorPos
 
-      elif k in GoToPreviousWord:
-        tf.cursorPos = findPrevWordStart()
+      elif keNoShift in GoToPreviousWord:
+        let newCursorPos = findPrevWordStart()
+        if mkShift in ke.mods:
+          updateSelection(newCursorPos)
+        else:
+          clearSelection()
+        tf.cursorPos = newCursorPos
 
-      elif k in GoToLineStart:
-        tf.cursorPos = 0
+      elif keNoShift in GoToLineStart or ke.key == keyUp:
+        let newCursorPos = 0
+        if mkShift in ke.mods:
+          updateSelection(newCursorPos)
+        else:
+          clearSelection()
+        tf.cursorPos = newCursorPos
 
-      elif k in GoToLineEnd:
-        tf.cursorPos = text.runeLen
+      elif keNoShift in GoToLineEnd or ke.key == keyDown:
+        let newCursorPos = text.runeLen
+        if mkShift in ke.mods:
+          updateSelection(newCursorPos)
+        else:
+          clearSelection()
+        tf.cursorPos = newCursorPos
 
-      elif k in DeleteWordToRight:
+      elif ke in DeleteWordToRight:
         let p = findNextWordEnd()
         text = text.runeSubStr(0, tf.cursorPos) & text.runeSubStr(p)
 
-      elif k in DeleteWordToLeft:
+      elif ke in DeleteWordToLeft:
         let p = findPrevWordStart()
         text = text.runeSubStr(0, p) & text.runeSubStr(tf.cursorPos)
         tf.cursorPos = p
 
-      elif k.key == keyRight:
-        tf.cursorPos = min(tf.cursorPos + 1, text.runeLen)
+      elif ke.key == keyRight:
+        let newCursorPos = min(tf.cursorPos + 1, text.runeLen)
+        if mkShift in ke.mods:
+          updateSelection(newCursorPos)
+        else:
+          clearSelection()
+        tf.cursorPos = newCursorPos
 
-      elif k.key == keyLeft:
-        tf.cursorPos = max(tf.cursorPos - 1, 0)
+      elif ke.key == keyLeft:
+        let newCursorPos = max(tf.cursorPos - 1, 0)
+        if mkShift in ke.mods:
+          updateSelection(newCursorPos)
+        else:
+          clearSelection()
+        tf.cursorPos = newCursorPos
 
-      elif k.key == keyBackspace:
+      elif ke.key == keyBackspace:
         if tf.cursorPos > 0:
           text = text.runeSubStr(0, tf.cursorPos - 1) &
                  text.runeSubStr(tf.cursorPos)
           dec(tf.cursorPos)
 
-      elif k.key == keyDelete:
+      elif ke.key == keyDelete:
         if text.len > 0:
           text = text.runeSubStr(0, tf.cursorPos) &
                  text.runeSubStr(tf.cursorPos + 1)
 
-      elif k.key == keyEscape:   # Cancel edits
+      elif ke.key == keyEscape:   # Cancel edits
         text = tf.originalText
         exitEditMode()
         # Note we won't process any remaining characters in the buffer
         # because exitEditMode() clears the key buffer.
 
-      elif k.key == keyEnter:  # Persist edits
+      elif ke.key == keyEnter:  # Persist edits
         exitEditMode()
         # Note we won't process any remaining characters in the buffer
         # because exitEditMode() clears the key buffer.
 
-      elif k.key == keyTab: discard  # TODO
+      elif ke.key == keyTab: discard  # TODO
 
     clearKeyBuf()
 
@@ -1032,25 +1086,17 @@ proc textField(id:         ItemId,
   vg.fillColor(fillColor)
   vg.fill()
 
+  vg.scissor(textBoxX, textBoxY, textBoxW, textBoxH)
+
   # Scroll content into view & draw cursor when editing
   if editing:
     calcGlyphPos()
     let textLen = text.runeLen
-#[
-    echo "---------------------------------------------"
-    echo fmt"State           {tf.State}"
-    echo fmt"ActiveItem      {tf.ActiveItem}"
-    echo fmt"CursorPos       {tf.CursorPos}"
-    echo fmt"SelFirst        {tf.SelFirst}"
-    echo fmt"SelLast         {tf.SelLast}"
-    echo fmt"DisplayStartPos {tf.DisplayStartPos}"
-    echo fmt"DisplayStartX   {tf.DisplayStartX}"
-    echo fmt"OriginalText    {tf.OriginalText}"
-]#
+
     if textLen == 0:
       tf.cursorPos = 0
-      tf.selFirst = -1
-      tf.selLast = 0
+      tf.selStartPos = -1
+      tf.selEndPos = 0
       tf.displayStartPos = 0
       tf.displayStartX = textBoxX
 
@@ -1097,6 +1143,23 @@ proc textField(id:         ItemId,
 
     textX = tf.displayStartX
 
+    # Draw selection
+    if hasSelection():
+      var (startPos, endPos) = getSelection()
+      endPos = max(endPos - 1, 0)
+
+      let
+        selStartX = tf.displayStartX + glyphs[startPos].minX -
+                                       glyphs[tf.displayStartPos].x
+
+        selEndX = tf.displayStartX + glyphs[endPos].maxX -
+                                     glyphs[tf.displayStartPos].x
+
+      vg.beginPath()
+      vg.rect(selStartX, y + 2, selEndX - selStartX, h - 4)
+      vg.fillColor(rgb(0.5, 0.15, 0.15))
+      vg.fill()
+
     # Draw cursor
     let cursorX = if tf.cursorPos == 0:
       textBoxX
@@ -1127,8 +1190,8 @@ proc textField(id:         ItemId,
   vg.textAlign(haLeft, vaMiddle)
   vg.fillColor(textColor)
 
-  vg.scissor(textBoxX, textBoxY, textBoxW, textBoxH)
   discard vg.text(textX, textY, text)
+
   vg.resetScissor()
 
   if isHot(id):
