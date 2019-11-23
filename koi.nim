@@ -99,10 +99,10 @@ type
     text:      string
 
 # }}}
-# {{{ GuiState
+# {{{ UIState
 
 type
-  GuiState = object
+  UIState = object
     # General state
     # *************
 
@@ -171,12 +171,10 @@ type DrawState = enum
 # {{{ Globals
 
 var
-  gui {.threadvar.}: GuiState
-  vg: NVGContext
-  drawList: seq[proc (vg: NVGContext)]
-  drawList2: seq[proc (vg: NVGContext)]
+  g_nvgContext: NVGContext
+  g_uiState    {.threadvar.}: UIState
 
-var
+  # TODO remove these once themeing is implemented
   RED*       {.threadvar.}: Color
   GRAY_MID*  {.threadvar.}: Color
   GRAY_HI*   {.threadvar.}: Color
@@ -187,9 +185,9 @@ var
 # {{{ Configuration
 
 const
-  TooltipShowDelay       = 0.5
+  TooltipShowDelay       = 0.4
   TooltipFadeOutDelay    = 0.1
-  TooltipFadeOutDuration = 5.3
+  TooltipFadeOutDuration = 0.4
 
   ScrollBarFineDragDivisor         = 10.0
   ScrollBarUltraFineDragDivisor    = 100.0
@@ -223,6 +221,32 @@ proc setCursorPosY*(y: float) =
 proc truncate(vg: NVGContext, text: string, maxWidth: float): string =
   result = text # TODO
 
+
+# }}}
+# {{{ Draw layers
+
+const
+  BottomLayer  = 0
+  DefaultLayer = 10
+  TopLayer     = 20
+
+type DrawProc = proc (vg: NVGContext)
+
+var g_drawLayers {.threadvar.}: array[BottomLayer..TopLayer, seq[DrawProc]]
+
+proc initDrawLayers() =
+  for i in 0..g_drawLayers.high:
+    g_drawLayers[i] = @[]
+
+proc drawLayerAdd(layer: Natural = DefaultLayer, p: DrawProc) =
+  g_drawLayers[layer].add(p)
+
+proc drawLayers(vg: NVGContext) =
+  # Draw all layers on top of each other
+  for layer in g_drawLayers:
+    for drawProc in layer:
+      drawProc(vg)
+
 # }}}
 # {{{ UI helpers
 
@@ -236,28 +260,36 @@ template generateId(filename: string, line: int, id: string): ItemId =
 
 
 proc mouseInside(x, y, w, h: float): bool =
+  alias(gui, g_uiState)
   gui.mx >= x and gui.mx <= x+w and
   gui.my >= y and gui.my <= y+h
 
 template isHot(id: ItemId): bool =
+  alias(gui, g_uiState)
   gui.hotItem == id
 
 template setHot(id: ItemId) =
+  alias(gui, g_uiState)
   gui.hotItem = id
 
 template isActive(id: ItemId): bool =
+  alias(gui, g_uiState)
   gui.activeItem == id
 
 template setActive(id: ItemId) =
+  alias(gui, g_uiState)
   gui.activeItem = id
 
 template isHotAndActive(id: ItemId): bool =
+  alias(gui, g_uiState)
   isHot(id) and isActive(id)
 
 template noActiveItem(): bool =
+  alias(gui, g_uiState)
   gui.activeItem == 0
 
 template hasActiveItem(): bool =
+  alias(gui, g_uiState)
   gui.activeItem > 0
 
 # }}}
@@ -267,28 +299,30 @@ const CharBufSize = 200
 var
   # TODO do we need locking around this stuff? written in the callback, read
   # from the UI code
-  charBuf: array[CharBufSize, Rune]
-  charBufIdx: Natural
+  g_charBuf: array[CharBufSize, Rune]
+  g_charBufIdx: Natural
 
 proc charCb(win: Window, codePoint: Rune) =
-  #echo fmt"Rune: {codePoint}"
-  if charBufIdx <= charBuf.high:
-    charBuf[charBufIdx] = codePoint
-    inc(charBufIdx)
+  if g_charBufIdx <= g_charBuf.high:
+    g_charBuf[g_charBufIdx] = codePoint
+    inc(g_charBufIdx)
 
-proc clearCharBuf() = charBufIdx = 0
+proc clearCharBuf() = g_charBufIdx = 0
 
-proc charBufEmpty(): bool = charBufIdx == 0
+proc charBufEmpty(): bool = g_charBufIdx == 0
 
 proc consumeCharBuf(): string =
-  for i in 0..<charBufIdx:
-    result &= charBuf[i]
+  for i in 0..<g_charBufIdx:
+    result &= g_charBuf[i]
   clearCharBuf()
 
 
 type KeyEvent = object
   key:  Key
   mods: set[ModifierKey]
+
+template mkKeyEvent(k: Key, m: set[ModifierKey]): KeyEvent =
+  KeyEvent(key: k, mods: m)
 
 proc withoutShift(k: KeyEvent): KeyEvent =
   KeyEvent(key: k.key, mods: k.mods - {mkShift})
@@ -297,8 +331,8 @@ const KeyBufSize = 200
 var
   # TODO do we need locking around this stuff? written in the callback, read
   # from the UI code
-  keyBuf: array[KeyBufSize, KeyEvent]
-  keyBufIdx: Natural
+  g_keyBuf: array[KeyBufSize, KeyEvent]
+  g_keyBufIdx: Natural
 
 const EditKeys = {
   keyEscape, keyEnter, keyTab,
@@ -312,38 +346,45 @@ proc keyCb(win: Window, key: Key, scanCode: int32, action: KeyAction,
            mods: set[ModifierKey]) =
 
   if key in EditKeys and action in {kaDown, kaRepeat}:
-    if keyBufIdx <= keyBuf.high:
-      keyBuf[keyBufIdx] = KeyEvent(key: key, mods: mods)
-      inc(keyBufIdx)
+    if g_keyBufIdx <= g_keyBuf.high:
+      g_keyBuf[g_keyBufIdx] = KeyEvent(key: key, mods: mods)
+      inc(g_keyBufIdx)
 
-proc clearKeyBuf() = keyBufIdx = 0
+proc clearKeyBuf() = g_keyBufIdx = 0
+
+iterator keyBuf(): KeyEvent =
+  var i = 0
+  while i < g_keyBufIdx:
+    yield g_keyBuf[i]
+    inc(i)
 
 when defined(macosx):
-  const GoToPreviousWord    = @[KeyEvent(key: keyLeft,      mods: {mkAlt})]
-  const GoToNextWord        = @[KeyEvent(key: keyRight,     mods: {mkAlt})]
+  const GoToPreviousWord  = @[mkKeyEvent(keyLeft,      {mkAlt})]
+  const GoToNextWord      = @[mkKeyEvent(keyRight,     {mkAlt})]
 
-  const GoToLineStart       = @[KeyEvent(key: keyLeft,      mods: {mkSuper}),
-                                KeyEvent(key: keyA,         mods: {mkCtrl})]
+  const GoToLineStart     = @[mkKeyEvent(keyLeft,      {mkSuper}),
+                              mkKeyEvent(keyA,         {mkCtrl})]
 
-  const GoToLineEnd         = @[KeyEvent(key: keyRight,     mods: {mkSuper}),
-                                KeyEvent(key: keyE,         mods: {mkCtrl})]
+  const GoToLineEnd       = @[mkKeyEvent(keyRight,     {mkSuper}),
+                              mkKeyEvent(keyE,         {mkCtrl})]
 
-  const DeleteWordToRight   = @[KeyEvent(key: keyDelete,    mods: {mkAlt})]
-  const DeleteWordToLeft    = @[KeyEvent(key: keyBackspace, mods: {mkAlt})]
+  const DeleteWordToRight = @[mkKeyEvent(keyDelete,    {mkAlt})]
+  const DeleteWordToLeft  = @[mkKeyEvent(keyBackspace, {mkAlt})]
 
 else: # Windows & Linux
-  const GoToPreviousWord    = @[KeyEvent(key: keyLeft,      mods: {mkCtrl})]
-  const GoToNextWord        = @[KeyEvent(key: keyRight,     mods: {mkCtrl})]
-  const GoToLineStart       = @[KeyEvent(key: keyHome,      mods: {})]
-  const GoToLineEnd         = @[KeyEvent(key: keyEnd,       mods: {})]
-  const DeleteWordToRight   = @[KeyEvent(key: keyDelete,    mods: {mkCtrl})]
-  const DeleteWordToLeft    = @[KeyEvent(key: keyBackspace, mods: {mkCtrl})]
+  const GoToPreviousWord  = @[mkKeyEvent(keyLeft,      {mkCtrl})]
+  const GoToNextWord      = @[mkKeyEvent(keyRight,     {mkCtrl})]
+  const GoToLineStart     = @[mkKeyEvent(keyHome,      {})]
+  const GoToLineEnd       = @[mkKeyEvent(keyEnd,       {})]
+  const DeleteWordToRight = @[mkKeyEvent(keyDelete,    {mkCtrl})]
+  const DeleteWordToLeft  = @[mkKeyEvent(keyBackspace, {mkCtrl})]
 
 # }}}
 # {{{ Tooltip handling
 # {{{ handleTooltipInsideWidget
 
 proc handleTooltipInsideWidget(id: ItemId, tooltip: string) =
+  alias(gui, g_uiState)
   alias(tt, gui.tooltipState)
 
   tt.state = tt.lastState
@@ -374,29 +415,29 @@ proc handleTooltipInsideWidget(id: ItemId, tooltip: string) =
 # }}}
 # {{{ drawTooltip
 
-proc drawTooltip(vg: NVGContext, x, y: float, text: string,
-                 alpha: float = 1.0) =
-  # TODO should moved to the drawing section once deferred drawing is
-  # implemented
-  let
-    w = 150.0
-    h = 40.0
+proc drawTooltip(x, y: float, text: string, alpha: float = 1.0) =
+  drawLayerAdd(TopLayer-3, proc (vg: NVGContext) =
+    let
+      w = 150.0
+      h = 40.0
 
-  vg.beginPath()
-  vg.roundedRect(x, y, w, h, 5)
-  vg.fillColor(gray(0.1, 0.88 * alpha))
-  vg.fill()
+    vg.beginPath()
+    vg.roundedRect(x, y, w, h, 5)
+    vg.fillColor(gray(0.1, 0.88 * alpha))
+    vg.fill()
 
-  vg.fontSize(17.0)
-  vg.fontFace("sans-bold")
-  vg.textAlign(haLeft, vaMiddle)
-  vg.fillColor(white(0.9 * alpha))
-  discard vg.text(x + 10, y + 10, text)
+    vg.fontSize(17.0)
+    vg.fontFace("sans-bold")
+    vg.textAlign(haLeft, vaMiddle)
+    vg.fillColor(white(0.9 * alpha))
+    discard vg.text(x + 10, y + 10, text)
+  )
 
 # }}}
 # {{{ tooltipPost
 
-proc tooltipPost(vg: NVGContext) =
+proc tooltipPost() =
+  alias(gui, g_uiState)
   alias(tt, gui.tooltipState)
 
   # TODO the actual drawing should be moved out of here once deferred drawing
@@ -412,10 +453,10 @@ proc tooltipPost(vg: NVGContext) =
       tt.state = tsShow
 
   of tsShow:
-    drawToolTip(vg, ttx, tty, tt.text)
+    drawToolTip(ttx, tty, tt.text)
 
   of tsFadeOutDelay:
-    drawToolTip(vg, ttx, tty, tt.text)
+    drawToolTip(ttx, tty, tt.text)
     if getTime() - tt.t0 > TooltipFadeOutDelay:
       tt.state = tsFadeOut
       tt.t0 = getTime()
@@ -426,7 +467,7 @@ proc tooltipPost(vg: NVGContext) =
       tt.state = tsOff
     else:
       let alpha = 1.0 - t / TooltipFadeOutDuration
-      drawToolTip(vg, ttx, tty, tt.text, alpha)
+      drawToolTip(ttx, tty, tt.text, alpha)
 
   # We reset the show delay state or move into the fade out state if the
   # tooltip is being shown; this is to handle the case when the user just
@@ -452,7 +493,7 @@ proc textLabel(id:         ItemId,
                fontSize:   float = 19.0,
                fontFace:   string = "sans-bold") =
 
-  drawList.add(proc (vg: NVGContext) =
+  drawLayerAdd(DefaultLayer, proc (vg: NVGContext) =
     vg.fontSize(fontSize)
     vg.fontFace(fontFace)
     vg.textAlign(haLeft, vaMiddle)
@@ -482,6 +523,8 @@ proc button(id:         ItemId,
             color:      Color,
             tooltip:    string = ""): bool =
 
+  alias(gui, g_uiState)
+
   # Hit testing
   if not gui.focusCaptured and mouseInside(x, y, w, h):
     setHot(id)
@@ -502,7 +545,7 @@ proc button(id:         ItemId,
     of dsActive: RED
     else:        color
 
-  drawList.add(proc (vg: NVGContext) =
+  drawLayerAdd(DefaultLayer, proc (vg: NVGContext) =
     vg.beginPath()
     vg.roundedRect(x, y, w, h, 5)
     vg.fillColor(fillColor)
@@ -538,6 +581,8 @@ proc checkBox(id:      ItemId,
               tooltip: string = "",
               active:  bool): bool =
 
+  alias(gui, g_uiState)
+
   const
     CheckPad = 3
 
@@ -565,7 +610,7 @@ proc checkBox(id:      ItemId,
     of dsHover, dsActive: GRAY_HI
     else:                 GRAY_MID
 
-  drawList.add(proc (vg: NVGContext) =
+  drawLayerAdd(DefaultLayer, proc (vg: NVGContext) =
     vg.beginPath()
     vg.roundedRect(x, y, w, w, 5)
     vg.fillColor(bgColor)
@@ -611,6 +656,8 @@ proc radioButtons(id:           ItemId,
   assert activeButton >= 0 and activeButton <= labels.high
   assert tooltips.len == 0 or tooltips.len == labels.len
 
+  alias(gui, g_uiState)
+
   let
     numButtons = labels.len
     buttonW = w / numButtons.float
@@ -639,7 +686,7 @@ proc radioButtons(id:           ItemId,
   var x = x
   const PadX = 2
 
-  drawList.add(proc (vg: NVGContext) =
+  drawLayerAdd(DefaultLayer, proc (vg: NVGContext) =
     vg.fontSize(19.0)
     vg.fontFace("sans-bold")
     vg.textAlign(haLeft, vaMiddle)
@@ -696,6 +743,7 @@ proc dropdown(id:           ItemId,
   assert items.len > 0
   assert selectedItem <= items.high
 
+  alias(gui, g_uiState)
   alias(ds, gui.dropdownState)
 
   const BoxPad = 7
@@ -725,7 +773,7 @@ proc dropdown(id:           ItemId,
     # Calculate the position of the box around the dropdown items
     var maxItemWidth = 0.0
     for i in items:
-      let tw = vg.horizontalAdvance(0, 0, i)
+      let tw = g_nvgContext.horizontalAdvance(0, 0, i)
       maxItemWidth = max(tw, maxItemWidth)
 
     boxX = x
@@ -779,7 +827,8 @@ proc dropdown(id:           ItemId,
     of dsActive: GRAY_MID
     else:        GRAY_MID
 
-  drawList.add(proc (vg: NVGContext) =
+  # Dropdown button
+  drawLayerAdd(DefaultLayer, proc (vg: NVGContext) =
     vg.beginPath()
     vg.roundedRect(x, y, w, h, 5)
     vg.fillColor(fillColor)
@@ -800,7 +849,8 @@ proc dropdown(id:           ItemId,
     discard vg.text(x + ItemXPad, y+h*0.5, itemText)
   )
 
-  drawList2.add(proc (vg: NVGContext) =
+  # Dropdown items
+  drawLayerAdd(DefaultLayer+1, proc (vg: NVGContext) =
     if isActive(id) and ds.state >= dsOpenLMBPressed:
       # Draw item list box
       vg.beginPath()
@@ -863,6 +913,7 @@ proc textField(id:         ItemId,
 
   assert text.runeLen <= MaxTextLen
 
+  alias(gui, g_uiState)
   alias(tf, gui.textFieldState)
 
   var text = text
@@ -893,7 +944,7 @@ proc textField(id:         ItemId,
 
   proc calcGlyphPos(force: bool = false) =
     if force or not glyphsCalculated:
-      discard vg.textGlyphPositions(0, 0, text, glyphs)
+      discard g_nvgContext.textGlyphPositions(0, 0, text, glyphs)
 
   if tf.state == tfDefault:
     # Hit testing
@@ -970,8 +1021,7 @@ proc textField(id:         ItemId,
       tf.cursorPos = startPos
       clearSelection()
 
-    for i in 0..<keyBufIdx:
-      let ke = keyBuf[i]
+    for ke in keyBuf():
       let keNoShift = withoutShift(ke)
 
       if keNoShift in GoToNextWord:
@@ -1114,7 +1164,7 @@ proc textField(id:         ItemId,
     else:        GRAY_MID
 
   # Draw text field background
-  drawList.add(proc (vg: NVGContext) =
+  drawLayerAdd(DefaultLayer, proc (vg: NVGContext) =
     vg.beginPath()
     vg.roundedRect(x, y, w, h, 5)
     vg.fillColor(fillColor)
@@ -1263,6 +1313,7 @@ proc horizScrollBar(id:         ItemId,
   assert thumbSize < 0.0 or thumbSize < abs(startVal - endVal)
   assert clickStep < 0.0 or clickStep < abs(startVal - endVal)
 
+  alias(gui, g_uiState)
   alias(sb, gui.scrollBarState)
 
   const
@@ -1407,7 +1458,7 @@ proc horizScrollBar(id:         ItemId,
     of dsActive: GRAY_MID
     else:        GRAY_MID
 
-  drawList.add(proc (vg: NVGContext) =
+  drawLayerAdd(DefaultLayer, proc (vg: NVGContext) =
     vg.beginPath()
     vg.roundedRect(x, y, w, h, 5)
     vg.fillColor(trackColor)
@@ -1474,6 +1525,7 @@ proc vertScrollBar(id:         ItemId,
   assert thumbSize < 0.0 or thumbSize < abs(startVal - endVal)
   assert clickStep < 0.0 or clickStep < abs(startVal - endVal)
 
+  alias(gui, g_uiState)
   alias(sb, gui.scrollBarState)
 
   const
@@ -1616,7 +1668,7 @@ proc vertScrollBar(id:         ItemId,
     of dsActive: GRAY_MID
     else:        GRAY_MID
 
-  drawList.add(proc (vg: NVGContext) =
+  drawLayerAdd(DefaultLayer, proc (vg: NVGContext) =
     vg.beginPath()
     vg.roundedRect(x, y, w, h, 5)
     vg.fillColor(trackColor)
@@ -1660,6 +1712,7 @@ template vertScrollBar*(x, y, w, h: float,
 # {{{ scrollBarPost
 
 proc scrollBarPost() =
+  alias(gui, g_uiState)
   alias(sb, gui.scrollBarState)
 
   # Handle release active scrollbar outside of the widget
@@ -1689,6 +1742,8 @@ proc horizSlider(id:         ItemId,
 
   assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
          (endVal   < startVal and value >= endVal   and value <= startVal)
+
+  alias(gui, g_uiState)
 
   const SliderPad = 3
 
@@ -1753,7 +1808,7 @@ proc horizSlider(id:         ItemId,
     of dsHover: GRAY_HI
     else:       GRAY_MID
 
-  drawList.add(proc (vg: NVGContext) =
+  drawLayerAdd(DefaultLayer, proc (vg: NVGContext) =
     vg.beginPath()
     vg.roundedRect(x, y, w, h, 5)
     vg.fillColor(fillColor)
@@ -1809,6 +1864,8 @@ proc vertSlider(id:         ItemId,
 
   assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
          (endVal   < startVal and value >= endVal   and value <= startVal)
+
+  alias(gui, g_uiState)
 
   const SliderPad = 3
 
@@ -1873,7 +1930,7 @@ proc vertSlider(id:         ItemId,
     of dsHover: GRAY_HI
     else:       GRAY_MID
 
-  drawList.add(proc (vg: NVGContext) =
+  drawLayerAdd(DefaultLayer, proc (vg: NVGContext) =
     vg.beginPath()
     vg.roundedRect(x, y, w, h, 5)
     vg.fillColor(fillColor)
@@ -1914,6 +1971,8 @@ template vertSlider*(x, y, w, h: float,
 # {{{ sliderPost
 
 proc sliderPost() =
+  alias(gui, g_uiState)
+
   # Handle release active slider outside of the widget
   if not gui.mbLeftDown and hasActiveItem():
     case gui.sliderState:
@@ -1939,7 +1998,7 @@ proc init*(nvg: NVGContext) =
   GRAY_LO   = gray(0.25)
   GRAY_LOHI = gray(0.35)
 
-  vg = nvg
+  g_nvgContext = nvg
 
   let win = currentContext()
   win.keyCb  = keyCb
@@ -1952,6 +2011,8 @@ proc init*(nvg: NVGContext) =
 
 proc beginFrame*() =
   let win = glfw.currentContext()
+
+  alias(gui, g_uiState)
 
   # Store mouse state
   gui.lastmx = gui.mx
@@ -1979,8 +2040,7 @@ proc beginFrame*() =
   # Reset hot item
   gui.hotItem = 0
 
-  drawList = @[]
-  drawList2 = @[]
+  initDrawLayers()
 
 # }}}
 # {{{ endFrame
@@ -1988,10 +2048,10 @@ proc beginFrame*() =
 proc endFrame*() =
 #  echo fmt"hotItem: {gui.hotItem}, activeItem: {gui.activeItem}, textFieldState: {gui.textFieldState}"
 
-  for drawFunc in drawList: drawFunc(vg)
-  for drawFunc in drawList2: drawFunc(vg)
+  alias(gui, g_uiState)
 
-  tooltipPost(vg)
+  tooltipPost()
+  drawLayers(g_nvgContext)
 
   gui.lastHotItem = gui.hotItem
 
