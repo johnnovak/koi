@@ -202,7 +202,6 @@ const
 # {{{ Utils
 
 proc disableCursor*() =
-  var win = glfw.currentContext()
   glfw.currentContext().cursorMode = cmDisabled
 
 proc enableCursor*() =
@@ -498,7 +497,6 @@ proc textLabel(id:         ItemId,
     vg.fontFace(fontFace)
     vg.textAlign(haLeft, vaMiddle)
     vg.fillColor(color)
-  #  let tw = vg.horizontalAdvance(0,0, label)
     discard vg.text(x, y+h*0.5, label)
   )
 
@@ -772,6 +770,11 @@ proc dropdown(id:           ItemId,
 
     # Calculate the position of the box around the dropdown items
     var maxItemWidth = 0.0
+
+    # TODO to be kept up to date with the draw proc
+    g_nvgContext.fontSize(19.0)
+    g_nvgContext.fontFace("sans-bold")
+
     for i in items:
       let tw = g_nvgContext.horizontalAdvance(0, 0, i)
       maxItemWidth = max(tw, maxItemWidth)
@@ -943,6 +946,10 @@ proc textField(id:         ItemId,
     tf.selEndPos = 0
 
   proc calcGlyphPos(force: bool = false) =
+    # TODO to be kept up to date with the draw proc
+    g_nvgContext.fontSize(19.0)
+    g_nvgContext.fontFace("sans-bold")
+
     if force or not glyphsCalculated:
       discard g_nvgContext.textGlyphPositions(0, 0, text, glyphs)
 
