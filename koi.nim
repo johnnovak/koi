@@ -822,13 +822,20 @@ proc textField(id:         ItemId,
                tooltip:    string = "",
                text:       string): string =
 
+  # TODO maxlength parameter
+  # TODO only int & float parameter
+
+  const
+    MaxTextLen = 50
+    PadX = 8
+
+  assert text.runeLen <= MaxTextLen
+
   alias(tf, gui.textFieldState)
 
   var text = text
 
   # The text is displayed within this rectangle (used for drawing later)
-  const
-    PadX = 8
   let
     textBoxX = x + PadX
     textBoxW = w - PadX*2
@@ -836,7 +843,7 @@ proc textField(id:         ItemId,
     textBoxH = h
 
   var
-    glyphs: array[1000, GlyphPosition]  # TODO is this buffer large enough?
+    glyphs: array[MaxTextLen, GlyphPosition]  # TODO is this buffer large enough?
     glyphsCalculated = false
 
   proc calcGlyphPos(force: bool = false) =
@@ -957,15 +964,22 @@ proc textField(id:         ItemId,
     # (If we exited edit mode in the above key handler, this will result in
     # a noop as exitEditMode() clears the char buffer.)
     if not charBufEmpty():
-      let newChars = consumeCharBuf()
+      let textLen = text.runeLen
+      var
+        newChars = consumeCharBuf()
+        newCharsLen = newChars.runeLen
+
+      if textLen + newCharsLen > MaxTextLen:
+        newCharsLen = max(MaxTextLen - textLen, 0)
+        newChars = newChars.runeSubStr(0, newCharsLen)
 
       let insertPos = tf.cursorPos
-      if insertPos == text.runeLen:
+      if insertPos == textLen:
         text.add(newChars)
       else:
         text.insert(newChars, text.runeOffset(insertPos))
 
-      inc(tf.cursorPos, newChars.runeLen)
+      inc(tf.cursorPos, newCharsLen)
 
       # We need to force glyp position recalculation here because the
       # text has changed.
