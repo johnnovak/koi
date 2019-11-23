@@ -1012,10 +1012,7 @@ proc textField(id:         ItemId,
   # Scroll content into view & draw cursor when editing
   if editing:
     calcGlyphPos()
-
-    var p = min(tf.cursorPos, text.runeLen-1)
-    let startOffsetX = textBoxX - tf.displayStartX
-
+    let textLen = text.runeLen
 #[
     echo "---------------------------------------------"
     echo fmt"State           {tf.State}"
@@ -1027,41 +1024,55 @@ proc textField(id:         ItemId,
     echo fmt"DisplayStartX   {tf.DisplayStartX}"
     echo fmt"OriginalText    {tf.OriginalText}"
 ]#
-    if text.len == 0:
+    if textLen == 0:
       tf.cursorPos = 0
       tf.selFirst = -1
       tf.selLast = 0
       tf.displayStartPos = 0
       tf.displayStartX = textBoxX
 
-    elif glyphs[p].maxX - glyphs[tf.displayStartPos].minX -
-       startOffsetX > textBoxW:
-
-      var x0 = glyphs[p].maxX
-
-      while p > 0 and x0 - glyphs[p].minX < textBoxW: dec(p)
-      tf.displayStartPos = p
-
-      let
-        textW = x0 - glyphs[p].minX
-        startOffsetX = textW - textBoxW
-
-      tf.displayStartX = min(textBoxX - startOffsetX, textBoxX)
-      textX = tf.displayStartX
-
-    elif glyphs[p].minX <
-         glyphs[tf.displayStartPos].minX + startOffsetX:
-
-      tf.displayStartX = textBoxX
-      tf.displayStartPos = min(tf.displayStartPos, p)
-      textX = tf.displayStartX
-
-    elif glyphs[p].maxX < textBoxW:
-      tf.displayStartPos = 0
-      tf.displayStartX = textBoxX
-
     else:
-      textX = tf.displayStartX
+      # Text fits into the text box
+      if glyphs[textLen-1].maxX < textBoxW:
+        tf.displayStartPos = 0
+        tf.displayStartX = textBoxX
+      else:
+        var p = min(tf.cursorPos, textLen-1)
+        let startOffsetX = textBoxX - tf.displayStartX
+
+        proc calcDisplayStart(fromPos: Natural): (Natural, float) = 
+          let x0 = glyphs[fromPos].maxX
+          var p = fromPos
+
+          while p > 0 and x0 - glyphs[p].minX < textBoxW: dec(p)
+
+          let
+            displayStartPos = p
+            textW = x0 - glyphs[p].minX
+            startOffsetX = textW - textBoxW
+            displayStartX = min(textBoxX - startOffsetX, textBoxX)
+
+          (displayStartPos, displayStartX)
+
+        # Cursor past the right edge of the text box
+        if glyphs[p].maxX -
+           glyphs[tf.displayStartPos].minX - startOffsetX > textBoxW:
+
+          (tf.displayStartPos, tf.displayStartX) = calcDisplayStart(p)
+
+        # Make sure the text is always aligned to the right edge of the text
+        # box
+        elif glyphs[textLen-1].maxX -
+             glyphs[tf.displayStartPos].minX - startOffsetX < textBoxW:
+
+          (tf.displayStartPos, tf.displayStartX) = calcDisplayStart(textLen-1)
+
+        # Cursor past the left edge of the text box
+        elif glyphs[p].minX < glyphs[tf.displayStartPos].minX + startOffsetX:
+          tf.displayStartX = textBoxX
+          tf.displayStartPos = min(tf.displayStartPos, p)
+
+    textX = tf.displayStartX
 
     # Draw cursor
     let cursorX = if tf.cursorPos == 0:
