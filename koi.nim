@@ -424,7 +424,7 @@ proc tooltipPost(vg: NVGContext) =
 # }}}
 # }}}
 
-# {{{ label
+# {{{ Label
 proc textLabel(id:         ItemId,
                x, y, w, h: float,
                label:      string,
@@ -452,7 +452,7 @@ template label*(x, y, w, h: float,
   textLabel(id, x, y, w, h, label, color, fontSize, fontFace)
 
 # }}}
-# {{{ button
+# {{{ Button
 
 proc button(id:         ItemId,
             x, y, w, h: float,
@@ -507,7 +507,7 @@ template button*(x, y, w, h: float,
   button(id, x, y, w, h, label, color, tooltip)
 
 # }}}
-# {{{ checkBox
+# {{{ CheckBox
 
 proc checkBox(id:      ItemId,
               x, y, w: float,
@@ -574,7 +574,7 @@ template checkBox*(x, y, w: float,
   checkbox(id, x, y, w, tooltip, active)
 
 # }}}
-# {{{ radioButtons
+# {{{ RadioButtons
 
 proc radioButtons(id:           ItemId,
                   x, y, w, h:   float,
@@ -657,7 +657,7 @@ template radioButtons*(x, y, w, h:   float,
   radioButtons(id, x, y, w, h, labels, tooltips, activeButton)
 
 # }}}
-# {{{ dropdown
+# {{{ Dropdown
 
 proc dropdown(id:           ItemId,
               x, y, w, h:   float,
@@ -815,7 +815,7 @@ template dropdown*(x, y, w, h:   float,
   dropdown(id, x, y, w, h, items, tooltip, selectedItem)
 
 # }}}
-# {{{ textField
+# {{{ TextField
 
 proc textField(id:         ItemId,
                x, y, w, h: float,
