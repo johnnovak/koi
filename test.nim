@@ -232,11 +232,13 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
   glfw.swapBuffers(win)
 
 
-proc windowPositionCb(win: Window, pos: tuple[x, y: int32]) =
+proc windowPosCb(win: Window, pos: tuple[x, y: int32]) =
   render(win)
 
+proc framebufSizeCb(win: Window, size: tuple[w, h: int32]) =
+  render(win)
 
-proc init(): Window = 
+proc init(): Window =
   glfw.initialize()
 
   var win = createWindow()
@@ -254,9 +256,10 @@ proc init(): Window =
 
   koi.init(vg)
 
-  win.windowPositionCb = windowPositionCb
+  win.windowPositionCb = windowPosCb
+  win.framebufferSizeCb = framebufSizeCb
 
-  glfw.swapInterval(1)
+  glfw.swapInterval(0)
 
   result = win
 
