@@ -261,14 +261,6 @@ template hasActiveItem(): bool =
 # }}}
 # {{{ Keyboard handling
 
-# Helpers to map Ctrl consistently to Cmd on OS X
-when defined(macosx):
-  const CtrlModSet = {mkSuper}
-  const CtrlMod    = mkSuper
-else:
-  const CtrlModSet = {mkCtrl}
-  const CtrlMod    = mkCtrl
-
 const CharBufSize = 200
 var
   # TODO do we need locking around this stuff? written in the callback, read
@@ -293,7 +285,7 @@ proc consumeCharBuf(): string =
 
 
 type KeyEvent = object
-  key: Key
+  key:  Key
   mods: set[ModifierKey]
 
 const KeyBufSize = 200
@@ -314,13 +306,33 @@ const EditKeys = {
 proc keyCb(win: Window, key: Key, scanCode: int32, action: KeyAction,
            mods: set[ModifierKey]) =
 
-  #echo fmt"Key: {key} (scan code: {scanCode}): {action} - {mods}"
   if key in EditKeys and action in {kaDown, kaRepeat}:
     if keyBufIdx <= keyBuf.high:
       keyBuf[keyBufIdx] = KeyEvent(key: key, mods: mods)
       inc(keyBufIdx)
 
 proc clearKeyBuf() = keyBufIdx = 0
+
+when defined(macosx):
+  const GoToPreviousWord    = @[KeyEvent(key: keyLeft,      mods: {mkAlt})]
+  const GoToNextWord        = @[KeyEvent(key: keyRight,     mods: {mkAlt})]
+
+  const GoToLineStart       = @[KeyEvent(key: keyLeft,      mods: {mkSuper}),
+                                KeyEvent(key: keyA,         mods: {mkCtrl})]
+
+  const GoToLineEnd         = @[KeyEvent(key: keyRight,     mods: {mkSuper}),
+                                KeyEvent(key: keyE,         mods: {mkCtrl})]
+
+  const DeleteWordToRight   = @[KeyEvent(key: keyDelete,    mods: {mkAlt})]
+  const DeleteWordToLeft    = @[KeyEvent(key: keyBackspace, mods: {mkAlt})]
+
+else: # Windows & Linux
+  const GoToPreviousWord    = @[KeyEvent(key: keyLeft,      mods: {mkCtrl})]
+  const GoToNextWord        = @[KeyEvent(key: keyRight,     mods: {mkCtrl})]
+  const GoToLineStart       = @[KeyEvent(key: keyHome,      mods: {})]
+  const GoToLineEnd         = @[KeyEvent(key: keyEnd,       mods: {})]
+  const DeleteWordToRight   = @[KeyEvent(key: keyDelete,    mods: {mkCtrl})]
+  const DeleteWordToLeft    = @[KeyEvent(key: keyBackspace, mods: {mkCtrl})]
 
 # }}}
 # {{{ Tooltip handling
@@ -902,12 +914,61 @@ proc textField(id:         ItemId,
     # Handle text field shortcuts
     # (If we exited edit mode above key handler, this will result in a noop as
     # exitEditMode() clears the key buffer.)
+
+    proc findNextWordEnd(): Natural =
+      var p = tf.cursorPos
+      while p < text.runeLen and     text.runeAt(p).isWhiteSpace: inc(p)
+      while p < text.runeLen and not text.runeAt(p).isWhiteSpace: inc(p)
+      result = p
+
+    proc findPrevWordStart(): Natural =
+      var p = tf.cursorPos
+      while p > 0 and     text.runeAt(p-1).isWhiteSpace: dec(p)
+      while p > 0 and not text.runeAt(p-1).isWhiteSpace: dec(p)
+      result = p
+
     for i in 0..<keyBufIdx:
       let k = keyBuf[i]
 
-      # TODO OS specific shortcuts
+      if k in GoToNextWord:
+        tf.cursorPos = findNextWordEnd()
 
-      if k.key == keyEscape:   # Cancel edits
+      elif k in GoToPreviousWord:
+        tf.cursorPos = findPrevWordStart()
+
+      elif k in GoToLineStart:
+        tf.cursorPos = 0
+
+      elif k in GoToLineEnd:
+        tf.cursorPos = text.runeLen
+
+      elif k in DeleteWordToRight:
+        let p = findNextWordEnd()
+        text = text.runeSubStr(0, tf.cursorPos) & text.runeSubStr(p)
+
+      elif k in DeleteWordToLeft:
+        let p = findPrevWordStart()
+        text = text.runeSubStr(0, p) & text.runeSubStr(tf.cursorPos)
+        tf.cursorPos = p
+
+      elif k.key == keyRight:
+        tf.cursorPos = min(tf.cursorPos + 1, text.runeLen)
+
+      elif k.key == keyLeft:
+        tf.cursorPos = max(tf.cursorPos - 1, 0)
+
+      elif k.key == keyBackspace:
+        if tf.cursorPos > 0:
+          text = text.runeSubStr(0, tf.cursorPos - 1) &
+                 text.runeSubStr(tf.cursorPos)
+          dec(tf.cursorPos)
+
+      elif k.key == keyDelete:
+        if text.len > 0:
+          text = text.runeSubStr(0, tf.cursorPos) &
+                 text.runeSubStr(tf.cursorPos + 1)
+
+      elif k.key == keyEscape:   # Cancel edits
         text = tf.originalText
         exitEditMode()
         # Note we won't process any remaining characters in the buffer
@@ -918,48 +979,7 @@ proc textField(id:         ItemId,
         # Note we won't process any remaining characters in the buffer
         # because exitEditMode() clears the key buffer.
 
-      elif k.key == keyTab: discard
-
-      elif k.key == keyBackspace:
-        if tf.cursorPos > 0:
-          if k.mods == CtrlModSet:
-            text = ""
-            tf.cursorPos = 0
-          else:
-            text = text.runeSubStr(0, tf.cursorPos - 1) &
-                   text.runeSubStr(tf.cursorPos)
-            dec(tf.cursorPos)
-
-      elif k.key == keyDelete:
-        if text.len > 0:
-          text = text.runeSubStr(0, tf.cursorPos) &
-                 text.runeSubStr(tf.cursorPos + 1)
-
-      elif k.key in {keyHome, keyUp} or
-           k.key == keyLeft and k.mods == CtrlModSet:   # TODO allow alt?
-        tf.cursorPos = 0
-
-      elif k.key in {keyEnd, keyDown} or
-           k.key == keyRight and k.mods == CtrlModSet:  # TODO allow alt?
-        tf.cursorPos = text.runeLen
-
-      elif k.key == keyRight:
-        if k.mods == {mkAlt}:
-          var p = tf.cursorPos
-          while p < text.runeLen and     text.runeAt(p).isWhiteSpace: inc(p)
-          while p < text.runeLen and not text.runeAt(p).isWhiteSpace: inc(p)
-          tf.cursorPos = p
-        else:
-          tf.cursorPos = min(tf.cursorPos + 1, text.runeLen)
-
-      elif k.key == keyLeft:
-        if k.mods == {mkAlt}:
-          var p = tf.cursorPos
-          while p > 0 and     text.runeAt(p-1).isWhiteSpace: dec(p)
-          while p > 0 and not text.runeAt(p-1).isWhiteSpace: dec(p)
-          tf.cursorPos = p
-        else:
-          tf.cursorPos = max(tf.cursorPos - 1, 0)
+      elif k.key == keyTab: discard  # TODO
 
     clearKeyBuf()
 
@@ -1043,7 +1063,7 @@ proc textField(id:         ItemId,
         var p = min(tf.cursorPos, textLen-1)
         let startOffsetX = textBoxX - tf.displayStartX
 
-        proc calcDisplayStart(fromPos: Natural): (Natural, float) = 
+        proc calcDisplayStart(fromPos: Natural): (Natural, float) =
           let x0 = glyphs[fromPos].maxX
           var p = fromPos
 
