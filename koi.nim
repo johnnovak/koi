@@ -10,13 +10,15 @@ import utils
 
 type ItemId = int64
 
+# {{{ SliderState
+
 type
   SliderState = enum
     ssDefault,
     ssDragHidden
 
-  TooltipState = enum
-    tsOff, tsShowDelay, tsShow, tsFadeOutDelay, tsFadeOut
+# }}}
+# {{{ ScrollBarState
 
 type
   ScrollBarState = enum
@@ -36,6 +38,9 @@ type
     #  1 = LMB pressed on the right side of the knob
     clickDir: float
 
+# }}}
+# {{{ DropdownState
+
 type
   DropdownState = enum
     dsClosed, dsOpenLMBPressed, dsOpen
@@ -45,6 +50,9 @@ type
 
     # Dropdown in open mode, 0 if no dropdown is open currently.
     activeItem: ItemId
+
+# }}}
+# {{{ TextFieldState
 
 type
   TextFieldState = enum
@@ -75,7 +83,13 @@ type
     # restored if the editing is cancelled.
     originalText:    string
 
+# }}}
+# {{{ TooltipState
+
 type
+  TooltipState = enum
+    tsOff, tsShowDelay, tsShow, tsFadeOutDelay, tsFadeOut
+
   TooltipStateVars = object
     state:     TooltipState
     lastState: TooltipState
@@ -83,6 +97,9 @@ type
     # Used for the various tooltip delays & timeouts.
     t0:        float
     text:      string
+
+# }}}
+# {{{ GuiState
 
 type
   GuiState = object
@@ -143,10 +160,13 @@ type
     # **********************
     tooltipState:     TooltipStateVars
 
+# }}}
+# {{{ DrawState
 
 type DrawState = enum
   dsNormal, dsHover, dsActive
 
+# }}}
 # }}}
 # {{{ Globals
 
@@ -205,6 +225,7 @@ proc truncate(vg: NVGContext, text: string, maxWidth: float): string =
 # {{{ UI helpers
 
 template generateId(filename: string, line: int, id: string): ItemId =
+  # TODO collision check in debug mode
   let
     hash32 = XXH32(filename & $line & id)
 
@@ -1789,17 +1810,17 @@ proc beginFrame*() =
   gui.mbMiddleDown = win.mouseButtonDown(mbMiddle)
 
   # Store modifier key state (just for convenience for the GUI functions)
-  gui.shiftDown  = win.isKeyDown(keyLeftShift) or
-                   win.isKeyDown(keyRightShift)
+  gui.shiftDown = win.isKeyDown(keyLeftShift) or
+                  win.isKeyDown(keyRightShift)
 
-  gui.ctrlDown   = win.isKeyDown(keyLeftControl) or
-                   win.isKeyDown(keyRightControl)
+  gui.ctrlDown  = win.isKeyDown(keyLeftControl) or
+                  win.isKeyDown(keyRightControl)
 
-  gui.altDown    = win.isKeyDown(keyLeftAlt) or
-                   win.isKeyDown(keyRightAlt)
+  gui.altDown   = win.isKeyDown(keyLeftAlt) or
+                  win.isKeyDown(keyRightAlt)
 
-  gui.superDown  = win.isKeyDown(keyLeftSuper) or
-                   win.isKeyDown(keyRightSuper)
+  gui.superDown = win.isKeyDown(keyLeftSuper) or
+                  win.isKeyDown(keyRightSuper)
 
   # Reset hot item
   gui.hotItem = 0
