@@ -3,6 +3,7 @@ import math, unicode, strformat
 import glfw
 import nanovg
 import xxhash
+import utils
 
 
 # {{{ Types
@@ -75,6 +76,15 @@ type
     originalText:    string
 
 type
+  TooltipStateVars = object
+    state:     TooltipState
+    lastState: TooltipState
+
+    # Used for the various tooltip delays & timeouts.
+    t0:        float
+    text:      string
+
+type
   GuiState = object
     # General state
     # *************
@@ -122,26 +132,16 @@ type
 
     # Widget-specific states
     # **********************
-    radioButtonsActiveButton: Natural
+    radioButtonsActiveItem: Natural
 
     dropdownState:  DropdownStateVars
     textFieldState: TextFieldStateVars
     scrollBarState: ScrollBarStateVars
-
-    # Slider
-    # ------
-    sliderState:        SliderState
-
-
+    sliderState:    SliderState
 
     # Internal tooltip state
     # **********************
-    tooltipState:     TooltipState
-    lastTooltipState: TooltipState
-
-    # Used for the various tooltip delays & timeouts.
-    tooltipT0:        float
-    tooltipText:      string
+    tooltipState:     TooltipStateVars
 
 
 type DrawState = enum
@@ -181,16 +181,6 @@ const
 
 # {{{ Utils
 
-template alias(newName: untyped, call: untyped) =
-  template newName(): untyped = call
-
-proc lerp*(a, b, t: float): float =
-  a + (b - a) * t
-
-proc invLerp*(a, b, v: float): float =
-  (v - a) / (b - a)
-
-
 proc disableCursor*() =
   var win = glfw.currentContext()
   glfw.currentContext().cursorMode = cmDisabled
@@ -207,10 +197,6 @@ proc setCursorPosY*(y: float) =
   let win = glfw.currentContext()
   let (currX, _) = win.cursorPos()
   win.cursorPos = (currX, y)
-
-
-template `++`(s: string, offset: int): cstring =
-  cast[cstring](cast[int](cstring(s)) + offset)
 
 proc truncate(vg: NVGContext, text: string, maxWidth: float): string =
   result = text # TODO
@@ -317,30 +303,32 @@ proc clearKeyBuf() = keyBufIdx = 0
 # {{{ handleTooltipInsideWidget
 
 proc handleTooltipInsideWidget(id: ItemId, tooltip: string) =
-  gui.tooltipState = gui.lastTooltipState
+  alias(tt, gui.tooltipState)
+
+  tt.state = tt.lastState
 
   # Reset the tooltip show delay if the cursor has been moved inside a
   # widget
-  if gui.tooltipState == tsShowDelay:
+  if tt.state == tsShowDelay:
     let cursorMoved = gui.mx != gui.lastmx or gui.my != gui.lastmy
     if cursorMoved:
-      gui.tooltipT0 = getTime()
+      tt.t0 = getTime()
 
   # Hide the tooltip immediately if the LMB is pressed inside the widget
   if gui.mbLeftDown and gui.activeItem > 0:
-    gui.tooltipState = tsOff
+    tt.state = tsOff
 
   # Start the show delay if we just entered the widget with LMB up and no
   # other tooltip is being shown
-  elif gui.tooltipState == tsOff and not gui.mbLeftDown and
+  elif tt.state == tsOff and not gui.mbLeftDown and
        gui.lastHotItem != id:
-    gui.tooltipState = tsShowDelay
-    gui.tooltipT0 = getTime()
+    tt.state = tsShowDelay
+    tt.t0 = getTime()
 
-  elif gui.tooltipState >= tsShow:
-    gui.tooltipState = tsShow
-    gui.tooltipT0 = getTime()
-    gui.tooltipText = tooltip
+  elif tt.state >= tsShow:
+    tt.state = tsShow
+    tt.t0 = getTime()
+    tt.text = tooltip
 
 # }}}
 # {{{ drawTooltip
@@ -368,47 +356,49 @@ proc drawTooltip(vg: NVGContext, x, y: float, text: string,
 # {{{ tooltipPost
 
 proc tooltipPost(vg: NVGContext) =
+  alias(tt, gui.tooltipState)
+
   # TODO the actual drawing should be moved out of here once deferred drawing
   # is implemented
   let
     ttx = gui.mx + 13
     tty = gui.my + 20
 
-  case gui.tooltipState:
+  case tt.state:
   of tsOff: discard
   of tsShowDelay:
-    if getTime() - gui.tooltipT0 > TooltipShowDelay:
-      gui.tooltipState = tsShow
+    if getTime() - tt.t0 > TooltipShowDelay:
+      tt.state = tsShow
 
   of tsShow:
-    drawToolTip(vg, ttx, tty, gui.tooltipText)
+    drawToolTip(vg, ttx, tty, tt.text)
 
   of tsFadeOutDelay:
-    drawToolTip(vg, ttx, tty, gui.tooltipText)
-    if getTime() - gui.tooltipT0 > TooltipFadeOutDelay:
-      gui.tooltipState = tsFadeOut
-      gui.tooltipT0 = getTime()
+    drawToolTip(vg, ttx, tty, tt.text)
+    if getTime() - tt.t0 > TooltipFadeOutDelay:
+      tt.state = tsFadeOut
+      tt.t0 = getTime()
 
   of tsFadeOut:
-    let t = getTime() - gui.tooltipT0
+    let t = getTime() - tt.t0
     if t > TooltipFadeOutDuration:
-      gui.tooltipState = tsOff
+      tt.state = tsOff
     else:
       let alpha = 1.0 - t / TooltipFadeOutDuration
-      drawToolTip(vg, ttx, tty, gui.tooltipText, alpha)
+      drawToolTip(vg, ttx, tty, tt.text, alpha)
 
   # We reset the show delay state or move into the fade out state if the
   # tooltip is being shown; this is to handle the case when the user just
   # moved the cursor outside of a widget. The actual widgets are responsible
   # for "keeping the state alive" every frame if the widget is hot/active by
   # restoring the tooltip state from lastTooltipState.
-  gui.lastTooltipState = gui.tooltipState
+  tt.lastState = tt.state
 
-  if gui.tooltipState == tsShowDelay:
-    gui.tooltipState = tsOff
-  elif gui.tooltipState == tsShow:
-    gui.tooltipState = tsFadeOutDelay
-    gui.tooltipT0 = getTime()
+  if tt.state == tsShowDelay:
+    tt.state = tsOff
+  elif tt.state == tsShow:
+    tt.state = tsFadeOutDelay
+    tt.t0 = getTime()
 
 # }}}
 # }}}
@@ -585,11 +575,11 @@ proc radioButtons(id:           ItemId,
     setHot(id)
     if gui.mbLeftDown and noActiveItem():
       setActive(id)
-      gui.radioButtonsActiveButton = hotButton
+      gui.radioButtonsActiveItem = hotButton
 
   # LMB released over active widget means it was clicked
   if not gui.mbLeftDown and isHotAndActive(id) and
-     gui.radioButtonsActiveButton == hotButton:
+     gui.radioButtonsActiveItem == hotButton:
     result = hotButton
   else:
     result = activeButton
@@ -609,7 +599,7 @@ proc radioButtons(id:           ItemId,
   for i, label in labels:
     let fillColor = if   drawState == dsHover  and hotButton == i: GRAY_HI
                     elif drawState == dsActive and hotButton == i and
-                         gui.radioButtonsActiveButton == i: RED
+                         gui.radioButtonsActiveItem == i: RED
                     else:
                       if activeButton == i: GRAY_LO else : GRAY_MID
 
