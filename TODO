@@ -1,3 +1,21 @@
 BUGS
 ====
 
+
+
+TASKS
+=====
+
+- deferred rendering
+- edit value fields
+- text field mouse support
+- value entry (modified slider)
+- text clipping (all widgets)
+- display combo box based on screen position
+- display tooltip based on screen position
+- scroll wheel support
+- copy/paste support
+- windows (e.g. modal popups)
+- menus
+- theme
+
