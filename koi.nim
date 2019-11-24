@@ -193,7 +193,7 @@ var
   g_cursorIBeam:       Cursor
   g_cursorHorizResize: Cursor
 
-  # TODO remove these once themeing is implemented
+  # TODO remove these once theming is implemented
   RED*       {.threadvar.}: Color
   GRAY_MID*  {.threadvar.}: Color
   GRAY_HI*   {.threadvar.}: Color
@@ -247,9 +247,6 @@ proc setCursorPosY*(y: float) =
   let win = glfw.currentContext()
   let (currX, _) = win.cursorPos()
   win.cursorPos = (currX, y)
-
-proc truncate(vg: NVGContext, text: string, maxWidth: float): string =
-  result = text # TODO
 
 # }}}
 # {{{ Draw layers
@@ -645,8 +642,6 @@ proc checkBox(id:      ItemId,
     if gui.mbLeftDown and noActiveItem():
       setActive(id)
 
-  # TODO SweepCheckBox could be introduced later
-
   # LMB released over active widget means it was clicked
   let active = if not gui.mbLeftDown and isHotAndActive(id): not active
                else: active
@@ -760,7 +755,6 @@ proc radioButtons(id:           ItemId,
       vg.fill()
 
       let
-        label = truncate(vg, label, buttonW)
         textColor = if drawState == dsHover and hotButton == i: GRAY_LO
                     else:
                       if activeButton == i: GRAY_HI
@@ -985,7 +979,7 @@ template dropdown*(x, y, w, h:   float,
 # }}}
 # {{{ TextField
 
-# TODO params
+# TODO this will do for internal use only for now
 proc textFieldEnterEditMode(id: ItemId, text: string, startX: float) =
   alias(gui, g_uiState)
   alias(tf, gui.textFieldState)
@@ -1914,7 +1908,8 @@ proc horizSlider(id:         ItemId,
         trimZeros(ss.valueText)
         ss.textFieldId = generateId(KoiInternalIdPrefix &
                                     "EditHorizSliderValue")
-        textFieldEnterEditMode(ss.textFieldId, ss.valueText, x) # TODO x
+        const TextBoxPadX = 8
+        textFieldEnterEditMode(ss.textFieldId, ss.valueText, x + TextBoxPadX)
         ss.editModeItem = id
         showCursor()
       else:
@@ -1953,7 +1948,7 @@ proc horizSlider(id:         ItemId,
 
         newPosX = calcPosX(value)
 
-        ss.editModeItem = -1  # TODO global state init in init()
+        ss.editModeItem = -1
         ss.state = ssDefault
 
         # Needed for the tooltips to work correctly
@@ -2170,6 +2165,8 @@ proc sliderPost() =
 # {{{ init()
 
 proc init*(nvg: NVGContext) =
+  alias(gui, g_uiState)
+
   RED       = rgb(1.0, 0.4, 0.4)
   GRAY_MID  = gray(0.6)
   GRAY_HI   = gray(0.8)
