@@ -1,6 +1,7 @@
-import math, unicode, strformat
+import math, unicode, strformat, strutils
 
 import glfw
+from glfw/wrapper import setCursor, createStandardCursor, CursorShape
 import nanovg
 import xxhash
 import utils
@@ -15,7 +16,18 @@ type ItemId = int64
 type
   SliderState = enum
     ssDefault,
-    ssDragHidden
+    ssDragHidden,
+    ssEditValue
+
+  SliderStateVars = object
+    state:       SliderState
+
+    # Whether the cursor was moved before releasing the LMB in drag mode
+    cursorMoved:  bool
+
+    valueText:    string
+    editModeItem: ItemId
+    textFieldId:  ItemId
 
 # }}}
 # {{{ ScrollBarState
@@ -145,6 +157,9 @@ type
     t0:             float
 
     # For keeping track of the cursor in hidden drag mode
+    # Dragging can be only active along the X or Y-axis, but not both:
+    # - in horizontal drag mode: dragX >= 0, dragY  < 0
+    # - in vertical drag mode:   dragX  < 0, dragY >= 0
     dragX, dragY:   float
 
     # Widget-specific states
@@ -154,7 +169,7 @@ type
     dropdownState:  DropdownStateVars
     textFieldState: TextFieldStateVars
     scrollBarState: ScrollBarStateVars
-    sliderState:    SliderState
+    sliderState:    SliderStateVars
 
     # Internal tooltip state
     # **********************
@@ -173,6 +188,10 @@ type DrawState = enum
 var
   g_nvgContext: NVGContext
   g_uiState    {.threadvar.}: UIState
+
+  g_cursorArrow:       Cursor
+  g_cursorIBeam:       Cursor
+  g_cursorHorizResize: Cursor
 
   # TODO remove these once themeing is implemented
   RED*       {.threadvar.}: Color
@@ -201,11 +220,23 @@ const
 
 # {{{ Utils
 
-proc disableCursor*() =
+proc hideCursor*() =
   glfw.currentContext().cursorMode = cmDisabled
 
-proc enableCursor*() =
+proc showCursor*() =
   glfw.currentContext().cursorMode = cmNormal
+
+proc showArrowCursor*() =
+  let win = glfw.currentContext()
+  wrapper.setCursor(win.getHandle, g_cursorArrow)
+
+proc showIBeamCursor*() =
+  let win = glfw.currentContext()
+  wrapper.setCursor(win.getHandle, g_cursorIBeam)
+
+proc showHorizResizeCursor*() =
+  let win = glfw.currentContext()
+  wrapper.setCursor(win.getHandle, g_cursorHorizResize)
 
 proc setCursorPosX*(x: float) =
   let win = glfw.currentContext()
@@ -219,7 +250,6 @@ proc setCursorPosY*(y: float) =
 
 proc truncate(vg: NVGContext, text: string, maxWidth: float): string =
   result = text # TODO
-
 
 # }}}
 # {{{ Draw layers
@@ -249,14 +279,13 @@ proc drawLayers(vg: NVGContext) =
 # }}}
 # {{{ UI helpers
 
-template generateId(filename: string, line: int, id: string): ItemId =
-  # TODO collision check in debug mode
-  let
-    hash32 = XXH32(filename & $line & id)
+const KoiInternalIdPrefix = "~-=[//.K0i:iN73Rn4L:!D.//]=-~"  # unique enough?!
 
+template generateId(filename: string, line: int, id: string): ItemId =
+  let input = filename & ":" & $line & ":" & id
+  let hash32 = XXH32(input)
   # Make sure the IDs are always positive integers
   int64(hash32) - int32.low + 1
-
 
 proc mouseInside(x, y, w, h: float): bool =
   alias(gui, g_uiState)
@@ -334,7 +363,7 @@ var
   g_keyBufIdx: Natural
 
 const EditKeys = {
-  keyEscape, keyEnter, keyTab,
+  keyEscape, keyEnter, keyKpEnter, keyTab,
   keyBackspace, keyDelete,
   keyRight, keyLeft, keyDown, keyUp,
   keyPageUp, keyPageDown,
@@ -439,8 +468,7 @@ proc tooltipPost() =
   alias(gui, g_uiState)
   alias(tt, gui.tooltipState)
 
-  # TODO the actual drawing should be moved out of here once deferred drawing
-  # is implemented
+
   let
     ttx = gui.mx + 13
     tty = gui.my + 20
@@ -945,9 +973,32 @@ template dropdown*(x, y, w, h:   float,
 # }}}
 # {{{ TextField
 
+# TODO params
+proc textFieldEnterEditMode(id: ItemId, text: string, startX: float) =
+  alias(gui, g_uiState)
+  alias(tf, gui.textFieldState)
+
+  setActive(id)
+  clearCharBuf()
+  clearKeyBuf()
+
+  tf.state = tfEdit
+  tf.activeItem = id
+  tf.cursorPos = text.runeLen
+  tf.displayStartPos = 0
+  tf.displayStartX = startX
+  tf.originalText = text
+  tf.selStartPos = 0
+  tf.selEndPos = tf.cursorPos
+
+  gui.focusCaptured = true
+  showIBeamCursor()
+
+
 proc textField(id:         ItemId,
                x, y, w, h: float,
                tooltip:    string = "",
+               drawWidget: bool = true,
                text:       string): string =
 
   # TODO maxlength parameter
@@ -983,10 +1034,6 @@ proc textField(id:         ItemId,
     else:
       (tf.selEndPos.int, tf.selStartPos)
 
-  proc clearSelection() =
-    tf.selStartPos = -1
-    tf.selEndPos = 0
-
   proc calcGlyphPos(force: bool = false) =
     # TODO to be kept up to date with the draw proc
     g_nvgContext.fontSize(19.0)
@@ -1000,19 +1047,12 @@ proc textField(id:         ItemId,
     if mouseInside(x, y, w, h):
       setHot(id)
       if gui.mbLeftDown and noActiveItem():
-        setActive(id)
-        clearCharBuf()
-        clearKeyBuf()
-
+        textFieldEnterEditMode(id, text, textBoxX)
         tf.state = tfEditLMBPressed
-        tf.activeItem = id
-        tf.cursorPos = text.runeLen
-        tf.displayStartPos = 0
-        tf.displayStartX = textBoxX
-        tf.originalText = text
-        clearSelection()
 
-        gui.focusCaptured = true
+  proc clearSelection() =
+    tf.selStartPos = -1
+    tf.selEndPos = 0
 
   proc exitEditMode() =
     clearKeyBuf()
@@ -1027,6 +1067,7 @@ proc textField(id:         ItemId,
     clearSelection()
 
     gui.focusCaptured = false
+    showArrowCursor()
 
   # We 'fall through' to the edit state to avoid a 1-frame delay when going
   # into edit mode
@@ -1157,7 +1198,7 @@ proc textField(id:         ItemId,
         # Note we won't process any remaining characters in the buffer
         # because exitEditMode() clears the key buffer.
 
-      elif ke.key == keyEnter:  # Persist edits
+      elif ke.key == keyEnter or ke.key == keyKpEnter:  # Persist edits
         exitEditMode()
         # Note we won't process any remaining characters in the buffer
         # because exitEditMode() clears the key buffer.
@@ -1212,14 +1253,22 @@ proc textField(id:         ItemId,
     of dsActive: GRAY_LO
     else:        GRAY_MID
 
-  # Draw text field background
   drawLayerAdd(DefaultLayer, proc (vg: NVGContext) =
-    vg.beginPath()
-    vg.roundedRect(x, y, w, h, 5)
-    vg.fillColor(fillColor)
-    vg.fill()
+    # Draw text field background
+    if drawWidget:
+      vg.beginPath()
+      vg.roundedRect(x, y, w, h, 5)
+      vg.fillColor(fillColor)
+      vg.fill()
+    else:
+      vg.beginPath()
+      vg.rect(textBoxX, textBoxY + 2, textBoxW, textBoxH - 2*2)
+      vg.fillColor(fillColor)
+      vg.fill()
+  )
 
-    # Make it slightly wider because of the cursor
+  drawLayerAdd(TopLayer-3, proc (vg: NVGContext) =
+    # Make scissor region slightly wider because of the cursor
     vg.scissor(textBoxX-3, textBoxY, textBoxW+3, textBoxH)
 
     # Scroll content into view & draw cursor when editing
@@ -1335,12 +1384,23 @@ proc textField(id:         ItemId,
 
 template textField*(x, y, w, h: float,
                     tooltip:    string = "",
+                    drawWidget: bool = true,
                     text:       string): string =
 
   let i = instantiationInfo(fullPaths = true)
   let id = generateId(i.filename, i.line, "")
 
-  textField(id, x, y, w, h, tooltip, text)
+  textField(id, x, y, w, h, tooltip, drawWidget, text)
+
+
+template textField*(x, y, w, h: float,
+                    tooltip:    string = "",
+                    text:       string): string =
+
+  let i = instantiationInfo(fullPaths = true)
+  let id = generateId(i.filename, i.line, "")
+
+  textField(id, x, y, w, h, tooltip, drawWidget = true, text)
 
 
 # }}}
@@ -1418,7 +1478,7 @@ proc horizScrollBar(id:         ItemId,
       if insideThumb:
         gui.x0 = gui.mx
         if gui.shiftDown:
-          disableCursor()
+          hideCursor()
           sb.state = sbsDragHidden
         else:
           sb.state = sbsDragNormal
@@ -1431,7 +1491,7 @@ proc horizScrollBar(id:         ItemId,
 
     of sbsDragNormal:
       if gui.shiftDown:
-        disableCursor()
+        hideCursor()
         sb.state = sbsDragHidden
       else:
         let dx = gui.mx - gui.x0
@@ -1461,7 +1521,7 @@ proc horizScrollBar(id:         ItemId,
         gui.dragY = -1.0
       else:
         sb.state = sbsDragNormal
-        enableCursor()
+        showCursor()
         setCursorPosX(gui.dragX)
         gui.mx = gui.dragX
         gui.x0 = gui.dragX
@@ -1628,7 +1688,7 @@ proc vertScrollBar(id:         ItemId,
       if insideThumb:
         gui.y0 = gui.my
         if gui.shiftDown:
-          disableCursor()
+          hideCursor()
           sb.state = sbsDragHidden
         else:
           sb.state = sbsDragNormal
@@ -1641,7 +1701,7 @@ proc vertScrollBar(id:         ItemId,
 
     of sbsDragNormal:
       if gui.shiftDown:
-        disableCursor()
+        hideCursor()
         sb.state = sbsDragHidden
       else:
         let dy = gui.my - gui.y0
@@ -1671,7 +1731,7 @@ proc vertScrollBar(id:         ItemId,
         gui.dragY = newThumbY + thumbH*0.5
       else:
         sb.state = sbsDragNormal
-        enableCursor()
+        showCursor()
         setCursorPosY(gui.dragY)
         gui.my = gui.dragY
         gui.y0 = gui.dragY
@@ -1770,7 +1830,7 @@ proc scrollBarPost() =
     case sb.state:
     of sbsDragHidden:
       sb.state = sbsDefault
-      enableCursor()
+      showCursor()
       if gui.dragX > -1.0:
         setCursorPosX(gui.dragX)
       else:
@@ -1794,6 +1854,7 @@ proc horizSlider(id:         ItemId,
          (endVal   < startVal and value >= endVal   and value <= startVal)
 
   alias(gui, g_uiState)
+  alias(ss, gui.sliderState)
 
   const SliderPad = 3
 
@@ -1809,7 +1870,10 @@ proc horizSlider(id:         ItemId,
   let posX = calcPosX(value)
 
   # Hit testing
-  if not gui.focusCaptured and mouseInside(x, y, w, h):
+  # TODO
+  if ss.editModeItem == id:
+    setActive(id)
+  elif not gui.focusCaptured and mouseInside(x, y, w, h):
     setHot(id)
     if gui.mbLeftDown and noActiveItem():
       setActive(id)
@@ -1817,37 +1881,83 @@ proc horizSlider(id:         ItemId,
   # New position & value calculation
   var
     newPosX = posX
-    newValue = value
+    value = value
 
   if isActive(id):
-    case gui.sliderState:
+    case ss.state:
     of ssDefault:
       gui.x0 = gui.mx
       gui.dragX = gui.mx
       gui.dragY = -1.0
-      disableCursor()
-      gui.sliderState = ssDragHidden
+      ss.state = ssDragHidden
+      ss.cursorMoved = false
+      hideCursor()
 
     of ssDragHidden:
-      # Technically, the cursor can move outside the widget when it's disabled
-      # in "drag hidden" mode, and then it will cease to be "hot". But in
-      # order to not break the tooltip processing logic, we're making here
-      # sure the widget is always hot in "drag hidden" mode.
-      setHot(id)
+      if gui.dragX != gui.mx:
+        ss.cursorMoved = true
 
-      let d = if gui.shiftDown:
-        if gui.altDown: SliderUltraFineDragDivisor
-        else:           SliderFineDragDivisor
-      else: 1
+      if not gui.mbLeftDown and not ss.cursorMoved:
+        ss.state = ssEditValue
+        ss.valueText = fmt"{value:.6f}"
+        trimZeros(ss.valueText)
+        # TODO
+        ss.textFieldId = generateId("", 1, KoiInternalIdPrefix &
+                                    "EditHorizSliderValue")
+        textFieldEnterEditMode(ss.textFieldId, ss.valueText, x) # TODO x
+        # TODO
+        ss.editModeItem = id
+        showCursor()
+      else:
+        # Technically, the cursor can move outside the widget when it's
+        # disabled in "drag hidden" mode, and then it will cease to be "hot".
+        # But in order to not break the tooltip processing logic, we're making
+        # here sure the widget is always hot in "drag hidden" mode.
+        setHot(id)
 
-      let dx = (gui.mx - gui.x0) / d
+        let d = if gui.shiftDown:
+          if gui.altDown: SliderUltraFineDragDivisor
+          else:           SliderFineDragDivisor
+        else: 1
 
-      newPosX = clamp(posX + dx, posMinX, posMaxX)
-      let t = invLerp(posMinX, posMaxX, newPosX)
-      newValue = lerp(startVal, endVal, t)
-      gui.x0 = gui.mx
+        let dx = (gui.mx - gui.x0) / d
 
-  result = newValue
+        newPosX = clamp(posX + dx, posMinX, posMaxX)
+        let t = invLerp(posMinX, posMaxX, newPosX)
+        value = lerp(startVal, endVal, t)
+        gui.x0 = gui.mx
+
+    of ssEditValue:
+      # The textfield will only work correctly if it thinks it's active
+      setActive(ss.textFieldId)
+
+      ss.valueText = koi.textField(ss.textFieldId, x, y, w, h,
+                                   tooltip = "", drawWidget = false,
+                                   ss.valueText)
+
+      if gui.textFieldState.state == tfDefault:
+        value = try:
+          let f = parseFloat(ss.valueText)
+          if startVal < endVal: clamp(f, startVal, endVal)
+          else:                 clamp(f, endVal, startVal)
+        except: value
+
+        newPosX = calcPosX(value)
+
+        ss.editModeItem = -1  # TODO global state init in init()
+        ss.state = ssDefault
+
+        # Needed for the tooltips to work correctly
+        setHot(id)
+
+      else:
+        # Reset hot & active to the current item so we won't confuse the
+        # tooltip processing (among other things)
+        setActive(id)
+        setHot(id)
+
+
+  result = value
 
   # Draw slider track
   let drawState = if isHot(id) and noActiveItem(): dsHover
@@ -1859,30 +1969,33 @@ proc horizSlider(id:         ItemId,
     else:       GRAY_MID
 
   drawLayerAdd(DefaultLayer, proc (vg: NVGContext) =
+    # Draw slider background
     vg.beginPath()
     vg.roundedRect(x, y, w, h, 5)
     vg.fillColor(fillColor)
     vg.fill()
 
-    # Draw slider
-    let sliderColor = case drawState
-      of dsHover:  GRAY_LOHI
-      of dsActive: RED
-      else:        GRAY_LO
+    if not (ss.editModeItem == id and ss.state == ssEditValue):
+      # Draw slider value bar
+      let sliderColor = case drawState
+        of dsHover:  GRAY_LOHI
+        of dsActive: RED
+        else:        GRAY_LO
 
-    vg.beginPath()
-    vg.roundedRect(x + SliderPad, y + SliderPad,
-                   newPosX - x - SliderPad, h - SliderPad*2, 5)
-    vg.fillColor(sliderColor)
-    vg.fill()
+      vg.beginPath()
+      vg.roundedRect(x + SliderPad, y + SliderPad,
+                     newPosX - x - SliderPad, h - SliderPad*2, 5)
+      vg.fillColor(sliderColor)
+      vg.fill()
 
-    vg.fontSize(19.0)
-    vg.fontFace("sans-bold")
-    vg.textAlign(haLeft, vaMiddle)
-    vg.fillColor(white())
-    let valueString = fmt"{newValue:.3f}"
-    let tw = vg.horizontalAdvance(0,0, valueString)
-    discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, valueString)
+      # Draw slider text
+      vg.fontSize(19.0)
+      vg.fontFace("sans-bold")
+      vg.textAlign(haLeft, vaMiddle)
+      vg.fillColor(white())
+      let valueString = fmt"{value:.3f}"
+      let tw = vg.horizontalAdvance(0,0, valueString)
+      discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, valueString)
   )
 
   if isHot(id):
@@ -1916,6 +2029,7 @@ proc vertSlider(id:         ItemId,
          (endVal   < startVal and value >= endVal   and value <= startVal)
 
   alias(gui, g_uiState)
+  alias(ss, gui.sliderState)
 
   const SliderPad = 3
 
@@ -1942,13 +2056,13 @@ proc vertSlider(id:         ItemId,
     newValue = value
 
   if isActive(id):
-    case gui.sliderState:
+    case ss.state:
     of ssDefault:
       gui.y0 = gui.my
       gui.dragX = -1.0
       gui.dragY = gui.my
-      disableCursor()
-      gui.sliderState = ssDragHidden
+      hideCursor()
+      ss.state = ssDragHidden
 
     of ssDragHidden:
       # Technically, the cursor can move outside the widget when it's disabled
@@ -1968,6 +2082,9 @@ proc vertSlider(id:         ItemId,
       let t = invLerp(posMinY, posMaxY, newPosY)
       newValue = lerp(startVal, endVal, t)
       gui.y0 = gui.my
+
+    of ssEditValue:
+      discard
 
   result = newValue
 
@@ -2022,19 +2139,17 @@ template vertSlider*(x, y, w, h: float,
 
 proc sliderPost() =
   alias(gui, g_uiState)
+  alias(ss, gui.sliderState)
 
   # Handle release active slider outside of the widget
   if not gui.mbLeftDown and hasActiveItem():
-    case gui.sliderState:
-    of ssDragHidden:
-      gui.sliderState = ssDefault
-      enableCursor()
+    if ss.state == ssDragHidden:
+      ss.state = ssDefault
+      showCursor()
       if gui.dragX > -1.0:
         setCursorPosX(gui.dragX)
       else:
         setCursorPosY(gui.dragY)
-
-    else: gui.sliderState = ssDefault
 
 # }}}
 # }}}
@@ -2050,11 +2165,23 @@ proc init*(nvg: NVGContext) =
 
   g_nvgContext = nvg
 
+  g_cursorArrow       = wrapper.createStandardCursor(csArrow)
+  g_cursorIBeam       = wrapper.createStandardCursor(csIBeam)
+  g_cursorHorizResize = wrapper.createStandardCursor(csHorizResize)
+
   let win = currentContext()
   win.keyCb  = keyCb
   win.charCb = charCb
 
   win.stickyMouseButtons = true
+
+# }}}
+# {{{ deinit()
+
+proc deinit*() =
+  wrapper.destroyCursor(g_cursorArrow)
+  wrapper.destroyCursor(g_cursorIBeam)
+  wrapper.destroyCursor(g_cursorHorizResize)
 
 # }}}
 # {{{ beginFrame()
@@ -2096,7 +2223,6 @@ proc beginFrame*() =
 # {{{ endFrame
 
 proc endFrame*() =
-#  echo fmt"hotItem: {gui.hotItem}, activeItem: {gui.activeItem}, textFieldState: {gui.textFieldState}"
 
   alias(gui, g_uiState)
 
