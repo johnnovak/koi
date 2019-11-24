@@ -523,6 +523,13 @@ proc button(id:         ItemId,
 
   alias(gui, g_uiState)
 
+  const TextBoxPadX = 8
+  let
+    textBoxX = x + TextBoxPadX
+    textBoxW = w - TextBoxPadX*2
+    textBoxY = y
+    textBoxH = h
+
   # Hit testing
   if not gui.focusCaptured and mouseInside(x, y, w, h):
     setHot(id)
@@ -549,12 +556,16 @@ proc button(id:         ItemId,
     vg.fillColor(fillColor)
     vg.fill()
 
+    vg.scissor(textBoxX, textBoxY, textBoxW, textBoxH)
+
     vg.fontSize(19.0)
     vg.fontFace("sans-bold")
     vg.textAlign(haLeft, vaMiddle)
     vg.fillColor(GRAY_LO)
     let tw = vg.horizontalAdvance(0,0, label)
     discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, label)
+
+    vg.resetScissor()
   )
 
   if isHot(id):
@@ -744,16 +755,16 @@ proc dropdown(id:           ItemId,
   alias(gui, g_uiState)
   alias(ds, gui.dropdownState)
 
-  const
-    TextBoxPadX = 8
-    SelBoxPadX = 7
-    SelBoxPadY = 7
-
+  const TextBoxPadX = 8
   let
     textBoxX = x + TextBoxPadX
     textBoxW = w - TextBoxPadX*2
     textBoxY = y
     textBoxH = h
+
+  const
+    SelBoxPadX = 7
+    SelBoxPadY = 7
 
   var
     selBoxX, selBoxY, selBoxW, selBoxH: float
@@ -924,23 +935,22 @@ proc textField(id:         ItemId,
   # TODO maxlength parameter
   # TODO only int & float parameter
 
-  const
-    MaxTextLen = 1000
-    TextBoxPadX = 8
+  const MaxTextLen = 1000
 
   assert text.runeLen <= MaxTextLen
 
   alias(gui, g_uiState)
   alias(tf, gui.textFieldState)
 
-  var text = text
-
   # The text is displayed within this rectangle (used for drawing later)
+  const TextBoxPadX = 8
   let
     textBoxX = x + TextBoxPadX
     textBoxW = w - TextBoxPadX*2
     textBoxY = y
     textBoxH = h
+
+  var text = text
 
   var
     glyphs: array[MaxTextLen, GlyphPosition]  # TODO is this buffer large enough?
