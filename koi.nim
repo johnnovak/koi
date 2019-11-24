@@ -693,6 +693,7 @@ proc radioButtons(id:           ItemId,
     else: dsNormal
 
   var x = x
+  # TODO this should be done properly, with rounded rectangles, etc.
   const PadX = 2
 
   drawLayerAdd(DefaultLayer, proc (vg: NVGContext) =
@@ -707,8 +708,10 @@ proc radioButtons(id:           ItemId,
                       else:
                         if activeButton == i: GRAY_LO else : GRAY_MID
 
+      var w = buttonW - PadX
+
       vg.beginPath()
-      vg.rect(x, y, buttonW - PadX, h)
+      vg.rect(x, y, w, h)
       vg.fillColor(fillColor)
       vg.fill()
 
@@ -719,9 +722,20 @@ proc radioButtons(id:           ItemId,
                       if activeButton == i: GRAY_HI
                       else: GRAY_LO
 
+      const TextBoxPadX = 8
+      let
+        textBoxX = x + TextBoxPadX
+        textBoxW = w - TextBoxPadX*2
+        textBoxY = y
+        textBoxH = h
+
+      vg.scissor(textBoxX, textBoxY, textBoxW, textBoxH)
+
       vg.fillColor(textColor)
       let tw = vg.horizontalAdvance(0,0, label)
       discard vg.text(x + buttonW*0.5 - tw*0.5, y+h*0.5, label)
+
+      vg.resetScissor()
 
       x += buttonW
   )
