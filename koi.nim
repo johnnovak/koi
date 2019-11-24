@@ -979,7 +979,7 @@ template dropdown*(x, y, w, h:   float,
 # }}}
 # {{{ TextField
 
-# TODO this will do for internal use only for now
+# TODO 
 proc textFieldEnterEditMode(id: ItemId, text: string, startX: float) =
   alias(gui, g_uiState)
   alias(tf, gui.textFieldState)
@@ -2165,8 +2165,6 @@ proc sliderPost() =
 # {{{ init()
 
 proc init*(nvg: NVGContext) =
-  alias(gui, g_uiState)
-
   RED       = rgb(1.0, 0.4, 0.4)
   GRAY_MID  = gray(0.6)
   GRAY_HI   = gray(0.8)
