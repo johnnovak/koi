@@ -380,9 +380,9 @@ else: # Windows & Linux
 
 # }}}
 # {{{ Tooltip handling
-# {{{ handleTooltipInsideWidget
+# {{{ handleTooltip
 
-proc handleTooltipInsideWidget(id: ItemId, tooltip: string) =
+proc handleTooltip(id: ItemId, tooltip: string) =
   alias(gui, g_uiState)
   alias(tt, gui.tooltipState)
 
@@ -569,7 +569,7 @@ proc button(id:         ItemId,
   )
 
   if isHot(id):
-    handleTooltipInsideWidget(id, tooltip)
+    handleTooltip(id, tooltip)
 
 
 template button*(x, y, w, h: float,
@@ -641,7 +641,7 @@ proc checkBox(id:      ItemId,
   )
 
   if isHot(id):
-    handleTooltipInsideWidget(id, tooltip)
+    handleTooltip(id, tooltip)
 
 
 template checkBox*(x, y, w: float,
@@ -727,7 +727,7 @@ proc radioButtons(id:           ItemId,
   )
 
   if isHot(id):
-    handleTooltipInsideWidget(id, tooltips[hotButton])
+    handleTooltip(id, tooltips[hotButton])
 
 
 template radioButtons*(x, y, w, h:   float,
@@ -911,7 +911,7 @@ proc dropdown(id:           ItemId,
   )
 
   if isHot(id):
-    handleTooltipInsideWidget(id, tooltip)
+    handleTooltip(id, tooltip)
 
 
 template dropdown*(x, y, w, h:   float,
@@ -1311,7 +1311,7 @@ proc textField(id:         ItemId,
   )
 
   if isHot(id):
-    handleTooltipInsideWidget(id, tooltip)
+    handleTooltip(id, tooltip)
 
 
 template textField*(x, y, w, h: float,
@@ -1518,7 +1518,7 @@ proc horizScrollBar(id:         ItemId,
   )
 
   if isHot(id):
-    handleTooltipInsideWidget(id, tooltip)
+    handleTooltip(id, tooltip)
 
 
 template horizScrollBar*(x, y, w, h: float,
@@ -1720,7 +1720,7 @@ proc vertScrollBar(id:         ItemId,
   )
 
   if isHot(id):
-    handleTooltipInsideWidget(id, tooltip)
+    handleTooltip(id, tooltip)
 
 
 template vertScrollBar*(x, y, w, h: float,
@@ -1867,7 +1867,7 @@ proc horizSlider(id:         ItemId,
   )
 
   if isHot(id):
-    handleTooltipInsideWidget(id, tooltip)
+    handleTooltip(id, tooltip)
 
 
 template horizSlider*(x, y, w, h: float,
@@ -1981,7 +1981,7 @@ proc vertSlider(id:         ItemId,
   )
 
   if isHot(id):
-    handleTooltipInsideWidget(id, tooltip)
+    handleTooltip(id, tooltip)
 
 
 template vertSlider*(x, y, w, h: float,
