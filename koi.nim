@@ -493,11 +493,15 @@ proc textLabel(id:         ItemId,
                fontFace:   string = "sans-bold") =
 
   drawLayerAdd(DefaultLayer, proc (vg: NVGContext) =
+    vg.scissor(x, y, w, h)
+
     vg.fontSize(fontSize)
     vg.fontFace(fontFace)
     vg.textAlign(haLeft, vaMiddle)
     vg.fillColor(color)
     discard vg.text(x, y+h*0.5, label)
+
+    vg.resetScissor()
   )
 
 
