@@ -1,6 +1,9 @@
 BUGS
 ====
 
+- maybe keep dropdown open in LMBPressed mode even if the cursor goes
+  outside of the selection box
+
 
 TASKS
 =====
@@ -8,10 +11,9 @@ TASKS
 - value entry widget (modified slider)
 - text field mouse support
 - copy/paste support
-- display combo box items based on screen position
+- menus
 - display tooltip based on screen position
 - windows (e.g. modal popups)
-- menus
 - scroll wheel support
 - keyboard support for dropdowns
 - proper tooltip sizing/formatting (requires multi-line wrapping...)
@@ -25,3 +27,4 @@ DONE
 - deferred rendering
 - text clipping (all widgets)
 - edit value fields
+- display combo box items based on screen position

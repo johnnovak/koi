@@ -32,6 +32,9 @@ var
 
   dropdownVal1 = 0
   dropdownVal2 = 0
+  dropdownTopRight = 0
+  dropdownBottomLeft = 0
+  dropdownBottomRight = 0
 
   textFieldVal1 = ""
   textFieldVal2 = "Nobody expects the Spanish Inquisition!"
@@ -83,7 +86,7 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
           GL_STENCIL_BUFFER_BIT)
 
   vg.beginFrame(winWidth.float, winHeight.float, pxRatio)
-  koi.beginFrame()
+  koi.beginFrame(winWidth.float, winHeight.float)
 
   ############################################################
   let
@@ -191,6 +194,24 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
     items = @["Red", "Green", "Blue", "Yellow", "Purple (with little yellow dots)"],
     tooltip = "Select a colour",
     dropdownVal2)
+
+  dropdownTopRight = koi.dropdown(
+    winWidth.float - (w+10), 20, w, h,
+    items = @["Red", "Green", "Blue", "Yellow", "Purple (with little yellow dots)"],
+    tooltip = "Select a colour",
+    dropdownTopRight)
+
+  dropdownBottomRight = koi.dropdown(
+    winWidth.float - (w+10), winHeight.float - 40, w, h,
+    items = @["Red", "Green", "Blue", "Yellow", "Purple (with little yellow dots)"],
+    tooltip = "Select a colour",
+    dropdownBottomRight)
+
+  dropdownBottomLeft = koi.dropdown(
+    10, winHeight.float - 40, w, h,
+    items = @["Red", "Green", "Blue", "Yellow", "Purple (with little yellow dots)"],
+    tooltip = "Select a colour",
+    dropdownBottomLeft)
 
   # Text fields
   y += pad * 2

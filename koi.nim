@@ -118,6 +118,9 @@ type
     # General state
     # *************
 
+    # Window dimensions (in virtual pixels)
+    winWidth, winHeight: float
+
     # Set if a widget has captured the focus (e.g. a textfield in edit mode) so
     # all other UI interactions (hovers, tooltips, etc.) should be disabled.
     focusCaptured:  bool
@@ -857,10 +860,14 @@ proc dropdown(id:           ItemId,
       let tw = g_nvgContext.horizontalAdvance(0, 0, i)
       maxItemWidth = max(tw, maxItemWidth)
 
-    selBoxX = x
-    selBoxY = y + h
     selBoxW = max(maxItemWidth + SelBoxPadX*2, w)
     selBoxH = float(items.len) * itemHeight + SelBoxPadY*2
+
+    selBoxX = if x + selBoxW < gui.winWidth: x
+              else: x - (selBoxW - w)
+
+    selBoxY = if y + h + selBoxH < gui.winHeight: y + h
+              else: y - selBoxH
 
     # Hit testing
     let
@@ -873,8 +880,9 @@ proc dropdown(id:           ItemId,
     else:
       closeDropdown()
 
-    hoverItem = min(int(floor((gui.my - selBoxY - SelBoxPadY) / itemHeight)),
-                    numItems-1)
+    if insideBox:
+      hoverItem = min(int(floor((gui.my - selBoxY - SelBoxPadY) / itemHeight)),
+                      numItems-1)
 
     # LMB released inside the box selects the item under the cursor and closes
     # the dropdown
@@ -979,7 +987,7 @@ template dropdown*(x, y, w, h:   float,
 # }}}
 # {{{ TextField
 
-# TODO 
+# TODO
 proc textFieldEnterEditMode(id: ItemId, text: string, startX: float) =
   alias(gui, g_uiState)
   alias(tf, gui.textFieldState)
@@ -2194,10 +2202,13 @@ proc deinit*() =
 # }}}
 # {{{ beginFrame()
 
-proc beginFrame*() =
+proc beginFrame*(winWidth, winHeight: float) =
   let win = glfw.currentContext()
 
   alias(gui, g_uiState)
+
+  gui.winWidth = winWidth
+  gui.winHeight = winHeight
 
   # Store mouse state
   gui.lastmx = gui.mx
