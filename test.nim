@@ -2,6 +2,7 @@ import strformat
 
 import glad/gl
 import glfw
+from glfw/wrapper import showWindow
 import nanovg
 import koi
 
@@ -41,8 +42,9 @@ var
 proc createWindow(): Window =
   var cfg = DefaultOpenglWindowConfig
   cfg.size = (w: 1000, h: 800)
-  cfg.title = "uiState test"
+  cfg.title = "Koi Test"
   cfg.resizable = true
+  cfg.visible = false
   cfg.bits = (r: 8, g: 8, b: 8, a: 8, stencil: 8, depth: 16)
   cfg.debugContext = true
   cfg.nMultiSamples = 4
@@ -244,7 +246,6 @@ proc init(): Window =
   glfw.initialize()
 
   var win = createWindow()
-  win.pos = (400, 150)  # TODO for development
 
   var flags = {nifStencilStrokes, nifDebug}
   vg = nvgInit(getProcAddress, flags)
@@ -262,6 +263,9 @@ proc init(): Window =
   win.framebufferSizeCb = framebufSizeCb
 
   glfw.swapInterval(1)
+
+  win.pos = (400, 150)  # TODO for development
+  wrapper.showWindow(win.getHandle())
 
   result = win
 
