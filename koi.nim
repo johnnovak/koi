@@ -722,7 +722,7 @@ proc radioButtons(id:           ItemId,
                       if activeButton == i: GRAY_HI
                       else: GRAY_LO
 
-      const TextBoxPadX = 8
+      const TextBoxPadX = 4
       let
         textBoxX = x + TextBoxPadX
         textBoxW = w - TextBoxPadX*2
@@ -1215,7 +1215,8 @@ proc textField(id:         ItemId,
     vg.fillColor(fillColor)
     vg.fill()
 
-    vg.scissor(textBoxX, textBoxY, textBoxW, textBoxH)
+    # Make it slightly wider because of the cursor
+    vg.scissor(textBoxX-3, textBoxY, textBoxW+3, textBoxH)
 
     # Scroll content into view & draw cursor when editing
     if editing:
