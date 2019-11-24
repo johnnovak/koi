@@ -30,10 +30,11 @@ var
   radioButtonsVal2 = 2
 
   dropdownVal1 = 0
-  dropdownVal2 = 2
+  dropdownVal2 = 0
 
   textFieldVal1 = ""
   textFieldVal2 = "Nobody expects the Spanish Inquisition!"
+  textFieldVal3 = "Raw text field"
 
 ############################################################
 
@@ -101,7 +102,7 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
     echo "button 1 pressed"
 
   y += pad
-  if koi.button(x, y, w, h, "Stop", color = GRAY_MID,
+  if koi.button(x, y, w, h, "Stop (very long text)", color = GRAY_MID,
                 tooltip = "Middle one..."):
     echo "button 2 pressed"
 
@@ -178,7 +179,7 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
   # Dropdowns
   y += pad * 2
   dropdownVal1 = koi.dropdown(
-    x, y, w, h,
+    x-50, 30, w, h,
     items = @["Orange", "Banana", "Blueberry", "Apricot", "Apple"],
     tooltip = "Select a fruit",
     dropdownVal1)
@@ -198,6 +199,10 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
   textFieldVal2 = koi.textField(
     x, y, w * 1.0, h, tooltip = "Text field 2", textFieldVal2)
 
+  y += pad
+  textFieldVal3 = koi.rawTextField(
+    x, y, w * 1.0, h, tooltip = "Text field 2", textFieldVal3)
+
   # Checkboxes
   y += pad * 2
   checkBoxVal1 = koi.checkBox(
@@ -210,14 +215,14 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
   y += pad * 2
   radioButtonsVal1 = koi.radioButtons(
     x, y, 150, h,
-    labels = @["PNG", "JPG", "EXR"],
+    labels = @["PNG", "JPG", "OpenEXR"],
     tooltips = @["Save PNG image", "Save JPG image", "Save EXR image"],
     radioButtonsVal1)
 
   y += pad * 2
   radioButtonsVal2 = koi.radioButtons(
     x, y, 220, h,
-    labels = @["One", "Two", "Three"],
+    labels = @["One", "Two", "The Third Option"],
     tooltips = @["First (1)", "Second (2)", "Third (3)"],
     radioButtonsVal2)
 
@@ -262,6 +267,7 @@ proc init(): Window =
 
 
 proc cleanup() =
+  koi.deinit()
   nvgDeinit(vg)
   glfw.terminate()
 

@@ -259,20 +259,30 @@ const
   DefaultLayer = 10
   TopLayer     = 20
 
-type DrawProc = proc (vg: NVGContext)
+type
+  DrawProc = proc (vg: NVGContext)
 
-var g_drawLayers {.threadvar.}: array[BottomLayer..TopLayer, seq[DrawProc]]
+  DrawLayers = object
+    layers:        array[BottomLayer..TopLayer, seq[DrawProc]]
+    lastUsedLayer: Natural
 
-proc initDrawLayers() =
-  for i in 0..g_drawLayers.high:
-    g_drawLayers[i] = @[]
+var
+  g_drawLayers {.threadvar.}: DrawLayers
 
-proc drawLayerAdd(layer: Natural = DefaultLayer, p: DrawProc) =
-  g_drawLayers[layer].add(p)
+proc init(dl: var DrawLayers) =
+  for i in 0..dl.layers.high:
+    dl.layers[i] = @[]
 
-proc drawLayers(vg: NVGContext) =
+proc add(dl: var DrawLayers, layer: Natural, p: DrawProc) =
+  dl.layers[layer].add(p)
+  dl.lastUsedLayer = layer
+
+proc removeLastAdded(dl: var DrawLayers) =
+  discard dl.layers[dl.lastUsedLayer].pop()
+
+proc draw(dl: DrawLayers, vg: NVGContext) =
   # Draw all layers on top of each other
-  for layer in g_drawLayers:
+  for layer in dl.layers:
     for drawProc in layer:
       drawProc(vg)
 
@@ -281,11 +291,13 @@ proc drawLayers(vg: NVGContext) =
 
 const KoiInternalIdPrefix = "~-=[//.K0i:iN73Rn4L:!D.//]=-~"  # unique enough?!
 
-template generateId(filename: string, line: int, id: string): ItemId =
-  let input = filename & ":" & $line & ":" & id
-  let hash32 = XXH32(input)
+template generateId(id: string): ItemId =
+  let hash32 = XXH32(id)
   # Make sure the IDs are always positive integers
   int64(hash32) - int32.low + 1
+
+template generateId(filename: string, line: int, id: string): ItemId =
+  generateId(filename & ":" & $line & ":" & id)
 
 proc mouseInside(x, y, w, h: float): bool =
   alias(gui, g_uiState)
@@ -444,7 +456,7 @@ proc handleTooltip(id: ItemId, tooltip: string) =
 # {{{ drawTooltip
 
 proc drawTooltip(x, y: float, text: string, alpha: float = 1.0) =
-  drawLayerAdd(TopLayer-3, proc (vg: NVGContext) =
+  g_drawLayers.add(TopLayer-3, proc (vg: NVGContext) =
     let
       w = 150.0
       h = 40.0
@@ -520,7 +532,7 @@ proc textLabel(id:         ItemId,
                fontSize:   float = 19.0,
                fontFace:   string = "sans-bold") =
 
-  drawLayerAdd(DefaultLayer, proc (vg: NVGContext) =
+  g_drawLayers.add(DefaultLayer, proc (vg: NVGContext) =
     vg.scissor(x, y, w, h)
 
     vg.fontSize(fontSize)
@@ -582,7 +594,7 @@ proc button(id:         ItemId,
     of dsActive: RED
     else:        color
 
-  drawLayerAdd(DefaultLayer, proc (vg: NVGContext) =
+  g_drawLayers.add(DefaultLayer, proc (vg: NVGContext) =
     vg.beginPath()
     vg.roundedRect(x, y, w, h, 5)
     vg.fillColor(fillColor)
@@ -651,7 +663,7 @@ proc checkBox(id:      ItemId,
     of dsHover, dsActive: GRAY_HI
     else:                 GRAY_MID
 
-  drawLayerAdd(DefaultLayer, proc (vg: NVGContext) =
+  g_drawLayers.add(DefaultLayer, proc (vg: NVGContext) =
     vg.beginPath()
     vg.roundedRect(x, y, w, w, 5)
     vg.fillColor(bgColor)
@@ -728,7 +740,7 @@ proc radioButtons(id:           ItemId,
   # TODO this should be done properly, with rounded rectangles, etc.
   const PadX = 2
 
-  drawLayerAdd(DefaultLayer, proc (vg: NVGContext) =
+  g_drawLayers.add(DefaultLayer, proc (vg: NVGContext) =
     vg.fontSize(19.0)
     vg.fontFace("sans-bold")
     vg.textAlign(haLeft, vaMiddle)
@@ -898,7 +910,7 @@ proc dropdown(id:           ItemId,
     else:        GRAY_MID
 
   # Dropdown button
-  drawLayerAdd(DefaultLayer, proc (vg: NVGContext) =
+  g_drawLayers.add(DefaultLayer, proc (vg: NVGContext) =
     vg.beginPath()
     vg.roundedRect(x, y, w, h, 5)
     vg.fillColor(fillColor)
@@ -924,7 +936,7 @@ proc dropdown(id:           ItemId,
   )
 
   # Dropdown items
-  drawLayerAdd(DefaultLayer+1, proc (vg: NVGContext) =
+  g_drawLayers.add(DefaultLayer+1, proc (vg: NVGContext) =
     if isActive(id) and ds.state >= dsOpenLMBPressed:
       # Draw item list box
       vg.beginPath()
@@ -1253,21 +1265,22 @@ proc textField(id:         ItemId,
     of dsActive: GRAY_LO
     else:        GRAY_MID
 
-  drawLayerAdd(DefaultLayer, proc (vg: NVGContext) =
+  g_drawLayers.add(DefaultLayer, proc (vg: NVGContext) =
     # Draw text field background
     if drawWidget:
       vg.beginPath()
       vg.roundedRect(x, y, w, h, 5)
       vg.fillColor(fillColor)
       vg.fill()
-    else:
+
+    elif editing:
       vg.beginPath()
       vg.rect(textBoxX, textBoxY + 2, textBoxW, textBoxH - 2*2)
       vg.fillColor(fillColor)
       vg.fill()
   )
 
-  drawLayerAdd(TopLayer-3, proc (vg: NVGContext) =
+  g_drawLayers.add(TopLayer-3, proc (vg: NVGContext) =
     # Make scissor region slightly wider because of the cursor
     vg.scissor(textBoxX-3, textBoxY, textBoxW+3, textBoxH)
 
@@ -1382,15 +1395,14 @@ proc textField(id:         ItemId,
     handleTooltip(id, tooltip)
 
 
-template textField*(x, y, w, h: float,
-                    tooltip:    string = "",
-                    drawWidget: bool = true,
-                    text:       string): string =
+template rawTextField*(x, y, w, h: float,
+                       tooltip:    string = "",
+                       text:       string): string =
 
   let i = instantiationInfo(fullPaths = true)
   let id = generateId(i.filename, i.line, "")
 
-  textField(id, x, y, w, h, tooltip, drawWidget, text)
+  textField(id, x, y, w, h, tooltip, drawWidget = false, text)
 
 
 template textField*(x, y, w, h: float,
@@ -1568,7 +1580,7 @@ proc horizScrollBar(id:         ItemId,
     of dsActive: GRAY_MID
     else:        GRAY_MID
 
-  drawLayerAdd(DefaultLayer, proc (vg: NVGContext) =
+  g_drawLayers.add(DefaultLayer, proc (vg: NVGContext) =
     vg.beginPath()
     vg.roundedRect(x, y, w, h, 5)
     vg.fillColor(trackColor)
@@ -1778,7 +1790,7 @@ proc vertScrollBar(id:         ItemId,
     of dsActive: GRAY_MID
     else:        GRAY_MID
 
-  drawLayerAdd(DefaultLayer, proc (vg: NVGContext) =
+  g_drawLayers.add(DefaultLayer, proc (vg: NVGContext) =
     vg.beginPath()
     vg.roundedRect(x, y, w, h, 5)
     vg.fillColor(trackColor)
@@ -1864,13 +1876,12 @@ proc horizSlider(id:         ItemId,
 
   # Calculate current slider position
   proc calcPosX(val: float): float =
-    let t = invLerp(startVal, endVal, value)
+    let t = invLerp(startVal, endVal, val)
     lerp(posMinX, posMaxX, t)
 
   let posX = calcPosX(value)
 
   # Hit testing
-  # TODO
   if ss.editModeItem == id:
     setActive(id)
   elif not gui.focusCaptured and mouseInside(x, y, w, h):
@@ -1901,11 +1912,9 @@ proc horizSlider(id:         ItemId,
         ss.state = ssEditValue
         ss.valueText = fmt"{value:.6f}"
         trimZeros(ss.valueText)
-        # TODO
-        ss.textFieldId = generateId("", 1, KoiInternalIdPrefix &
+        ss.textFieldId = generateId(KoiInternalIdPrefix &
                                     "EditHorizSliderValue")
         textFieldEnterEditMode(ss.textFieldId, ss.valueText, x) # TODO x
-        # TODO
         ss.editModeItem = id
         showCursor()
       else:
@@ -1950,6 +1959,10 @@ proc horizSlider(id:         ItemId,
         # Needed for the tooltips to work correctly
         setHot(id)
 
+        # The edit field is drawn on the top of everything else; we'll need
+        # to remove it so we can draw the slider correctly
+        g_drawLayers.removeLastAdded()
+
       else:
         # Reset hot & active to the current item so we won't confuse the
         # tooltip processing (among other things)
@@ -1968,7 +1981,7 @@ proc horizSlider(id:         ItemId,
     of dsHover: GRAY_HI
     else:       GRAY_MID
 
-  drawLayerAdd(DefaultLayer, proc (vg: NVGContext) =
+  g_drawLayers.add(DefaultLayer, proc (vg: NVGContext) =
     # Draw slider background
     vg.beginPath()
     vg.roundedRect(x, y, w, h, 5)
@@ -2097,7 +2110,7 @@ proc vertSlider(id:         ItemId,
     of dsHover: GRAY_HI
     else:       GRAY_MID
 
-  drawLayerAdd(DefaultLayer, proc (vg: NVGContext) =
+  g_drawLayers.add(DefaultLayer, proc (vg: NVGContext) =
     vg.beginPath()
     vg.roundedRect(x, y, w, h, 5)
     vg.fillColor(fillColor)
@@ -2217,7 +2230,7 @@ proc beginFrame*() =
   # Reset hot item
   gui.hotItem = 0
 
-  initDrawLayers()
+  g_drawLayers.init()
 
 # }}}
 # {{{ endFrame
@@ -2227,7 +2240,8 @@ proc endFrame*() =
   alias(gui, g_uiState)
 
   tooltipPost()
-  drawLayers(g_nvgContext)
+
+  g_drawLayers.draw(g_nvgContext)
 
   gui.lastHotItem = gui.hotItem
 
