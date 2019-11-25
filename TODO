@@ -8,9 +8,9 @@ BUGS
 TASKS
 =====
 
+- copy/paste support
 - value entry widget (modified slider)
 - text field mouse support
-- copy/paste support
 - menus
 - display tooltip based on screen position
 - windows (e.g. modal popups)

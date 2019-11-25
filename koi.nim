@@ -251,6 +251,12 @@ proc setCursorPosY*(y: float) =
   let (currX, _) = win.cursorPos()
   win.cursorPos = (currX, y)
 
+proc toClipboard*(s: string) =
+  glfw.currentContext().clipboardString = s
+
+proc fromClipboard*(): string =
+  $glfw.currentContext().clipboardString
+
 # }}}
 # {{{ Draw layers
 
@@ -343,6 +349,7 @@ var
   g_charBufIdx: Natural
 
 proc charCb(win: Window, codePoint: Rune) =
+  echo codePoint
   if g_charBufIdx <= g_charBuf.high:
     g_charBuf[g_charBufIdx] = codePoint
     inc(g_charBufIdx)
@@ -374,6 +381,7 @@ var
   g_keyBuf: array[KeyBufSize, KeyEvent]
   g_keyBufIdx: Natural
 
+# TODO solution: only have EditKeyEvents, key combinations should be a table
 const EditKeys = {
   keyEscape, keyEnter, keyKpEnter, keyTab,
   keyBackspace, keyDelete,
@@ -381,13 +389,20 @@ const EditKeys = {
   keyPageUp, keyPageDown,
   keyHome, keyEnd
 }
+let EditKeyEvents = @[
+  mkKeyEvent(keyC, {mkSuper}),
+  mkKeyEvent(keyX, {mkSuper}),
+  mkKeyEvent(keyV, {mkSuper})
+]
 
 proc keyCb(win: Window, key: Key, scanCode: int32, action: KeyAction,
            mods: set[ModifierKey]) =
 
-  if key in EditKeys and action in {kaDown, kaRepeat}:
+  let ke = KeyEvent(key: key, mods: mods)
+  if action in {kaDown, kaRepeat} and (key in EditKeys or ke in EditKeyEvents):
+    echo ke
     if g_keyBufIdx <= g_keyBuf.high:
-      g_keyBuf[g_keyBufIdx] = KeyEvent(key: key, mods: mods)
+      g_keyBuf[g_keyBufIdx] = ke
       inc(g_keyBufIdx)
 
 proc clearKeyBuf() = g_keyBufIdx = 0
@@ -399,6 +414,9 @@ iterator keyBuf(): KeyEvent =
     inc(i)
 
 when defined(macosx):
+  const CutText           = @[mkKeyEvent(keyX,         {mkSuper})]
+  const CopyText          = @[mkKeyEvent(keyC,         {mkSuper})]
+  const PasteText         = @[mkKeyEvent(keyV,         {mkSuper})]
   const GoToPreviousWord  = @[mkKeyEvent(keyLeft,      {mkAlt})]
   const GoToNextWord      = @[mkKeyEvent(keyRight,     {mkAlt})]
 
@@ -1033,11 +1051,15 @@ proc textField(id:         ItemId,
     textBoxY = y
     textBoxH = h
 
-  var text = text
-
   var
+    text = text
     glyphs: array[MaxTextLen, GlyphPosition]  # TODO is this buffer large enough?
-    glyphsCalculated = false
+
+  proc calcGlyphPos() =
+    # TODO to be kept up to date with the draw proc
+    g_nvgContext.fontSize(19.0)
+    g_nvgContext.fontFace("sans-bold")
+    discard g_nvgContext.textGlyphPositions(0, 0, text, glyphs)
 
   proc hasSelection(): bool =
     tf.selStartPos > -1 and tf.selStartPos != tf.selEndPos
@@ -1047,14 +1069,6 @@ proc textField(id:         ItemId,
       (tf.selStartPos, tf.selEndPos.int)
     else:
       (tf.selEndPos.int, tf.selStartPos)
-
-  proc calcGlyphPos(force: bool = false) =
-    # TODO to be kept up to date with the draw proc
-    g_nvgContext.fontSize(19.0)
-    g_nvgContext.fontFace("sans-bold")
-
-    if force or not glyphsCalculated:
-      discard g_nvgContext.textGlyphPositions(0, 0, text, glyphs)
 
   if tf.state == tfDefault:
     # Hit testing
@@ -1125,7 +1139,23 @@ proc textField(id:         ItemId,
       tf.cursorPos = startPos
       clearSelection()
 
+    proc insertString(s: string) =
+      if s.len > 0:
+        if hasSelection():
+          let (startPos, endPos) = getSelection()
+          text = text.runeSubStr(0, startPos) & s & text.runeSubStr(endPos)
+          tf.cursorPos = startPos + s.runeLen()
+          clearSelection()
+        else:
+          let insertPos = tf.cursorPos
+          if insertPos == text.runeLen():
+            text.add(s)
+          else:
+            text.insert(s, text.runeOffset(insertPos))
+          inc(tf.cursorPos, s.runeLen())
+
     for ke in keyBuf():
+      # TODO this hack will not be necessary with the keyevent table
       let keNoShift = withoutShift(ke)
 
       if keNoShift in GoToNextWord:
@@ -1174,6 +1204,15 @@ proc textField(id:         ItemId,
           let p = findPrevWordStart()
           text = text.runeSubStr(0, p) & text.runeSubStr(tf.cursorPos)
           tf.cursorPos = p
+
+      elif ke in CopyText:
+        if hasSelection():
+          let (startPos, endPos) = getSelection()
+          toClipboard(text.runeSubStr(startPos, endPos - startPos))
+
+      elif ke in PasteText:
+        let s = fromClipboard()
+        insertString(s)
 
       elif ke.key == keyRight:
         let newCursorPos = min(tf.cursorPos + 1, text.runeLen)
@@ -1226,28 +1265,7 @@ proc textField(id:         ItemId,
     # a noop as exitEditMode() clears the char buffer.)
     if not charBufEmpty():
       var newChars = consumeCharBuf()
-
-      if hasSelection():
-        let (startPos, endPos) = getSelection()
-        text = text.runeSubStr(0, startPos) & newChars & text.runeSubStr(endPos)
-        tf.cursorPos = startPos + newChars.runeLen()
-        clearSelection()
-      else:
-        let insertPos = tf.cursorPos
-        if insertPos == text.runeLen():
-          text.add(newChars)
-        else:
-          text.insert(newChars, text.runeOffset(insertPos))
-
-        inc(tf.cursorPos, newChars.runeLen())
-
-      if text.runeLen > MaxTextLen:
-        text = text.runeSubStr(0, MaxTextLen)
-        tf.cursorPos = MaxTextLen
-
-      # We need to force glyp position recalculation here because the
-      # text has changed.
-      calcGlyphPos(force = true)
+      insertString(newChars)
 
   result = text
 
