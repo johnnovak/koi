@@ -350,7 +350,6 @@ var
   g_charBufIdx: Natural
 
 proc charCb(win: Window, codePoint: Rune) =
-  echo codePoint
   if g_charBufIdx <= g_charBuf.high:
     g_charBuf[g_charBufIdx] = codePoint
     inc(g_charBufIdx)
@@ -401,7 +400,6 @@ proc keyCb(win: Window, key: Key, scanCode: int32, action: KeyAction,
 
   let ke = KeyEvent(key: key, mods: mods)
   if action in {kaDown, kaRepeat} and (key in EditKeys or ke in EditKeyEvents):
-    echo ke
     if g_keyBufIdx <= g_keyBuf.high:
       g_keyBuf[g_keyBufIdx] = ke
       inc(g_keyBufIdx)
@@ -1349,6 +1347,9 @@ proc textField(id:         ItemId,
 
       elif ke in sc[tesDeleteToLineEnd]:
         text = text.runeSubStr(0, tf.cursorPos)
+
+      elif ke in sc[tesSwitchChars]:
+        discard # TODO
 
       elif ke in sc[tesCutText]:
         if hasSelection():
