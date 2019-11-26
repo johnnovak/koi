@@ -1377,7 +1377,9 @@ proc textField(id:         ItemId,
     of dsActive: GRAY_LO
     else:        GRAY_MID
 
-  g_drawLayers.add(DefaultLayer, proc (vg: NVGContext) =
+  let layer = if editing: TopLayer-3 else: DefaultLayer
+
+  g_drawLayers.add(layer, proc (vg: NVGContext) =
     # Draw text field background
     if drawWidget:
       vg.beginPath()
@@ -1390,9 +1392,7 @@ proc textField(id:         ItemId,
       vg.rect(textBoxX, textBoxY + 2, textBoxW, textBoxH - 2*2)
       vg.fillColor(fillColor)
       vg.fill()
-  )
 
-  g_drawLayers.add(TopLayer-3, proc (vg: NVGContext) =
     # Make scissor region slightly wider because of the cursor
     vg.scissor(textBoxX-3, textBoxY, textBoxW+3, textBoxH)
 
@@ -2276,6 +2276,72 @@ proc sliderPost() =
         setCursorPosX(gui.dragX)
       else:
         setCursorPosY(gui.dragY)
+
+# }}}
+# }}}
+# {{{ Menu
+# {{{ menuBar
+
+proc menuBar(id:         ItemId,
+             x, y, w, h: float,
+             labels:     seq[string]): int =
+
+  alias(gui, g_uiState)
+
+  const PadX = 10
+
+  # Hit testing
+  if not gui.focusCaptured and mouseInside(x, y, w, h):
+    setHot(id)
+    if gui.mbLeftDown and noActiveItem():
+      setActive(id)
+
+  # LMB released over active widget means it was clicked
+#  if not gui.mbLeftDown and isHotAndActive(id):
+#    result = true
+
+  # Draw menu bar
+  let drawState = if isHot(id) and noActiveItem(): dsHover
+    elif isHotAndActive(id): dsActive
+    else: dsNormal
+
+  let fillColor = case drawState
+    of dsHover:  GRAY_HI
+    of dsActive: RED
+    else:        GRAY_MID
+
+  g_drawLayers.add(DefaultLayer, proc (vg: NVGContext) =
+    # Draw bar
+    vg.beginPath()
+    vg.rect(x, y, w, h)
+    vg.fillColor(fillColor)
+    vg.fill()
+
+    vg.scissor(x, y, w, h)
+
+    vg.fontSize(19.0)
+    vg.fontFace("sans-bold")
+    vg.textAlign(haLeft, vaMiddle)
+    vg.fillColor(GRAY_LO)
+
+    var x = x
+    x += PadX
+    for label in labels:
+      discard vg.text(x, y+h*0.5, label)
+      let tw = vg.horizontalAdvance(0,0, label)
+      x += tw + PadX*2
+
+    vg.resetScissor()
+  )
+
+
+template menuBar*(x, y, w, h: float,
+                 labels:      seq[string]): int =
+
+  let i = instantiationInfo(fullPaths = true)
+  let id = generateId(i.filename, i.line, "")
+
+  menuBar(id, x, y, w, h, labels)
 
 # }}}
 # }}}

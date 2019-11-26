@@ -97,7 +97,7 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
     x = 100.0
     y = 50.0
 
-  koi.label(x + 5, y, w, h, "Test buttons", color = gray(0.90),
+  koi.label(x, y, w, h, "Koi widget tests", color = gray(0.90),
             fontSize = 22.0)
 
   # Buttons
@@ -184,7 +184,7 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
   # Dropdowns
   y += pad * 2
   dropdownVal1 = koi.dropdown(
-    x-50, 30, w, h,
+    x, y, w, h,
     items = @["Orange", "Banana", "Blueberry", "Apricot", "Apple"],
     tooltip = "Select a fruit",
     dropdownVal1)
@@ -242,7 +242,7 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
     tooltips = @["Save PNG image", "Save JPG image", "Save EXR image"],
     radioButtonsVal1)
 
-  y += pad * 2
+  y += pad
   radioButtonsVal2 = koi.radioButtons(
     x, y, 220, h,
     labels = @["One", "Two", "The Third Option"],
