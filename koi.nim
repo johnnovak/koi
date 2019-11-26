@@ -1,4 +1,4 @@
-import math, unicode, strformat, strutils, tables
+import hashes, math, sets, sequtils, strformat, strutils, tables, unicode
 
 import utils
 
@@ -342,28 +342,6 @@ template hasActiveItem(): bool =
 # }}}
 # {{{ Keyboard handling
 
-const CharBufSize = 200
-var
-  # TODO do we need locking around this stuff? written in the callback, read
-  # from the UI code
-  g_charBuf: array[CharBufSize, Rune]
-  g_charBufIdx: Natural
-
-proc charCb(win: Window, codePoint: Rune) =
-  if g_charBufIdx <= g_charBuf.high:
-    g_charBuf[g_charBufIdx] = codePoint
-    inc(g_charBufIdx)
-
-proc clearCharBuf() = g_charBufIdx = 0
-
-proc charBufEmpty(): bool = g_charBufIdx == 0
-
-proc consumeCharBuf(): string =
-  for i in 0..<g_charBufIdx:
-    result &= g_charBuf[i]
-  clearCharBuf()
-
-
 type KeyEvent = object
   key:  Key
   mods: set[ModifierKey]
@@ -371,47 +349,14 @@ type KeyEvent = object
 template mkKeyEvent(k: Key, m: set[ModifierKey]): KeyEvent =
   KeyEvent(key: k, mods: m)
 
-proc withoutShift(k: KeyEvent): KeyEvent =
-  KeyEvent(key: k.key, mods: k.mods - {mkShift})
+proc hash(ke: KeyEvent): Hash =
+  var h: Hash = 0
+  h = h !& hash(ord(ke.key))
+  for m in ke.mods:
+    h = h !& hash(ord(m))
+  result = !$h
 
-const KeyBufSize = 200
-var
-  # TODO do we need locking around this stuff? written in the callback, read
-  # from the UI code
-  g_keyBuf: array[KeyBufSize, KeyEvent]
-  g_keyBufIdx: Natural
-
-# TODO solution: only have EditKeyEvents, key combinations should be a table
-const EditKeys = {
-  keyEscape, keyEnter, keyKpEnter, keyTab,
-  keyBackspace, keyDelete,
-  keyRight, keyLeft, keyDown, keyUp,
-  keyPageUp, keyPageDown,
-  keyHome, keyEnd
-}
-let EditKeyEvents = @[
-  mkKeyEvent(keyC, {mkSuper}),
-  mkKeyEvent(keyX, {mkSuper}),
-  mkKeyEvent(keyV, {mkSuper})
-]
-
-proc keyCb(win: Window, key: Key, scanCode: int32, action: KeyAction,
-           mods: set[ModifierKey]) =
-
-  let ke = KeyEvent(key: key, mods: mods)
-  if action in {kaDown, kaRepeat} and (key in EditKeys or ke in EditKeyEvents):
-    if g_keyBufIdx <= g_keyBuf.high:
-      g_keyBuf[g_keyBufIdx] = ke
-      inc(g_keyBufIdx)
-
-proc clearKeyBuf() = g_keyBufIdx = 0
-
-iterator keyBuf(): KeyEvent =
-  var i = 0
-  while i < g_keyBufIdx:
-    yield g_keyBuf[i]
-    inc(i)
-
+# {{{ Shortcut definitions
 
 type TextEditShortcuts = enum
   tesCursorOneCharLeft,
@@ -507,29 +452,57 @@ let textFieldEditShortcuts = {
 }.toTable
 
 
-when defined(macosx):
-  const CutText           = @[mkKeyEvent(keyX,         {mkSuper})]
-  const CopyText          = @[mkKeyEvent(keyC,         {mkSuper})]
-  const PasteText         = @[mkKeyEvent(keyV,         {mkSuper})]
-  const GoToPreviousWord  = @[mkKeyEvent(keyLeft,      {mkAlt})]
-  const GoToNextWord      = @[mkKeyEvent(keyRight,     {mkAlt})]
+var textFieldEditShortcutKeyEvents =
+  toSeq(textFieldEditShortcuts.values).concat.toHashSet
 
-  const GoToLineStart     = @[mkKeyEvent(keyLeft,      {mkSuper}),
-                              mkKeyEvent(keyA,         {mkCtrl})]
+# }}}
 
-  const GoToLineEnd       = @[mkKeyEvent(keyRight,     {mkSuper}),
-                              mkKeyEvent(keyE,         {mkCtrl})]
+const CharBufSize = 200
+var
+  # TODO do we need locking around this stuff? written in the callback, read
+  # from the UI code
+  g_charBuf: array[CharBufSize, Rune]
+  g_charBufIdx: Natural
 
-  const DeleteWordToRight = @[mkKeyEvent(keyDelete,    {mkAlt})]
-  const DeleteWordToLeft  = @[mkKeyEvent(keyBackspace, {mkAlt})]
+proc charCb(win: Window, codePoint: Rune) =
+  if g_charBufIdx <= g_charBuf.high:
+    g_charBuf[g_charBufIdx] = codePoint
+    inc(g_charBufIdx)
 
-else: # Windows & Linux
-  const GoToPreviousWord  = @[mkKeyEvent(keyLeft,      {mkCtrl})]
-  const GoToNextWord      = @[mkKeyEvent(keyRight,     {mkCtrl})]
-  const GoToLineStart     = @[mkKeyEvent(keyHome,      {})]
-  const GoToLineEnd       = @[mkKeyEvent(keyEnd,       {})]
-  const DeleteWordToRight = @[mkKeyEvent(keyDelete,    {mkCtrl})]
-  const DeleteWordToLeft  = @[mkKeyEvent(keyBackspace, {mkCtrl})]
+proc clearCharBuf() = g_charBufIdx = 0
+
+proc charBufEmpty(): bool = g_charBufIdx == 0
+
+proc consumeCharBuf(): string =
+  for i in 0..<g_charBufIdx:
+    result &= g_charBuf[i]
+  clearCharBuf()
+
+
+const KeyBufSize = 200
+var
+  # TODO do we need locking around this stuff? written in the callback, read
+  # from the UI code
+  g_keyBuf: array[KeyBufSize, KeyEvent]
+  g_keyBufIdx: Natural
+
+
+proc keyCb(win: Window, key: Key, scanCode: int32, action: KeyAction,
+           mods: set[ModifierKey]) =
+
+  let ke = KeyEvent(key: key, mods: mods)
+  if action in {kaDown, kaRepeat} and ke in textFieldEditShortcutKeyEvents:
+    if g_keyBufIdx <= g_keyBuf.high:
+      g_keyBuf[g_keyBufIdx] = ke
+      inc(g_keyBufIdx)
+
+proc clearKeyBuf() = g_keyBufIdx = 0
+
+iterator keyBuf(): KeyEvent =
+  var i = 0
+  while i < g_keyBufIdx:
+    yield g_keyBuf[i]
+    inc(i)
 
 # }}}
 # {{{ Tooltip handling

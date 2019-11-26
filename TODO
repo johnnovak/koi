@@ -8,7 +8,6 @@ BUGS
 TASKS
 =====
 
-- copy/paste support
 - value entry widget (modified slider)
 - text field mouse support
 - menus
@@ -24,6 +23,7 @@ TASKS
 
 DONE
 
+- copy/paste support
 - deferred rendering
 - text clipping (all widgets)
 - edit value fields
