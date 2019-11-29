@@ -1,4 +1,5 @@
-import hashes, math, sets, sequtils, strformat, strutils, tables, unicode
+import hashes, math, options, sets, sequtils, strformat, strutils, tables,
+       unicode
 
 import utils
 
@@ -342,11 +343,11 @@ template hasActiveItem(): bool =
 # }}}
 # {{{ Keyboard handling
 
-type KeyEvent = object
-  key:  Key
-  mods: set[ModifierKey]
+type KeyEvent* = object
+  key*:  Key
+  mods*: set[ModifierKey]
 
-template mkKeyEvent(k: Key, m: set[ModifierKey]): KeyEvent =
+template mkKeyEvent*(k: Key, m: set[ModifierKey]): KeyEvent =
   KeyEvent(key: k, mods: m)
 
 proc hash(ke: KeyEvent): Hash =
@@ -2279,20 +2280,34 @@ proc sliderPost() =
 
 # }}}
 # }}}
-# {{{ Menu
+# {{{ Menus
 # {{{ menuBar
 
 proc menuBar(id:         ItemId,
              x, y, w, h: float,
-             labels:     seq[string]): int =
+             names:      seq[string]): string =
 
   alias(gui, g_uiState)
 
   const PadX = 10
 
+  var menuPosX: seq[float] = @[]
+
+  var posX = x
+  for name in names:
+    posX += PadX
+    menuPosX.add(posX)
+    let tw = g_nvgContext.horizontalAdvance(0,0, name)
+    posX += tw + PadX
+
+  menuPosX.add(posX)
+
   # Hit testing
   if not gui.focusCaptured and mouseInside(x, y, w, h):
     setHot(id)
+    for i in 0..<menuPosX.high:
+      if gui.mx >= menuPosX[i] and gui.mx < menuPosX[i+1]:
+        echo fmt"inside {names[i]}"
     if gui.mbLeftDown and noActiveItem():
       setActive(id)
 
@@ -2324,24 +2339,55 @@ proc menuBar(id:         ItemId,
     vg.textAlign(haLeft, vaMiddle)
     vg.fillColor(GRAY_LO)
 
-    var x = x
-    x += PadX
-    for label in labels:
-      discard vg.text(x, y+h*0.5, label)
-      let tw = vg.horizontalAdvance(0,0, label)
-      x += tw + PadX*2
+    for i in 0..names.high:
+      discard vg.text(menuPosX[i], y+h*0.5, names[i])
 
     vg.resetScissor()
   )
 
 
-template menuBar*(x, y, w, h: float,
-                 labels:      seq[string]): int =
+template menuBar*(x, y, w, h: float, names: seq[string]): string =
 
   let i = instantiationInfo(fullPaths = true)
   let id = generateId(i.filename, i.line, "")
 
-  menuBar(id, x, y, w, h, labels)
+  menuBar(id, x, y, w, h, names)
+
+
+proc beginMenuParentItem(name: string,
+                         shortcut: Option[KeyEvent] = none(KeyEvent)) =
+  discard
+
+proc endMenuParentItem() =
+  discard
+
+template menuParentItem*(name: string,
+                         shortcut: Option[KeyEvent] = none(KeyEvent)): bool =
+  beginMenuParentItem(name, shortcut)
+  endMenuParentItem()
+  false
+
+
+proc beginMenuBarItem(name: string) =
+  discard
+
+proc endMenuBarItem() =
+  discard
+
+template menuBarItem*(name: string, menuItems: untyped): untyped =
+  beginMenuBarItem(name)
+  menuItems
+  endMenuBarItem()
+
+
+proc menuItem*(name: string,
+               shortcut: Option[KeyEvent] = none(KeyEvent),
+               disabled = false,
+               tooltip: string = ""): bool =
+  result = false
+
+proc menuItemSeparator*() =
+  discard
 
 # }}}
 # }}}

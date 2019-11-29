@@ -1,0 +1,9 @@
+Kick   Snare   Hihat   Ride1   Ride1
+
+L  00  H       C1 00
+-  00  R       C2 40
+R  00  F       C3 
+       D       C4 70
+       S       O1
+               O2
+               O5

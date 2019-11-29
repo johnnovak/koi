@@ -95,7 +95,7 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
     pad = h + 8
   var
     x = 100.0
-    y = 50.0
+    y = 70.0
 
   koi.label(x, y, w, h, "Koi widget tests", color = gray(0.90),
             fontSize = 22.0)
@@ -248,6 +248,82 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
     labels = @["One", "Two", "The Third Option"],
     tooltips = @["First (1)", "Second (2)", "Third (3)"],
     radioButtonsVal2)
+
+  # Menu
+
+  x = 70.0
+  y = 20.0
+
+  case menuBar(x, y, 500, h, names = @["File", "Edit", "Help"]):
+  of "File":
+    if menuParentItem("&New", some(mkKeyEvent(keyN, {mkSuper}))):
+      if menuItem("&General"):       echo "File -> New -> General"
+      if menuItem("2&D Animation"):  echo "File -> New -> 2D Animation"
+      if menuItem("&Sculpting"):     echo "File -> New -> Sculpting"
+      if menuItem("&VFX"):           echo "File -> New -> VFX"
+      if menuItem("Video &Editing"): echo "File -> New -> Video Editing"
+
+    if menuItem("&Open...", some(mkKeyEvent(keyO, {mkSuper}))):
+      echo "File -> Open"
+
+    if menuParentItem("Open &Recent...",
+                   some(mkKeyEvent(keyO, {mkShift, mkSuper}))):
+      discard menuItem("No recent files", disabled = true)
+
+    if menuItem("Revert", shortcut = none(KeyEvent), disabled = true,
+             tooltip = "Reload the saved file."):
+      echo "File -> Revert"
+
+    if menuParentItem("Recover", shortcut = none(KeyEvent)):
+      if menuItem("&Last Session", tooltip = "Open the last closed file."):
+        echo "File -> Revert"
+
+      if menuItem("&Auto Save",
+                  tooltip = "Open an automatically saved file to recover it."):
+        echo "File -> Revert"
+
+    menuItemSeparator()
+
+    if menuItem("&Save", some(mkKeyEvent(keyO, {mkSuper})),
+                tooltip = "Save the current file."):
+      echo "File -> Save"
+
+    if menuItem("Save &As...", some(mkKeyEvent(keyO, {mkShift, mkSuper})),
+                tooltip = "Save the current file in the desired location."):
+      echo "File -> Save As"
+
+    if menuItem("Save &Copy...",
+                tooltip = "Save the current file in the desired location."):
+      echo "File -> Save Copy"
+
+    menuItemSeparator()
+
+    if menuItem("&Quit", some(mkKeyEvent(keyQ, {mkSuper})),
+                tooltip = "Quit the program."):
+      echo "File -> Save Copy"
+
+  of "Edit":
+    if menuItem("&Undo", some(mkKeyEvent(keyZ, {mkSuper}))):
+      echo "Edit -> Undo"
+
+    if menuItem("&Redo", some(mkKeyEvent(keyZ, {mkShift, mkSuper}))):
+      echo "Edit -> Redo"
+
+    menuItemSeparator()
+
+    if menuItem("Undo &History..."): echo "Edit -> Undo History"
+
+  of "Help":
+    if menuItem("&Manual"):    echo "Help -> Manual"
+    if menuItem("&Tutorials"): echo "Help -> Tutorials"
+    if menuItem("&Support"):   echo "Help -> Support"
+
+    menuItemSeparator()
+
+    if menuItem("Save System &Info"): echo "Help -> Save System Info"
+
+  else: discard
+
 
   ############################################################
 
