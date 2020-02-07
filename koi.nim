@@ -492,14 +492,14 @@ proc keyCb(win: Window, key: Key, scanCode: int32, action: KeyAction,
            mods: set[ModifierKey]) =
 
   let ke = KeyEvent(key: key, mods: mods)
-  if action in {kaDown, kaRepeat} and ke in textFieldEditShortcutKeyEvents:
+  if action in {kaDown, kaRepeat}: # TODO ADD BACK! and ke in textFieldEditShortcutKeyEvents:
     if g_keyBufIdx <= g_keyBuf.high:
       g_keyBuf[g_keyBufIdx] = ke
       inc(g_keyBufIdx)
 
-proc clearKeyBuf() = g_keyBufIdx = 0
+proc clearKeyBuf*() = g_keyBufIdx = 0
 
-iterator keyBuf(): KeyEvent =
+iterator keyBuf*(): KeyEvent =
   var i = 0
   while i < g_keyBufIdx:
     yield g_keyBuf[i]

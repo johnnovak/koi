@@ -1,0 +1,217 @@
+import strformat
+
+import glad/gl
+import glfw
+from glfw/wrapper import showWindow
+import nanovg
+import koi
+
+import common
+import map
+import drawmap
+import utils
+
+
+var
+  g_vg: NVGContext
+
+  g_map: Map
+
+  g_cursorX: Natural
+  g_cursorY: Natural
+
+
+proc createWindow(): Window =
+  var cfg = DefaultOpenglWindowConfig
+  cfg.size = (w: 800, h: 800)
+  cfg.title = "Dungeon Mapper"
+  cfg.resizable = true
+  cfg.visible = false
+  cfg.bits = (r: 8, g: 8, b: 8, a: 8, stencil: 8, depth: 16)
+  cfg.debugContext = true
+  cfg.nMultiSamples = 4
+
+  when defined(macosx):
+    cfg.version = glv32
+    cfg.forwardCompat = true
+    cfg.profile = opCoreProfile
+
+  newWindow(cfg)
+
+
+proc loadData(vg: NVGContext) =
+  let regularFont = vg.createFont("sans", "data/Roboto-Regular.ttf")
+  if regularFont == NoFont:
+    quit "Could not add regular font.\n"
+
+  let boldFont = vg.createFont("sans-bold", "data/Roboto-Bold.ttf")
+  if boldFont == NoFont:
+    quit "Could not add bold font.\n"
+
+
+proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
+  let
+    (winWidth, winHeight) = win.size
+    (fbWidth, fbHeight) = win.framebufferSize
+    pxRatio = fbWidth / winWidth
+
+  # Update and render
+  glViewport(0, 0, fbWidth, fbHeight)
+
+  glClearColor(0.4, 0.4, 0.4, 1.0)
+
+  glClear(GL_COLOR_BUFFER_BIT or
+          GL_DEPTH_BUFFER_BIT or
+          GL_STENCIL_BUFFER_BIT)
+
+  g_vg.beginFrame(winWidth.float, winHeight.float, pxRatio)
+  koi.beginFrame(winWidth.float, winHeight.float)
+
+  ############################################################
+
+  drawMap(g_vg, g_map, g_cursorX, g_cursorY)
+
+  ############################################################
+
+  koi.endFrame()
+  g_vg.endFrame()
+
+  glfw.swapBuffers(win)
+
+
+proc windowPosCb(win: Window, pos: tuple[x, y: int32]) =
+  render(win)
+
+proc framebufSizeCb(win: Window, size: tuple[w, h: int32]) =
+  render(win)
+
+proc init(): Window =
+  glfw.initialize()
+
+  var win = createWindow()
+
+  var flags = {nifStencilStrokes, nifDebug}
+  g_vg = nvgInit(getProcAddress, flags)
+  if g_vg == nil:
+    quit "Error creating NanoVG context"
+
+  if not gladLoadGL(getProcAddress):
+    quit "Error initialising OpenGL"
+
+  loadData(g_vg)
+
+  g_Map = newMap(24, 32)
+
+  koi.init(g_vg)
+
+  win.windowPositionCb = windowPosCb
+  win.framebufferSizeCb = framebufSizeCb
+
+  glfw.swapInterval(1)
+
+  win.pos = (100, 1700)  # TODO for development
+  wrapper.showWindow(win.getHandle())
+
+  result = win
+
+proc cleanup() =
+  koi.deinit()
+  nvgDeinit(g_vg)
+  glfw.terminate()
+
+
+proc setCursor(m: Map, x, y: Natural) =
+  g_cursorX = min(x, m.width-1)
+  g_cursorY = min(y, m.height-1)
+
+
+proc moveCursor(m: Map, dir: Direction) =
+  case dir:
+  of North: setCursor(m, g_cursorX,   g_cursorY+1)
+  of East:  setCursor(m, g_cursorX+1, g_cursorY)
+  of South:
+    if g_cursorY > 0: setCursor(m, g_cursorX,   g_cursorY-1)
+  of West:
+    if g_cursorX > 0: setCursor(m, g_cursorX-1, g_cursorY)
+
+
+proc eraseCellWalls(m: var Map, x, y: Natural) =
+  m.setWall(x,y, North, wNone)
+  m.setWall(x,y, West, wNone)
+  m.setWall(x,y, South, wNone)
+  m.setWall(x,y, East, wNone)
+
+proc eraseCell(m: var Map, x, y: Natural) =
+  # TODO fill should be improved
+  m.fill(x, y, x, y)
+  m.eraseCellWalls(x, y)
+
+
+proc drawPath(m: var Map, x, y: Natural) =
+  if m.getFloor(x,y) == fNone:
+    m.setFloor(x,y, fGround)
+
+  if y == m.height-1 or m.getFloor(x,y+1) == fNone:
+    m.setWall(x,y, North, wWall)
+  else:
+    m.setWall(x,y, North, wNone)
+
+  if x == 0 or m.getFloor(x-1,y) == fNone:
+    m.setWall(x,y, West, wWall)
+  else:
+    m.setWall(x,y, West, wNone)
+
+  if y == 0 or m.getFloor(x,y-1) == fNone:
+    m.setWall(x,y, South, wWall)
+  else:
+    m.setWall(x,y, South, wNone)
+
+  if x == m.width-1 or m.getFloor(x+1,y) == fNone:
+    m.setWall(x,y, East, wWall)
+  else:
+    m.setWall(x,y, East, wNone)
+
+
+
+proc main() =
+  let win = init()
+
+  while not win.shouldClose:
+    if win.isKeyDown(keyEscape):  # TODO key buf, like char buf?
+      win.shouldClose = true
+
+    for ke in keyBuf():
+      alias(curX, g_cursorX)
+      alias(curY, g_cursorY)
+
+      proc handleMoveKey(dir: Direction) =
+        if ke.mods == {mkShift}:
+          g_map.setWall(curX, curY, dir, wWall)
+        elif ke.mods == {mkAlt}:
+          g_map.setWall(curX, curY, dir, wNone)
+        elif ke.mods == {mkAlt, mkShift}:
+          g_map.setWall(curX, curY, dir, wDoor)
+        else:
+          g_map.moveCursor(dir)
+
+      if ke.key == keyLeft  or ke.key == keyH: handleMoveKey(West)
+      if ke.key == keyRight or ke.key == keyL: handleMoveKey(East)
+      if ke.key == keyUp    or ke.key == keyK: handleMoveKey(North)
+      if ke.key == keyDown  or ke.key == keyJ: handleMoveKey(South)
+
+      if   win.isKeyDown(keyF): g_map.setFloor(curX, curY, fGround)
+      elif win.isKeyDown(keyD): g_map.drawPath(curX, curY)
+      elif win.isKeyDown(keyE): g_map.eraseCell(curX, curY)
+      elif win.isKeyDown(keyW): g_map.eraseCellWalls(curX, curY)
+
+    clearKeyBuf()
+
+    render(win)
+    glfw.pollEvents()
+
+  cleanup()
+
+
+main()
+
+# vim: et:ts=2:sw=2:fdm=marker
