@@ -24,14 +24,25 @@ type
     startX*:   float
     startY*:   float
 
-    defaultStrokeColor*: Color
-    mapBackgroundColor*: Color
-    cursorColor*:        Color
-    cursorGuideColor*:   Color
-    mapOutlineColor*:    Color
+    defaultStrokeColor*:  Color
+ 
+    mapBackgroundColor*:  Color
+    mapOutlineColor*:     Color
+    drawOutline*:         bool
 
-    drawCursorGuides*: bool
-    drawOutline*:      bool
+    gridColorBackground*: Color
+    gridColorFloor*:      Color
+
+    floorColor*:          Color
+
+    cursorColor*:         Color
+    cursorGuideColor*:    Color
+    drawCursorGuides*:    bool
+
+    cellCoordsColor*:     Color
+    cellCoordsColorHi*:   Color
+    cellCoordsFontSize*:  float
+
 
 # }}}
 # {{{ initDrawParams()
@@ -42,14 +53,24 @@ proc initDrawParams(): DrawParams =
   dp.startX = 50.0
   dp.startY = 50.0
 
-  dp.defaultStrokeColor = gray(0.1)
-  dp.mapBackgroundColor = gray(0.0, 0.7)
-  dp.cursorColor        = rgb(1.0, 0.65, 0.0)
-  dp.cursorGuideColor   = rgba(1.0, 0.65, 0.0, 0.2)
-  dp.mapOutlineColor    = gray(0.3)
+  dp.defaultStrokeColor  = gray(0.1)
 
-  dp.drawCursorGuides = false
-  dp.drawOutline      = false
+  dp.gridColorBackground = gray(0.0, 0.3)
+  dp.gridColorFloor      = gray(0.0, 0.3)
+
+  dp.floorColor          = gray(0.9)
+
+  dp.mapBackgroundColor  = gray(0.0, 0.7)
+  dp.mapOutlineColor     = gray(0.23)
+  dp.drawOutline         = true
+
+  dp.cursorColor         = rgb(1.0, 0.65, 0.0)
+  dp.cursorGuideColor    = rgba(1.0, 0.65, 0.0, 0.2)
+  dp.drawCursorGuides    = true
+
+  dp.cellCoordsColor     = gray(0.9)
+  dp.cellCoordsColorHi   = rgb(1.0, 0.75, 0.0)
+  dp.cellCoordsFontSize  = 15.0
 
   result = dp
 # }}}
@@ -74,7 +95,7 @@ proc drawBackgroundGrid(m: Map, dp: DrawParams, vg: NVGContext) =
   let strokeWidth = UltrathinStrokeWidth
 
   vg.lineCap(lcjSquare)
-  vg.strokeColor(gray(0.0, 0.3))
+  vg.strokeColor(dp.gridColorBackground)
   vg.strokeWidth(strokeWidth)
 
   let endX = snap(cellX(m.width,  dp), strokeWidth)
@@ -100,16 +121,16 @@ proc drawBackgroundGrid(m: Map, dp: DrawParams, vg: NVGContext) =
 # {{{ drawCellCoords()
 proc drawCellCoords(m: Map, cursorX, cursorY: Natural,
                     dp: DrawParams, vg: NVGContext) =
-  vg.fontSize(14.0)
+
   vg.fontFace("sans")
+  vg.fontSize(dp.cellCoordsFontSize)
   vg.textAlign(haCenter, vaMiddle)
 
   proc setTextHighlight(on: bool) =
     if on:
-      vg.fillColor(rgb(1.0, 0.8, 0.0))
-      vg.fontFace("sans-bold")
+      vg.fillColor(dp.cellCoordsColorHi)
     else:
-      vg.fillColor(gray(0.9))
+      vg.fillColor(dp.cellCoordsColor)
       vg.fontFace("sans")
 
   let endX = dp.startX + dp.gridSize * m.width
@@ -189,15 +210,16 @@ proc drawCursor(m: Map, cursorX, cursorY: Natural,
 
     vg.fillColor(dp.cursorGuideColor)
     vg.strokeColor(dp.cursorGuideColor)
-    vg.strokeWidth(UltrathinStrokeWidth)
+    let sw = UltrathinStrokeWidth
+    vg.strokeWidth(sw)
 
     vg.beginPath()
-    vg.rect(x, dp.startY, dp.gridSize, h)
+    vg.rect(snap(x, sw), snap(dp.startY, sw), dp.gridSize, h)
     vg.fill()
     vg.stroke()
 
     vg.beginPath()
-    vg.rect(dp.startX, y, w, dp.gridSize)
+    vg.rect(snap(dp.startX, sw), snap(y, sw), w, dp.gridSize)
     vg.fill()
     vg.stroke()
 
@@ -228,13 +250,15 @@ proc drawOutline(m: Map, dp: DrawParams, vg: NVGContext) =
     for x in 0..<m.width:
       if isOutline(x, y):
         let
-          x = cellX(x, dp)
-          y = cellY(y, dp)
+          sw = UltrathinStrokeWidth
+          x = snap(cellX(x, dp), sw)
+          y = snap(cellY(y, dp), sw)
 
-        vg.beginPath()
+        vg.strokeWidth(sw)
         vg.fillColor(dp.mapOutlineColor)
         vg.strokeColor(dp.mapOutlineColor)
-        vg.strokeWidth(UltrathinStrokeWidth)
+
+        vg.beginPath()
         vg.rect(x, y, dp.gridSize, dp.gridSize)
         vg.fill()
         vg.stroke()
@@ -356,9 +380,9 @@ proc setVertTransform(x, y: float, dp: DrawParams, vg: NVGContext) =
   vg.translate(0, -1)
 
 # }}}
-# {{{ drawWall()
-proc drawWall(x, y: float, wall: Wall,
-              orientation: Orientation, dp: DrawParams, vg: NVGContext) =
+# {{{ drawElement()
+proc drawElement(x, y: float, wall: Wall,
+                 orientation: Orientation, dp: DrawParams, vg: NVGContext) =
 
   template drawOriented(drawProc: untyped) =
     case orientation: 
@@ -384,24 +408,24 @@ proc drawWall(x, y: float, wall: Wall,
 # }}}
 # {{{ drawWalls()
 proc drawWalls(m: Map, x: Natural, y: Natural, dp: DrawParams, vg: NVGContext) =
-  drawWall(
+  drawElement(
     cellX(x, dp), cellY(y, dp),
     m.getWall(x,y, North), orientation=Horiz,
     dp, vg)
 
-  drawWall(
+  drawElement(
     cellX(x, dp), cellY(y, dp),
     m.getWall(x,y, West), orientation=Vert,
     dp, vg)
 
   if x == m.width-1:
-    drawWall(
+    drawElement(
       cellX(x+1, dp), cellY(y, dp),
       m.getWall(x,y, East), orientation=Vert,
       dp, vg)
 
   if y == m.height-1:
-    drawWall(
+    drawElement(
       cellX(x, dp), cellY(y+1, dp),
       m.getWall(x,y, South), orientation=Horiz,
       dp, vg)
@@ -420,8 +444,8 @@ proc drawFloor(m: Map, x: Natural, y: Natural, dp: DrawParams, vg: NVGContext) =
       y = snap(cellY(y, dp), strokeWidth)
 
     vg.beginPath()
-    vg.fillColor(gray(0.9))
-    vg.strokeColor(gray(0.7))
+    vg.fillColor(dp.floorColor)
+    vg.strokeColor(dp.gridColorFloor)
     vg.strokeWidth(strokeWidth)
     vg.rect(x, y, dp.gridSize, dp.gridSize)
     vg.fill()
