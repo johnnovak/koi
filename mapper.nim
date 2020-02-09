@@ -195,7 +195,7 @@ proc main() =
         elif ke.mods == {mkAlt}:
           g_map.setWall(curX, curY, dir, wNone)
         elif ke.mods == {mkAlt, mkShift}:
-          g_map.setWall(curX, curY, dir, wClosedDoor)
+          g_map.setWall(curX, curY, dir, wOpenDoor)
         else:
           g_map.moveCursor(dir)
 
@@ -205,6 +205,18 @@ proc main() =
       if ke.key in {keyDown,  keyJ, keyKp2}: handleMoveKey(South)
 
       if   win.isKeyDown(keyF): g_map.setFloor(curX, curY, fGround)
+      if   win.isKeyDown(key1): g_map.setFloor(curX, curY, fGround)
+      if   win.isKeyDown(key2): g_map.setFloor(curX, curY, fClosedDoor)
+      if   win.isKeyDown(key3): g_map.setFloor(curX, curY, fOpenDoor)
+      if   win.isKeyDown(key4): g_map.setFloor(curX, curY, fPressurePlate)
+      if   win.isKeyDown(key5): g_map.setFloor(curX, curY, fHiddenPressurePlate)
+      if   win.isKeyDown(key6): g_map.setFloor(curX, curY, fClosedPit)
+      if   win.isKeyDown(key7): g_map.setFloor(curX, curY, fOpenPit)
+      if   win.isKeyDown(key8): g_map.setFloor(curX, curY, fHiddenPit)
+      if   win.isKeyDown(key9): g_map.setFloor(curX, curY, fCeilingPit)
+      if   win.isKeyDown(key0): g_map.setFloor(curX, curY, fStairsDown)
+
+      elif win.isKeyDown(keyF): g_map.setFloor(curX, curY, fGround)
       elif win.isKeyDown(keyD): g_map.drawPath(curX, curY)
       elif win.isKeyDown(keyE): g_map.eraseCell(curX, curY)
       elif win.isKeyDown(keyW) and ke.mods == {mkAlt}: g_map.eraseCellWalls(curX, curY)

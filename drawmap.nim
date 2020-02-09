@@ -12,9 +12,6 @@ const
   ThinStrokeWidth      = 2.0
   NormalStrokeWidth    = 3.0
 
-  DoorWidthFactor = 0.75
-  DoorDepthFactor = 0.1
-
 
 # All drawing procs interpret the passed in (x,y) coordinates as the
 # upper-left corner of the object (e.g. a cell).
@@ -29,6 +26,9 @@ type
 
     defaultStrokeColor*: Color
     mapBackgroundColor*: Color
+    cursorColor*:        Color
+    cursorGuideColor*:   Color
+    mapOutlineColor*:    Color
 
     drawCursorGuides*: bool
     drawOutline*:      bool
@@ -37,7 +37,6 @@ type
 # {{{ initDrawParams()
 proc initDrawParams(): DrawParams =
   var dp: DrawParams
-
   dp.gridSize = 22.0
 
   dp.startX = 50.0
@@ -45,6 +44,9 @@ proc initDrawParams(): DrawParams =
 
   dp.defaultStrokeColor = gray(0.1)
   dp.mapBackgroundColor = gray(0.0, 0.7)
+  dp.cursorColor        = rgb(1.0, 0.65, 0.0)
+  dp.cursorGuideColor   = rgba(1.0, 0.65, 0.0, 0.2)
+  dp.mapOutlineColor    = gray(0.3)
 
   dp.drawCursorGuides = false
   dp.drawOutline      = false
@@ -185,23 +187,21 @@ proc drawCursor(m: Map, cursorX, cursorY: Natural,
       w = dp.gridSize * m.width
       h = dp.gridSize * m.height
 
-    vg.beginPath()
-    vg.fillColor(rgba(1.0, 0.65, 0.0, 0.2))
-    vg.strokeColor(rgba(1.0, 0.65, 0.0, 0.2))
+    vg.fillColor(dp.cursorGuideColor)
+    vg.strokeColor(dp.cursorGuideColor)
     vg.strokeWidth(UltrathinStrokeWidth)
+
+    vg.beginPath()
     vg.rect(x, dp.startY, dp.gridSize, h)
     vg.fill()
     vg.stroke()
 
     vg.beginPath()
     vg.rect(dp.startX, y, w, dp.gridSize)
-    vg.strokeColor(rgba(1.0, 0.65, 0.0, 0.2))
-    vg.strokeWidth(UltrathinStrokeWidth)
     vg.fill()
     vg.stroke()
 
-  vg.fillColor(rgb(1.0, 0.65, 0.0))
-
+  vg.fillColor(dp.cursorColor)
   vg.beginPath()
   vg.rect(x+1, y+1, dp.gridSize-1, dp.gridSize-1)
   vg.fill()
@@ -232,8 +232,8 @@ proc drawOutline(m: Map, dp: DrawParams, vg: NVGContext) =
           y = cellY(y, dp)
 
         vg.beginPath()
-        vg.fillColor(gray(0.3))
-        vg.strokeColor(gray(0.3))
+        vg.fillColor(dp.mapOutlineColor)
+        vg.strokeColor(dp.mapOutlineColor)
         vg.strokeWidth(UltrathinStrokeWidth)
         vg.rect(x, y, dp.gridSize, dp.gridSize)
         vg.fill()
@@ -260,45 +260,8 @@ proc drawSolidWallHoriz(x, y: float, dp: DrawParams, vg: NVGContext) =
 # {{{ drawOpenDoorHoriz()
 proc drawOpenDoorHoriz(x, y: float, dp: DrawParams, vg: NVGContext) =
   let
-    wallLen = (dp.gridSize * (1.0 - DoorWidthFactor)).int
-    doorWidth = round(dp.gridSize * DoorDepthFactor)
-    x1 = x - doorWidth
-    x2 = x + doorWidth
-    ys = y - dp.gridSize
-    y1 = ys + wallLen
-    ye = ys + dp.gridSize
-    y2 = ye - wallLen
-
-  vg.strokeColor(dp.defaultStrokeColor)
-  vg.strokeWidth(NormalStrokeWidth)
-
-  vg.lineCap(lcjSquare)
-  vg.beginPath()
-  vg.moveTo(x, ys)
-  vg.lineTo(x, y1)
-  vg.stroke()
-
-  vg.beginPath()
-  vg.moveTo(x1, y1)
-  vg.lineTo(x2, y1)
-  vg.stroke()
-
-  vg.beginPath()
-  vg.moveTo(x1, y2)
-  vg.lineTo(x2, y2)
-  vg.stroke()
-
-  vg.beginPath()
-  vg.moveTo(x, y2)
-  vg.lineTo(x, ye)
-  vg.stroke()
-
-# }}}
-# {{{ drawClosedDoorHoriz()
-proc drawClosedDoorHoriz(x, y: float, dp: DrawParams, vg: NVGContext) =
-  let
-    wallLen = (dp.gridSize * (1.0 - DoorWidthFactor)).int
-    doorWidth = round(dp.gridSize * DoorDepthFactor)
+    wallLen = (dp.gridSize * 0.3).int
+    doorWidth = round(dp.gridSize * 0.1)
     xs = x
     y  = y
     x1 = xs + wallLen
@@ -311,146 +274,108 @@ proc drawClosedDoorHoriz(x, y: float, dp: DrawParams, vg: NVGContext) =
   vg.strokeWidth(sw)
   vg.strokeColor(dp.defaultStrokeColor)
 
-  vg.lineCap(lcjSquare)
+  # Wall start
+  vg.lineCap(lcjRound)
   vg.beginPath()
   vg.moveTo(snap(xs, sw), snap(y, sw))
-  vg.lineTo(snap(x1 - sw/2, sw), snap(y, sw))
+  vg.lineTo(snap(x1, sw), snap(y, sw))
   vg.stroke()
 
+  # Door opening
+  vg.lineCap(lcjSquare)
+  vg.beginPath()
+  vg.moveTo(snap(x1, sw), snap(y1, sw))
+  vg.lineTo(snap(x1, sw), snap(y2, sw))
+  vg.stroke()
+
+  vg.beginPath()
+  vg.moveTo(snap(x2, sw), snap(y1, sw))
+  vg.lineTo(snap(x2, sw), snap(y2, sw))
+  vg.stroke()
+
+  # Wall end
+  sw = NormalStrokeWidth
+  vg.strokeWidth(sw)
+  vg.lineCap(lcjRound)
+  vg.beginPath()
+  vg.moveTo(snap(x2, sw), snap(y, sw))
+  vg.lineTo(snap(xe, sw), snap(y, sw))
+  vg.stroke()
+
+# }}}
+# {{{ drawClosedDoorHoriz()
+proc drawClosedDoorHoriz(x, y: float, dp: DrawParams, vg: NVGContext) =
+  let
+    wallLen = (dp.gridSize * 0.25).int
+    doorWidth = round(dp.gridSize * 0.3)
+    xs = x
+    y  = y
+    x1 = xs + wallLen
+    xe = xs + dp.gridSize
+    x2 = xe - wallLen
+    y1 = y - doorWidth
+    y2 = y + doorWidth
+
+  var sw = NormalStrokeWidth
+  vg.strokeWidth(sw)
+  vg.strokeColor(dp.defaultStrokeColor)
+
+  # Wall start
+  vg.lineCap(lcjRound)
+  vg.beginPath()
+  vg.moveTo(snap(xs, sw), snap(y, sw))
+  vg.lineTo(snap(x1, sw), snap(y, sw))
+  vg.stroke()
+
+  # Door
+  vg.lineCap(lcjSquare)
   sw = ThinStrokeWidth
   vg.strokeWidth(sw)
   vg.beginPath()
   vg.rect(snap(x1, sw) + 1, snap(y1, sw), x2-x1-1, y2-y1+1)
   vg.stroke()
 
+  # Wall end
   sw = NormalStrokeWidth
   vg.strokeWidth(sw)
+  vg.lineCap(lcjRound)
   vg.beginPath()
-  vg.moveTo(snap(x2 + sw/2, sw), snap(y, sw))
+  vg.moveTo(snap(x2, sw), snap(y, sw))
   vg.lineTo(snap(xe, sw), snap(y, sw))
   vg.stroke()
 
 # }}}
 
-# {{{ drawSolidWallVert()
-proc drawSolidWallVert(x, y: float, dp: DrawParams, vg: NVGContext) =
-  let
-    strokeWidth = NormalStrokeWidth
-    x = snap(x, strokeWidth)
-    y = snap(y, strokeWidth)
+# {{{ setVertTransform()
+proc setVertTransform(x, y: float, dp: DrawParams, vg: NVGContext) =
+  vg.translate(x, y)
+  vg.rotate(degToRad(90.0))
 
-  vg.lineCap(lcjRound)
-  vg.beginPath()
-  vg.strokeColor(dp.defaultStrokeColor)
-  vg.strokeWidth(NormalStrokeWidth)
-  vg.moveTo(x, y)
-  vg.lineTo(x, y + dp.gridSize)
-  vg.stroke()
+  # Because of the grid-snapping, we need to nudge the rotated image to the
+  # left of the X-axis by 1 pixel if the stroke width is odd.
+  vg.translate(0, -1)
 
 # }}}
-# {{{ drawOpenDoorVert()
-proc drawOpenDoorVert(x, y: float, dp: DrawParams, vg: NVGContext) =
-  let
-    wallLen = (dp.gridSize * (1.0 - DoorWidthFactor)).int
-    doorWidth = round(dp.gridSize * DoorDepthFactor)
-    x1 = x - doorWidth
-    x2 = x + doorWidth
-    ys = y - dp.gridSize
-    y1 = ys + wallLen
-    ye = ys + dp.gridSize
-    y2 = ye - wallLen
+# {{{ drawWall()
+proc drawWall(x, y: float, wall: Wall,
+              orientation: Orientation, dp: DrawParams, vg: NVGContext) =
 
-  vg.strokeColor(dp.defaultStrokeColor)
-  vg.strokeWidth(NormalStrokeWidth)
+  template drawOriented(drawProc: untyped) =
+    case orientation: 
+    of Horiz:
+      drawProc(x, y, dp, vg)
+    of Vert:
+      setVertTransform(x, y, dp, vg)
+      drawProc(0, 0, dp, vg)
+      vg.resetTransform()
 
-  vg.lineCap(lcjSquare)
-  vg.beginPath()
-  vg.moveTo(x, ys)
-  vg.lineTo(x, y1)
-  vg.stroke()
-
-  vg.beginPath()
-  vg.moveTo(x1, y1)
-  vg.lineTo(x2, y1)
-  vg.stroke()
-
-  vg.beginPath()
-  vg.moveTo(x1, y2)
-  vg.lineTo(x2, y2)
-  vg.stroke()
-
-  vg.beginPath()
-  vg.moveTo(x, y2)
-  vg.lineTo(x, ye)
-  vg.stroke()
-
-# }}}
-# {{{ drawClosedDoorVert()
-proc drawClosedDoorVert(x, y: float, dp: DrawParams, vg: NVGContext) =
-  let
-    wallLen = (dp.gridSize * (1.0 - DoorWidthFactor)).int
-    doorWidth = round(dp.gridSize * DoorDepthFactor)
-    xs = snap(x, NormalStrokeWidth)
-    y  = snap(y, NormalStrokeWidth)
-    x1 = snap(xs + wallLen, ThinStrokeWidth)
-    xe = xs + dp.gridSize
-    x2 = snap(xe - wallLen, ThinStrokeWidth)
-    y1 = snap(y - doorWidth, ThinStrokeWidth)
-    y2 = snap(y + doorWidth, ThinStrokeWidth)
-
-  vg.strokeColor(dp.defaultStrokeColor)
-  vg.strokeWidth(NormalStrokeWidth)
-
-  vg.lineCap(lcjSquare)
-  vg.beginPath()
-  vg.moveTo(xs, y)
-  vg.lineTo(x1 - NormalStrokeWidth/2, y)
-  vg.stroke()
-
-  vg.strokeWidth(ThinStrokeWidth)
-  vg.beginPath()
-  vg.rect(
-    snap(x1, ThinStrokeWidth),
-    snap(y1, ThinStrokeWidth),
-    snap(x2-x1, ThinStrokeWidth),
-    snap(y2-y1, ThinStrokeWidth)
-  )
-  vg.stroke()
-
-  vg.strokeWidth(NormalStrokeWidth)
-  vg.beginPath()
-  vg.moveTo(x2 + NormalStrokeWidth/2, y)
-  vg.lineTo(xe, y)
-  vg.stroke()
-
-# }}}
-
-# {{{ drawWallHoriz()
-proc drawWallHoriz(x, y: float, wall: Wall,
-                   dp: DrawParams, vg: NVGContext) =
   case wall
   of wNone:          discard
-  of wWall:          drawSolidWallHoriz(x, y, dp, vg)
+  of wWall:          drawOriented(drawSolidWallHoriz)
   of wIllusoryWall:  discard
   of wInvisibleWall: discard
-  of wOpenDoor:      drawOpenDoorHoriz(x, y, dp, vg)
-  of wClosedDoor:    drawClosedDoorHoriz(x, y, dp, vg)
-  of wSecretDoor:    discard
-  of wLever:         discard
-  of wNiche:         discard
-  of wStatue:        discard
-
-# }}}
-# {{{ drawWallVert()
-proc drawWallVert(x, y: float, wall: Wall,
-                  dp: DrawParams, vg: NVGContext) =
-  case wall
-  of wNone:          discard
-  of wWall:          drawSolidWallVert(x, y, dp, vg)
-  of wIllusoryWall:  discard
-  of wInvisibleWall: discard
-  of wOpenDoor:      drawOpenDoorVert(x, y, dp, vg)
-  of wClosedDoor:    drawClosedDoorVert(x, y, dp, vg)
+  of wOpenDoor:      drawOriented(drawOpenDoorHoriz)
+  of wClosedDoor:    drawOriented(drawClosedDoorHoriz)
   of wSecretDoor:    discard
   of wLever:         discard
   of wNiche:         discard
@@ -459,20 +384,36 @@ proc drawWallVert(x, y: float, wall: Wall,
 # }}}
 # {{{ drawWalls()
 proc drawWalls(m: Map, x: Natural, y: Natural, dp: DrawParams, vg: NVGContext) =
-  drawWallHoriz(cellX(x, dp), cellY(y, dp), m.getWall(x,y, North), dp, vg)
-  drawWallVert(cellX(x, dp), cellY(y, dp), m.getWall(x,y, West), dp, vg)
+  drawWall(
+    cellX(x, dp), cellY(y, dp),
+    m.getWall(x,y, North), orientation=Horiz,
+    dp, vg)
+
+  drawWall(
+    cellX(x, dp), cellY(y, dp),
+    m.getWall(x,y, West), orientation=Vert,
+    dp, vg)
 
   if x == m.width-1:
-    drawWallVert(cellX(x+1, dp), cellY(y, dp), m.getWall(x,y, East), dp, vg)
+    drawWall(
+      cellX(x+1, dp), cellY(y, dp),
+      m.getWall(x,y, East), orientation=Vert,
+      dp, vg)
 
   if y == m.height-1:
-    drawWallHoriz(cellX(x, dp), cellY(y+1, dp), m.getWall(x,y, South), dp, vg)
+    drawWall(
+      cellX(x, dp), cellY(y+1, dp),
+      m.getWall(x,y, South), orientation=Horiz,
+      dp, vg)
 
 # }}}
 
 # {{{ drawFloor()
 proc drawFloor(m: Map, x: Natural, y: Natural, dp: DrawParams, vg: NVGContext) =
-  if m.getFloor(x,y) != fNone:
+  case m.getFloor(x,y)
+  of fNone: discard
+
+  of fGround:
     let
       strokeWidth = UltrathinStrokeWidth
       x = snap(cellX(x, dp), strokeWidth)
@@ -486,6 +427,32 @@ proc drawFloor(m: Map, x: Natural, y: Natural, dp: DrawParams, vg: NVGContext) =
     vg.fill()
     vg.stroke()
 
+  of fClosedDoor: discard
+
+  of fOpenDoor: discard
+
+  of fPressurePlate: discard
+
+  of fHiddenPressurePlate: discard
+
+  of fClosedPit: discard
+
+  of fOpenPit: discard
+
+  of fHiddenPit: discard
+
+  of fCeilingPit: discard
+
+  of fStairsDown: discard
+
+  of fStairsUp: discard
+
+  of fSpinner: discard
+
+  of fTeleport: discard
+
+  of fCustom: discard
+
 
 # }}}
 
@@ -494,7 +461,7 @@ proc drawMap*(m: Map, cursorX, cursorY: Natural,
               dp: DrawParams, vg: NVGContext) =
 
   drawCellCoords(m, cursorX, cursorY, dp, vg)
- # drawMapBackground(m, dp, vg)
+  drawMapBackground(m, dp, vg)
   drawBackgroundGrid(m, dp, vg)
 
   if dp.drawOutline: drawOutline(m, dp, vg)

@@ -32,10 +32,11 @@ type
 
 
   Cell* = object
-    floor:        Floor
-    wallN, wallW: Wall
-    customChar:   char
-    notes:        string
+    floor:         Floor
+    floorOrient:   Orientation
+    wallN, wallW:  Wall
+    customChar:    char
+    notes:         string
 
   # (0,0) is the top-left cell of the map
   Map* = ref object
