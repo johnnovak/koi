@@ -2,50 +2,46 @@ import common
 
 type
   Floor* = enum
-    fNone      = ( 0, "blank"),
-    fGround     = ( 1, "ground"),
-    fDoor       = ( 2, "door"),
-    fPlate      = ( 3, "pressure plate"),
-    fOpenPit    = ( 4, "open pit"),
-    fClosedPit  = ( 5, "closed pit"),
-    fPitAbove   = ( 6, "pit (above)"),
-    fStairsDown = ( 7, "stairs (down)"),
-    fStairsUp   = ( 8, "stairs (up)"),
-    fSpinner    = ( 9, "spinner"),
-    fTeleport   = (10, "teleport"),
-#    fCurtain    = (11, "curtain"),
-#    fGrate      = (12, "grate"),
-#    fColumn     = (13, "column"),
-#    fStatue     = (14, "statue"),
-#    fWater      = (16, "water")
-    fCustom     = (17, "custom")
+    fNone                = (  0, "blank"),
+    fGround              = ( 10, "ground"),
+    fClosedDoor          = ( 20, "closed door"),
+    fOpenDoor            = ( 21, "open door"),
+    fPressurePlate       = ( 30, "pressure plate"),
+    fHiddenPressurePlate = ( 31, "hidden pressure plate"),
+    fClosedPit           = ( 40, "closed pit"),
+    fOpenPit             = ( 41, "open pit"),
+    fHiddenPit           = ( 42, "hidden pit"),
+    fCeilingPit          = ( 43, "ceiling pit"),
+    fStairsDown          = ( 50, "stairs down"),
+    fStairsUp            = ( 51, "stairs up"),
+    fSpinner             = ( 60, "spinner"),
+    fTeleport            = ( 70, "teleport"),
+    fCustom              = (999, "custom")
 
   Wall* = enum
     wNone          = ( 0, "none"),
-    wWall          = ( 1, "wall"),
-    wDoor          = ( 2, "door"),
-    wDoorway       = ( 3, "doorway"),
-    wSecretDoor    = ( 4, "secret door"),
-    wIllusoryWall  = ( 5, "illusory wall"),
-    wInvisibleWall = ( 6, "invisible wall")
+    wWall          = (10, "wall"),
+    wIllusoryWall  = (11, "illusory wall"),
+    wInvisibleWall = (12, "invisible wall")
+    wOpenDoor      = (20, "closed door"),
+    wClosedDoor    = (21, "open door"),
+    wSecretDoor    = (22, "secret door"),
+    wLever         = (30, "statue")
+    wNiche         = (40, "niche")
+    wStatue        = (50, "statue")
 
-    # TODO
-#    wLever         = ( 0, "lever"),
-#    wButton        = ( 1, "button"),
-#    wWallCavity    = ( 2, "wall cavity"),
-#    wWriting       = ( 3, "writing"),
-#    fProjector  = (15, "projector"),
 
   Cell* = object
-    floor*:         Floor
-    wallS*, wallW*: Wall
-    customChar*:    char
-    notes*:         string
+    floor:        Floor
+    wallN, wallW: Wall
+    customChar:   char
+    notes:        string
 
+  # (0,0) is the top-left cell of the map
   Map* = ref object
-    width: Natural
+    width:  Natural
     height: Natural
-    cells: seq[Cell]
+    cells:  seq[Cell]
 
 
 func width*(m: Map): Natural =
@@ -99,13 +95,14 @@ proc copyFrom*(m: var Map,
 
   for y in 0..h-2:
     for x in 0..w-2:
-      m[x + destX, y + destY] = src[x + srcX, y + srcY]
+      m[x+destX, y+destY] = src[x+srcX, y+srcY]
 
   for x in 0..w-2:
-    m[x+destX, h-1 + destY].wallS = src[x+srcX, h-1 + destY].wallS
+    m[x+destX, h-1 + destY].wallN = src[x+srcX, h-1 + destY].wallN
 
   for y in 0..h-2:
-    m[w-1 + destX, y+destY].wallS = src[w-1 + destX, y+destY].wallW
+    m[w-1 + destX, y+destY].wallW = src[w-1 + destX, y+destY].wallW
+
 
 proc copyFrom*(m: var Map, src: Map) =
   m.copyFrom(src, 0, 0, src.width, src.height, 0, 0)
@@ -133,10 +130,10 @@ proc getWall*(m: Map, x, y: Natural, dir: Direction): Wall =
   assert y < m.height-1
 
   case dir
-  of North: m[  x, 1+y].wallS
-  of East:  m[1+x,   y].wallW
-  of South: m[  x,   y].wallS
+  of North: m[  x,   y].wallN
   of West:  m[  x,   y].wallW
+  of South: m[  x, 1+y].wallN
+  of East:  m[1+x,   y].wallW
 
 
 proc setWall*(m: var Map, x, y: Natural, dir: Direction, w: Wall) =
@@ -144,10 +141,10 @@ proc setWall*(m: var Map, x, y: Natural, dir: Direction, w: Wall) =
   assert y < m.height-1
 
   case dir
-  of North: m[  x, 1+y].wallS = w
-  of East:  m[1+x,   y].wallW = w
-  of South: m[  x,   y].wallS = w
+  of North: m[  x,   y].wallN = w
   of West:  m[  x,   y].wallW = w
+  of South: m[  x, 1+y].wallN = w
+  of East:  m[1+x,   y].wallW = w
 
 
 # vim: et:ts=2:sw=2:fdm=marker

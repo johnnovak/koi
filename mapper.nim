@@ -24,7 +24,7 @@ var
 proc createWindow(): Window =
   var cfg = DefaultOpenglWindowConfig
   cfg.size = (w: 800, h: 800)
-  cfg.title = "Dungeon Mapper"
+  cfg.title = "Dungeon PowerMapper Deluxe v0.1 alpha"
   cfg.resizable = true
   cfg.visible = false
   cfg.bits = (r: 8, g: 8, b: 8, a: 8, stencil: 8, depth: 16)
@@ -69,7 +69,7 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
 
   ############################################################
 
-  drawMap(g_vg, g_map, g_cursorX, g_cursorY)
+  drawMap(g_map, g_cursorX, g_cursorY, g_drawParams, g_vg)
 
   ############################################################
 
@@ -109,7 +109,7 @@ proc init(): Window =
 
   glfw.swapInterval(1)
 
-  win.pos = (100, 1700)  # TODO for development
+  win.pos = (150, 150)  # TODO for development
   wrapper.showWindow(win.getHandle())
 
   result = win
@@ -127,10 +127,12 @@ proc setCursor(m: Map, x, y: Natural) =
 
 proc moveCursor(m: Map, dir: Direction) =
   case dir:
-  of North: setCursor(m, g_cursorX,   g_cursorY+1)
-  of East:  setCursor(m, g_cursorX+1, g_cursorY)
-  of South:
+  of North:
     if g_cursorY > 0: setCursor(m, g_cursorX,   g_cursorY-1)
+  of East:
+    setCursor(m, g_cursorX+1, g_cursorY)
+  of South:
+    setCursor(m, g_cursorX,   g_cursorY+1)
   of West:
     if g_cursorX > 0: setCursor(m, g_cursorX-1, g_cursorY)
 
@@ -151,7 +153,7 @@ proc drawPath(m: var Map, x, y: Natural) =
   if m.getFloor(x,y) == fNone:
     m.setFloor(x,y, fGround)
 
-  if y == m.height-1 or m.getFloor(x,y+1) == fNone:
+  if y == 0 or m.getFloor(x,y-1) == fNone:
     m.setWall(x,y, North, wWall)
   else:
     m.setWall(x,y, North, wNone)
@@ -161,7 +163,7 @@ proc drawPath(m: var Map, x, y: Natural) =
   else:
     m.setWall(x,y, West, wNone)
 
-  if y == 0 or m.getFloor(x,y-1) == fNone:
+  if y == m.height-1 or m.getFloor(x,y+1) == fNone:
     m.setWall(x,y, South, wWall)
   else:
     m.setWall(x,y, South, wNone)
@@ -170,7 +172,6 @@ proc drawPath(m: var Map, x, y: Natural) =
     m.setWall(x,y, East, wWall)
   else:
     m.setWall(x,y, East, wNone)
-
 
 
 proc main() =
@@ -185,24 +186,28 @@ proc main() =
       alias(curY, g_cursorY)
 
       proc handleMoveKey(dir: Direction) =
-        if ke.mods == {mkShift}:
-          g_map.setWall(curX, curY, dir, wWall)
+#        if ke.mods == {mkShift}:
+        if win.isKeyDown(keyW):
+          let w = if g_map.getWall(curX, curY, dir) == wNone: wWall
+                  else: wNone
+          g_map.setWall(curX, curY, dir, w)
+
         elif ke.mods == {mkAlt}:
           g_map.setWall(curX, curY, dir, wNone)
         elif ke.mods == {mkAlt, mkShift}:
-          g_map.setWall(curX, curY, dir, wDoor)
+          g_map.setWall(curX, curY, dir, wClosedDoor)
         else:
           g_map.moveCursor(dir)
 
-      if ke.key == keyLeft  or ke.key == keyH: handleMoveKey(West)
-      if ke.key == keyRight or ke.key == keyL: handleMoveKey(East)
-      if ke.key == keyUp    or ke.key == keyK: handleMoveKey(North)
-      if ke.key == keyDown  or ke.key == keyJ: handleMoveKey(South)
+      if ke.key in {keyLeft,  keyH, keyKp4}: handleMoveKey(West)
+      if ke.key in {keyRight, keyL, keyKp6}: handleMoveKey(East)
+      if ke.key in {keyUp,    keyK, keyKp8}: handleMoveKey(North)
+      if ke.key in {keyDown,  keyJ, keyKp2}: handleMoveKey(South)
 
       if   win.isKeyDown(keyF): g_map.setFloor(curX, curY, fGround)
       elif win.isKeyDown(keyD): g_map.drawPath(curX, curY)
       elif win.isKeyDown(keyE): g_map.eraseCell(curX, curY)
-      elif win.isKeyDown(keyW): g_map.eraseCellWalls(curX, curY)
+      elif win.isKeyDown(keyW) and ke.mods == {mkAlt}: g_map.eraseCellWalls(curX, curY)
 
     clearKeyBuf()
 
