@@ -25,7 +25,7 @@ type
     startY*:   float
 
     defaultStrokeColor*:  Color
- 
+
     mapBackgroundColor*:  Color
     mapOutlineColor*:     Color
     drawOutline*:         bool
@@ -56,17 +56,17 @@ proc initDrawParams(): DrawParams =
   dp.defaultStrokeColor  = gray(0.1)
 
   dp.gridColorBackground = gray(0.0, 0.3)
-  dp.gridColorFloor      = gray(0.0, 0.3)
+  dp.gridColorFloor      = gray(0.0, 0.2)
 
   dp.floorColor          = gray(0.9)
 
   dp.mapBackgroundColor  = gray(0.0, 0.7)
   dp.mapOutlineColor     = gray(0.23)
-  dp.drawOutline         = true
+  dp.drawOutline         = false
 
   dp.cursorColor         = rgb(1.0, 0.65, 0.0)
   dp.cursorGuideColor    = rgba(1.0, 0.65, 0.0, 0.2)
-  dp.drawCursorGuides    = true
+  dp.drawCursorGuides    = false
 
   dp.cellCoordsColor     = gray(0.9)
   dp.cellCoordsColorHi   = rgb(1.0, 0.75, 0.0)
@@ -197,36 +197,36 @@ proc drawMapBackground(m: Map, dp: DrawParams, vg: NVGContext) =
 
 # }}}
 # {{{ drawCursor()
-proc drawCursor(m: Map, cursorX, cursorY: Natural,
-                dp: DrawParams, vg: NVGContext) =
-  let
-    x = cellX(cursorX, dp)
-    y = cellY(cursorY, dp)
-
-  if dp.drawCursorGuides:
-    let
-      w = dp.gridSize * m.width
-      h = dp.gridSize * m.height
-
-    vg.fillColor(dp.cursorGuideColor)
-    vg.strokeColor(dp.cursorGuideColor)
-    let sw = UltrathinStrokeWidth
-    vg.strokeWidth(sw)
-
-    vg.beginPath()
-    vg.rect(snap(x, sw), snap(dp.startY, sw), dp.gridSize, h)
-    vg.fill()
-    vg.stroke()
-
-    vg.beginPath()
-    vg.rect(snap(dp.startX, sw), snap(y, sw), w, dp.gridSize)
-    vg.fill()
-    vg.stroke()
-
+proc drawCursor(x, y: float, dp: DrawParams, vg: NVGContext) =
   vg.fillColor(dp.cursorColor)
   vg.beginPath()
   vg.rect(x+1, y+1, dp.gridSize-1, dp.gridSize-1)
   vg.fill()
+
+# }}}
+# {{{ drawCursorGuides()
+proc drawCursorGuides(m: Map, cursorX, cursorY: Natural,
+                      dp: DrawParams, vg: NVGContext) =
+  let
+    x = cellX(cursorX, dp)
+    y = cellY(cursorY, dp)
+    w = dp.gridSize * m.width
+    h = dp.gridSize * m.height
+
+  vg.fillColor(dp.cursorGuideColor)
+  vg.strokeColor(dp.cursorGuideColor)
+  let sw = UltrathinStrokeWidth
+  vg.strokeWidth(sw)
+
+  vg.beginPath()
+  vg.rect(snap(x, sw), snap(dp.startY, sw), dp.gridSize, h)
+  vg.fill()
+  vg.stroke()
+
+  vg.beginPath()
+  vg.rect(snap(dp.startX, sw), snap(y, sw), w, dp.gridSize)
+  vg.fill()
+  vg.stroke()
 
 # }}}
 # {{{ drawOutline()
@@ -262,6 +262,20 @@ proc drawOutline(m: Map, dp: DrawParams, vg: NVGContext) =
         vg.rect(x, y, dp.gridSize, dp.gridSize)
         vg.fill()
         vg.stroke()
+
+# }}}
+
+# {{{ drawGround()
+proc drawGround(x, y: float, color: Color, dp: DrawParams, vg: NVGContext) =
+  let sw = UltrathinStrokeWidth
+
+  vg.beginPath()
+  vg.fillColor(color)
+  vg.strokeColor(dp.gridColorFloor)
+  vg.strokeWidth(sw)
+  vg.rect(snap(x, sw), snap(y, sw), dp.gridSize, dp.gridSize)
+  vg.fill()
+  vg.stroke()
 
 # }}}
 
@@ -331,7 +345,7 @@ proc drawOpenDoorHoriz(x, y: float, dp: DrawParams, vg: NVGContext) =
 proc drawClosedDoorHoriz(x, y: float, dp: DrawParams, vg: NVGContext) =
   let
     wallLen = (dp.gridSize * 0.25).int
-    doorWidth = round(dp.gridSize * 0.3)
+    doorWidth = round(dp.gridSize * 0.1)
     xs = x
     y  = y
     x1 = xs + wallLen
@@ -370,6 +384,9 @@ proc drawClosedDoorHoriz(x, y: float, dp: DrawParams, vg: NVGContext) =
 
 # }}}
 
+# {{{ drawOriented()
+
+# }}}
 # {{{ setVertTransform()
 proc setVertTransform(x, y: float, dp: DrawParams, vg: NVGContext) =
   vg.translate(x, y)
@@ -380,12 +397,83 @@ proc setVertTransform(x, y: float, dp: DrawParams, vg: NVGContext) =
   vg.translate(0, -1)
 
 # }}}
-# {{{ drawElement()
-proc drawElement(x, y: float, wall: Wall,
-                 orientation: Orientation, dp: DrawParams, vg: NVGContext) =
+# {{{ drawFloor()
+proc drawFloor(m: Map, x, y: Natural, cursorActive: bool,
+               dp: DrawParams, vg: NVGContext) =
 
   template drawOriented(drawProc: untyped) =
-    case orientation: 
+    let xPos = cellX(x, dp)
+    let yPos = cellY(y, dp)
+    case m.getFloorOrientation(x,y):
+    of Horiz:
+      drawProc(xPos, yPos + dp.gridSize/2, dp, vg)
+    of Vert:
+      setVertTransform(xPos + dp.gridSize/2, yPos, dp, vg)
+      drawProc(0, 0, dp, vg)
+      vg.resetTransform()
+
+  proc drawBg() =
+    drawGround(cellX(x, dp), cellY(y, dp), dp.floorColor, dp, vg)
+    if cursorActive:
+      drawCursor(cellX(x, dp), cellY(y, dp), dp, vg)
+
+  case m.getFloor(x,y)
+  of fNone:
+    if cursorActive:
+      drawCursor(cellX(x, dp), cellY(y, dp), dp, vg)
+
+  of fEmptyFloor:
+    drawBg()
+
+  of fClosedDoor:
+    drawBg()
+    drawOriented(drawClosedDoorHoriz)
+
+  of fOpenDoor:
+    drawBg()
+    drawOriented(drawOpenDoorHoriz)
+
+  of fPressurePlate:
+    drawBg()
+
+  of fHiddenPressurePlate:
+    drawBg()
+
+  of fClosedPit:
+    drawBg()
+
+  of fOpenPit:
+    drawBg()
+
+  of fHiddenPit:
+    drawBg()
+
+  of fCeilingPit:
+    drawBg()
+
+  of fStairsDown:
+    drawBg()
+
+  of fStairsUp:
+    drawBg()
+
+  of fSpinner:
+    drawBg()
+
+  of fTeleport:
+    drawBg()
+
+  of fCustom:
+    drawBg()
+
+
+# }}}
+# {{{ drawWall()
+proc drawWall(x, y: float, wall: Wall,
+              ot: Orientation, dp: DrawParams, vg: NVGContext) =
+
+  template drawOriented(drawProc: untyped) =
+    case ot:
     of Horiz:
       drawProc(x, y, dp, vg)
     of Vert:
@@ -408,75 +496,14 @@ proc drawElement(x, y: float, wall: Wall,
 # }}}
 # {{{ drawWalls()
 proc drawWalls(m: Map, x: Natural, y: Natural, dp: DrawParams, vg: NVGContext) =
-  drawElement(
-    cellX(x, dp), cellY(y, dp),
-    m.getWall(x,y, North), orientation=Horiz,
-    dp, vg)
-
-  drawElement(
-    cellX(x, dp), cellY(y, dp),
-    m.getWall(x,y, West), orientation=Vert,
-    dp, vg)
+  drawWall(cellX(x, dp), cellY(y, dp), m.getWall(x,y, North), Horiz, dp, vg)
+  drawWall(cellX(x, dp), cellY(y, dp), m.getWall(x,y, West), Vert, dp, vg)
 
   if x == m.width-1:
-    drawElement(
-      cellX(x+1, dp), cellY(y, dp),
-      m.getWall(x,y, East), orientation=Vert,
-      dp, vg)
+    drawWall(cellX(x+1, dp), cellY(y, dp), m.getWall(x,y, East), Vert, dp, vg)
 
   if y == m.height-1:
-    drawElement(
-      cellX(x, dp), cellY(y+1, dp),
-      m.getWall(x,y, South), orientation=Horiz,
-      dp, vg)
-
-# }}}
-
-# {{{ drawFloor()
-proc drawFloor(m: Map, x: Natural, y: Natural, dp: DrawParams, vg: NVGContext) =
-  case m.getFloor(x,y)
-  of fNone: discard
-
-  of fGround:
-    let
-      strokeWidth = UltrathinStrokeWidth
-      x = snap(cellX(x, dp), strokeWidth)
-      y = snap(cellY(y, dp), strokeWidth)
-
-    vg.beginPath()
-    vg.fillColor(dp.floorColor)
-    vg.strokeColor(dp.gridColorFloor)
-    vg.strokeWidth(strokeWidth)
-    vg.rect(x, y, dp.gridSize, dp.gridSize)
-    vg.fill()
-    vg.stroke()
-
-  of fClosedDoor: discard
-
-  of fOpenDoor: discard
-
-  of fPressurePlate: discard
-
-  of fHiddenPressurePlate: discard
-
-  of fClosedPit: discard
-
-  of fOpenPit: discard
-
-  of fHiddenPit: discard
-
-  of fCeilingPit: discard
-
-  of fStairsDown: discard
-
-  of fStairsUp: discard
-
-  of fSpinner: discard
-
-  of fTeleport: discard
-
-  of fCustom: discard
-
+    drawWall(cellX(x, dp), cellY(y+1, dp), m.getWall(x,y, South), Horiz, dp, vg)
 
 # }}}
 
@@ -492,9 +519,11 @@ proc drawMap*(m: Map, cursorX, cursorY: Natural,
 
   for y in 0..<m.height:
     for x in 0..<m.width:
-      drawFloor(m, x, y, dp, vg)
+      let cursorActive = x == cursorX and y == cursorY
+      drawFloor(m, x, y, cursorActive, dp, vg)
 
-  drawCursor(m, cursorX, cursorY, dp, vg)
+  if dp.drawCursorGuides:
+    drawCursorGuides(m, cursorX, cursorY, dp, vg)
 
   for y in 0..<m.height:
     for x in 0..<m.width:

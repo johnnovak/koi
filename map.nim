@@ -3,7 +3,7 @@ import common
 type
   Floor* = enum
     fNone                = (  0, "blank"),
-    fGround              = ( 10, "ground"),
+    fEmptyFloor          = ( 10, "empty"),
     fClosedDoor          = ( 20, "closed door"),
     fOpenDoor            = ( 21, "open door"),
     fPressurePlate       = ( 30, "pressure plate"),
@@ -32,11 +32,11 @@ type
 
 
   Cell* = object
-    floor:         Floor
-    floorOrient:   Orientation
-    wallN, wallW:  Wall
-    customChar:    char
-    notes:         string
+    floor:            Floor
+    floorOrientation: Orientation
+    wallN, wallW:     Wall
+    customChar:       char
+    notes:            string
 
   # (0,0) is the top-left cell of the map
   Map* = ref object
@@ -119,6 +119,16 @@ proc getFloor*(m: Map, x, y: Natural): Floor =
   assert x < m.width-1
   assert y < m.height-1
   m[x,y].floor
+
+proc getFloorOrientation*(m: Map, x, y: Natural): Orientation =
+  assert x < m.width-1
+  assert y < m.height-1
+  m[x,y].floorOrientation
+
+proc setFloorOrientation*(m: Map, x, y: Natural, ot: Orientation) =
+  assert x < m.width-1
+  assert y < m.height-1
+  m[x,y].floorOrientation = ot
 
 proc setFloor*(m: Map, x, y: Natural, f: Floor) =
   assert x < m.width-1
