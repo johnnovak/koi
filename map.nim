@@ -1,4 +1,7 @@
+import streams
+
 import common
+
 
 type
   Floor* = enum
@@ -31,7 +34,7 @@ type
     wStatue        = (50, "statue")
 
 
-  Cell* = object
+  Cell = object
     floor:            Floor
     floorOrientation: Orientation
     wallN, wallW:     Wall
@@ -106,13 +109,25 @@ proc copyFrom*(m: var Map,
 
 
 proc copyFrom*(m: var Map, src: Map) =
-  m.copyFrom(src, 0, 0, src.width, src.height, 0, 0)
+  m.copyFrom(src, srcX=0, srcY=0, src.width, src.height, destX=0, destY=0)
 
-proc newMapFrom*(src: Map): Map =
+
+proc newMapFrom*(src: Map, x, y, width, height: Natural): Map =
+  assert x < src.width
+  assert y < src.height
+  assert width > 0
+  assert height > 0
+  assert x + width <= src.width
+  assert y + height <= src.height
+
   var m = new Map
-  m.initMap(src.width, src.height)
-  m.copyFrom(src)
+  m.initMap(width, height)
+  m.copyFrom(src, srcX=x, srcY=y, width, height, destX=0, destY=0)
   result = m
+
+
+proc newMapFrom*(m: Map): Map =
+  newMapFrom(m, x=0, y=0, m.width, m.height)
 
 
 proc getFloor*(m: Map, x, y: Natural): Floor =
@@ -156,6 +171,15 @@ proc setWall*(m: var Map, x, y: Natural, dir: Direction, w: Wall) =
   of West:  m[  x,   y].wallW = w
   of South: m[  x, 1+y].wallN = w
   of East:  m[1+x,   y].wallW = w
+
+
+# TODO
+proc serialize(m: Map, s: var Stream) =
+  discard
+
+# TODO
+proc deserialize(s: Stream): Map =
+  discard
 
 
 # vim: et:ts=2:sw=2:fdm=marker

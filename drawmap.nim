@@ -12,7 +12,6 @@ const
   ThinStrokeWidth      = 2.0
   NormalStrokeWidth    = 3.0
 
-
 # All drawing procs interpret the passed in (x,y) coordinates as the
 # upper-left corner of the object (e.g. a cell).
 
@@ -24,7 +23,7 @@ type
     startX*:   float
     startY*:   float
 
-    defaultStrokeColor*:  Color
+    defaultFgColor*:      Color
 
     mapBackgroundColor*:  Color
     mapOutlineColor*:     Color
@@ -53,7 +52,7 @@ proc initDrawParams(): DrawParams =
   dp.startX = 50.0
   dp.startY = 50.0
 
-  dp.defaultStrokeColor  = gray(0.1)
+  dp.defaultFgColor  = gray(0.1)
 
   dp.gridColorBackground = gray(0.0, 0.3)
   dp.gridColorFloor      = gray(0.0, 0.2)
@@ -77,18 +76,21 @@ proc initDrawParams(): DrawParams =
 
 var g_drawParams*: DrawParams = initDrawParams()
 
+# {{{ utils
+
 # This is needed for drawing crisp lines
 func snap(f: float, strokeWidth: float): float =
   let (i, _) = splitDecimal(f)
   let (_, offs) = splitDecimal(strokeWidth/2)
   result = i + offs
 
-
 proc cellX(x: Natural, dp: DrawParams): float =
   dp.startX + dp.gridSize * x
 
 proc cellY(y: Natural, dp: DrawParams): float =
   dp.startY + dp.gridSize * y
+
+# }}}
 
 # {{{ drawBackgroundGrid
 proc drawBackgroundGrid(m: Map, dp: DrawParams, vg: NVGContext) =
@@ -278,6 +280,115 @@ proc drawGround(x, y: float, color: Color, dp: DrawParams, vg: NVGContext) =
   vg.stroke()
 
 # }}}
+# {{{ drawPressurePlate()
+proc drawPressurePlate(x, y: float, dp: DrawParams, vg: NVGContext) =
+  let
+    offs = (dp.gridSize * 0.3).int
+    a = dp.gridSize - 2*offs + 1
+    sw = ThinStrokeWidth
+
+  vg.lineCap(lcjRound)
+  vg.strokeColor(dp.defaultFgColor)
+  vg.strokeWidth(sw)
+
+  vg.beginPath()
+  vg.rect(snap(x + offs, sw), snap(y + offs, sw), a, a)
+  vg.stroke()
+
+# }}}
+# {{{ drawHiddenPressurePlate()
+proc drawHiddenPressurePlate(x, y: float, dp: DrawParams, vg: NVGContext) =
+  discard
+
+# }}}
+# {{{ drawClosedPit()
+proc drawClosedPit(x, y: float, dp: DrawParams, vg: NVGContext) =
+  let
+    offs = (dp.gridSize * 0.3).int
+    a = dp.gridSize - 2*offs + 1
+    sw = ThinStrokeWidth
+
+  vg.lineCap(lcjSquare)
+  vg.strokeColor(dp.defaultFgColor)
+  vg.strokeWidth(sw)
+
+  let
+    x1 = snap(x + offs, sw)
+    y1 = snap(y + offs, sw)
+    x2 = snap(x + offs + a, sw)
+    y2 = snap(y + offs + a, sw)
+
+  vg.beginPath()
+  vg.rect(x1, y1, a, a)
+  vg.stroke()
+
+  vg.beginPath()
+  vg.moveTo(x1+1, y1+1)
+  vg.lineTo(x2-1, y2-1)
+  vg.stroke()
+  vg.beginPath()
+  vg.moveTo(x2-1, y1+1)
+  vg.lineTo(x1+1, y2-1)
+  vg.stroke()
+
+# }}}
+# {{{ drawOpenPit()
+proc drawOpenPit(x, y: float, dp: DrawParams, vg: NVGContext) =
+  let
+    offs = (dp.gridSize * 0.3).int
+    a = dp.gridSize - 2*offs + 1
+    sw = ThinStrokeWidth
+
+  vg.lineCap(lcjSquare)
+  vg.strokeWidth(sw)
+  vg.strokeColor(dp.defaultFgColor)
+  vg.fillColor(dp.defaultFgColor)
+
+  let
+    x1 = snap(x + offs, sw)
+    y1 = snap(y + offs, sw)
+
+  vg.beginPath()
+  vg.rect(x1, y1, a, a)
+  vg.fill()
+  vg.stroke()
+
+# }}}
+# {{{ drawHiddenPit()
+proc drawHiddenPit(x, y: float, dp: DrawParams, vg: NVGContext) =
+  discard
+
+# }}}
+# {{{ drawCeilingPit()
+proc drawCeilingPit(x, y: float, dp: DrawParams, vg: NVGContext) =
+  discard
+
+# }}}
+# {{{ drawStairsDown()
+proc drawStairsDown(x, y: float, dp: DrawParams, vg: NVGContext) =
+  discard
+
+# }}}
+# {{{ drawStairsUp()
+proc drawStairsUp(x, y: float, dp: DrawParams, vg: NVGContext) =
+  discard
+
+# }}}
+# {{{ drawSpinner()
+proc drawSpinner(x, y: float, dp: DrawParams, vg: NVGContext) =
+  discard
+
+# }}}
+# {{{ drawTeleport()
+proc drawTeleport(x, y: float, dp: DrawParams, vg: NVGContext) =
+  discard
+
+# }}}
+# {{{ drawCustom()
+proc drawCustom(x, y: float, dp: DrawParams, vg: NVGContext) =
+  discard
+
+# }}}
 
 # {{{ drawSolidWallHoriz()
 proc drawSolidWallHoriz(x, y: float, dp: DrawParams, vg: NVGContext) =
@@ -288,7 +399,7 @@ proc drawSolidWallHoriz(x, y: float, dp: DrawParams, vg: NVGContext) =
 
   vg.lineCap(lcjRound)
   vg.beginPath()
-  vg.strokeColor(dp.defaultStrokeColor)
+  vg.strokeColor(dp.defaultFgColor)
   vg.strokeWidth(sw)
   vg.moveTo(x, y)
   vg.lineTo(x + dp.gridSize, y)
@@ -310,7 +421,7 @@ proc drawOpenDoorHoriz(x, y: float, dp: DrawParams, vg: NVGContext) =
 
   var sw = NormalStrokeWidth
   vg.strokeWidth(sw)
-  vg.strokeColor(dp.defaultStrokeColor)
+  vg.strokeColor(dp.defaultFgColor)
 
   # Wall start
   vg.lineCap(lcjRound)
@@ -356,7 +467,7 @@ proc drawClosedDoorHoriz(x, y: float, dp: DrawParams, vg: NVGContext) =
 
   var sw = NormalStrokeWidth
   vg.strokeWidth(sw)
-  vg.strokeColor(dp.defaultStrokeColor)
+  vg.strokeColor(dp.defaultFgColor)
 
   # Wall start
   vg.lineCap(lcjRound)
@@ -401,9 +512,11 @@ proc setVertTransform(x, y: float, dp: DrawParams, vg: NVGContext) =
 proc drawFloor(m: Map, x, y: Natural, cursorActive: bool,
                dp: DrawParams, vg: NVGContext) =
 
+  let xPos = cellX(x, dp)
+  let yPos = cellY(y, dp)
+
   template drawOriented(drawProc: untyped) =
-    let xPos = cellX(x, dp)
-    let yPos = cellY(y, dp)
+    drawBg()
     case m.getFloorOrientation(x,y):
     of Horiz:
       drawProc(xPos, yPos + dp.gridSize/2, dp, vg)
@@ -413,59 +526,33 @@ proc drawFloor(m: Map, x, y: Natural, cursorActive: bool,
       vg.resetTransform()
 
   proc drawBg() =
-    drawGround(cellX(x, dp), cellY(y, dp), dp.floorColor, dp, vg)
+    drawGround(xPos, yPos, dp.floorColor, dp, vg)
     if cursorActive:
-      drawCursor(cellX(x, dp), cellY(y, dp), dp, vg)
+      drawCursor(xPos, yPos, dp, vg)
+
+  template draw(drawProc: untyped) =
+    drawBg()
+    drawProc(xPos, yPos, dp, vg)
 
   case m.getFloor(x,y)
   of fNone:
     if cursorActive:
-      drawCursor(cellX(x, dp), cellY(y, dp), dp, vg)
+      drawCursor(xPos, yPos, dp, vg)
 
-  of fEmptyFloor:
-    drawBg()
-
-  of fClosedDoor:
-    drawBg()
-    drawOriented(drawClosedDoorHoriz)
-
-  of fOpenDoor:
-    drawBg()
-    drawOriented(drawOpenDoorHoriz)
-
-  of fPressurePlate:
-    drawBg()
-
-  of fHiddenPressurePlate:
-    drawBg()
-
-  of fClosedPit:
-    drawBg()
-
-  of fOpenPit:
-    drawBg()
-
-  of fHiddenPit:
-    drawBg()
-
-  of fCeilingPit:
-    drawBg()
-
-  of fStairsDown:
-    drawBg()
-
-  of fStairsUp:
-    drawBg()
-
-  of fSpinner:
-    drawBg()
-
-  of fTeleport:
-    drawBg()
-
-  of fCustom:
-    drawBg()
-
+  of fEmptyFloor:          drawBg()
+  of fClosedDoor:          drawOriented(drawClosedDoorHoriz)
+  of fOpenDoor:            drawOriented(drawOpenDoorHoriz)
+  of fPressurePlate:       draw(drawPressurePlate)
+  of fHiddenPressurePlate: draw(drawHiddenPressurePlate)
+  of fClosedPit:           draw(drawClosedPit)
+  of fOpenPit:             draw(drawOpenPit)
+  of fHiddenPit:           draw(drawHiddenPit)
+  of fCeilingPit:          draw(drawCeilingPit)
+  of fStairsDown:          draw(drawStairsDown)
+  of fStairsUp:            draw(drawStairsUp)
+  of fSpinner:             draw(drawSpinner)
+  of fTeleport:            draw(drawTeleport)
+  of fCustom:              draw(drawCustom)
 
 # }}}
 # {{{ drawWall()
@@ -530,6 +617,5 @@ proc drawMap*(m: Map, cursorX, cursorY: Natural,
       drawWalls(m, x, y, dp, vg)
 
 # }}}
-
 
 # vim: et:ts=2:sw=2:fdm=marker

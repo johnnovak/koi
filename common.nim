@@ -12,3 +12,4 @@ func orientation*(dir: Direction): Orientation =
   of East:  Vert
   of South: Horiz
   of West:  Vert
+
