@@ -1,6 +1,24 @@
 import common
 import map
-import undo
+import undomanager
+
+
+
+using
+  um: var UndoManager[Map]
+
+
+proc storeSingleCellUndoState(m: var Map, x, y: Natural,
+                              redoAction: proc (s: var Map), um) =
+
+  var undoMap = newMapFrom(m, x, y, width=1, height=1)
+
+  um.storeUndoState(
+    undoAction = proc (s: var Map) =
+      s.copyFrom(undoMap, srcX=0, srcY=0, width=1, height=1, destX=x, destY=y),
+
+    redoAction=redoAction
+  )
 
 
 # {{{ eraseCellWalls()
@@ -13,77 +31,50 @@ proc eraseCellWalls(m: var Map, x, y: Natural) =
 # }}}
 
 # {{{ eraseCellWallsAction*()
-proc eraseCellWallsAction*(m: var Map, x, y: Natural) =
-  let action = proc (m: var Map) =
-    m.eraseCellWalls(x, y)
+proc eraseCellWallsAction*(m: var Map, x, y: Natural, um) =
+  let action = proc (s: var Map) =
+    s.eraseCellWalls(x, y)
 
-  storeUndo(
-    UndoState(
-      kind: uskRectAreaChange,
-      rectX: x, rectY: y,
-      map: newMapFrom(m, x, y, width=1, height=1)
-    ),
-    redoAction=action
-  )
+  storeSingleCellUndoState(m, x, y, action, um)
 
   action(m)
 
+
 # }}}
 # {{{ eraseCellAction*()
-proc eraseCellAction*(m: var Map, x, y: Natural) =
+proc eraseCellAction*(m: var Map, x, y: Natural, um) =
   let action = proc (m: var Map) =
     # TODO fill should be improved
     m.fill(x, y, x, y)
     m.eraseCellWalls(x, y)
 
-  storeUndo(
-    UndoState(
-      kind: uskRectAreaChange,
-      rectX: x, rectY: y,
-      map: newMapFrom(m, x, y, width=1, height=1)
-    ),
-    redoAction=action
-  )
+  storeSingleCellUndoState(m, x, y, action, um)
 
   action(m)
 
 # }}}
 # {{{ setWallAction*()
-proc setWallAction*(m: var Map, x, y: Natural, dir: Direction, w: Wall) =
+proc setWallAction*(m: var Map, x, y: Natural, dir: Direction, w: Wall, um) =
   let action = proc (m: var Map) =
     m.setWall(x, y, dir, w)
 
-  storeUndo(
-    UndoState(
-      kind: uskRectAreaChange,
-      rectX: x, rectY: y,
-      map: newMapFrom(m, x, y, width=1, height=1)
-    ),
-    redoAction=action
-  )
+  storeSingleCellUndoState(m, x, y, action, um)
 
   action(m)
 
 # }}}
 # {{{ setFloorAction*()
-proc setFloorAction*(m: var Map, x, y: Natural, f: Floor) =
+proc setFloorAction*(m: var Map, x, y: Natural, f: Floor, um) =
   let action = proc (m: var Map) =
     m.setFloor(x, y, f)
 
-  storeUndo(
-    UndoState(
-      kind: uskRectAreaChange,
-      rectX: x, rectY: y,
-      map: newMapFrom(m, x, y, width=1, height=1)
-    ),
-    redoAction=action
-  )
+  storeSingleCellUndoState(m, x, y, action, um)
 
   action(m)
 
 # }}}
 # {{{ excavateAction*()
-proc excavateAction*(m: var Map, x, y: Natural) =
+proc excavateAction*(m: var Map, x, y: Natural, um) =
   let action = proc (m: var Map) =
     if m.getFloor(x,y) == fNone:
       m.setFloor(x,y, fEmptyFloor)
@@ -108,32 +99,18 @@ proc excavateAction*(m: var Map, x, y: Natural) =
     else:
       m.setWall(x,y, East, wNone)
 
-  storeUndo(
-    UndoState(
-      kind: uskRectAreaChange,
-      rectX: x, rectY: y,
-      map: newMapFrom(m, x, y, width=1, height=1)
-    ),
-    redoAction=action
-  )
+  storeSingleCellUndoState(m, x, y, action, um)
 
   action(m)
 
 # }}}
 # {{{ toggleFloorOrientationAction*()
-proc toggleFloorOrientationAction*(m: var Map, x, y: Natural) =
+proc toggleFloorOrientationAction*(m: var Map, x, y: Natural, um) =
   let action = proc (m: var Map) =
     let newOt = if m.getFloorOrientation(x, y) == Horiz: Vert else: Horiz
     m.setFloorOrientation(x, y, newOt)
 
-  storeUndo(
-    UndoState(
-      kind: uskRectAreaChange,
-      rectX: x, rectY: y,
-      map: newMapFrom(m, x, y, width=1, height=1)
-    ),
-    redoAction=action
-  )
+  storeSingleCellUndoState(m, x, y, action, um)
 
   action(m)
 

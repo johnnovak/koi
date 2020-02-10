@@ -10,6 +10,7 @@ import actions
 import common
 import drawmap
 import map
+import undomanager
 import utils
 
 
@@ -20,6 +21,7 @@ var
   g_map: Map
   g_cursorX: Natural
   g_cursorY: Natural
+  g_undoManager: UndoManager[Map]
 
 # }}}
 
@@ -110,7 +112,8 @@ proc init(): Window =
 
   loadData(g_vg)
 
-  g_Map = newMap(32, 32)
+  g_map = newMap(32, 32)
+  initUndoManager(g_undoManager)
 
   koi.init(g_vg)
 
@@ -160,18 +163,19 @@ proc handleEvents(win: Window) =
   for ke in keyBuf():
     alias(curX, g_cursorX)
     alias(curY, g_cursorY)
+    alias(um, g_undoManager)
 
     proc handleMoveKey(dir: Direction) =
 #        if ke.mods == {mkShift}:
       if win.isKeyDown(keyW):
         let w = if g_map.getWall(curX, curY, dir) == wNone: wWall
                 else: wNone
-        setWallAction(g_map,curX, curY, dir, w)
+        setWallAction(g_map,curX, curY, dir, w, um)
 
       elif ke.mods == {mkAlt}:
-        setWallAction(g_map,curX, curY, dir, wNone)
+        setWallAction(g_map,curX, curY, dir, wNone, um)
       elif ke.mods == {mkAlt, mkShift}:
-        setWallAction(g_map,curX, curY, dir, wClosedDoor)
+        setWallAction(g_map,curX, curY, dir, wClosedDoor, um)
       else:
         g_map.moveCursor(dir)
 
@@ -180,53 +184,53 @@ proc handleEvents(win: Window) =
     if ke.key in {keyUp,    keyK, keyKp8}: handleMoveKey(North)
     if ke.key in {keyDown,  keyJ, keyKp2}: handleMoveKey(South)
 
-    if   win.isKeyDown(keyF): setFloor(g_map, curX, curY, fEmptyFloor)
-    elif win.isKeyDown(key1): setFloor(g_map, curX, curY, fEmptyFloor)
+    if   win.isKeyDown(keyF): setFloorAction(g_map, curX, curY, fEmptyFloor, um)
+    elif win.isKeyDown(key1): setFloorAction(g_map, curX, curY, fEmptyFloor, um)
 
     elif win.isKeyDown(key2):
       if g_map.getFloor(curX, curY) == fClosedDoor:
-        toggleFloorOrientationAction(g_map, curX, curY)
+        toggleFloorOrientationAction(g_map, curX, curY, um)
       else:
-        setFloorAction(g_map, curX, curY, fClosedDoor)
+        setFloorAction(g_map, curX, curY, fClosedDoor, um)
 
     elif win.isKeyDown(key3):
       if g_map.getFloor(curX, curY) == fOpenDoor:
-        toggleFloorOrientationAction(g_map, curX, curY)
+        toggleFloorOrientationAction(g_map, curX, curY, um)
       else:
-        setFloorAction(g_map, curX, curY, fOpenDoor)
+        setFloorAction(g_map, curX, curY, fOpenDoor, um)
 
     elif win.isKeyDown(key4):
-      setFloorAction(g_map, curX, curY, fPressurePlate)
+      setFloorAction(g_map, curX, curY, fPressurePlate, um)
 
     elif win.isKeyDown(key5):
-      setFloorAction(g_map, curX, curY, fHiddenPressurePlate)
+      setFloorAction(g_map, curX, curY, fHiddenPressurePlate, um)
 
     elif win.isKeyDown(key6):
-      setFloorAction(g_map, curX, curY, fClosedPit)
+      setFloorAction(g_map, curX, curY, fClosedPit, um)
 
     elif win.isKeyDown(key7):
-      setFloorAction(g_map, curX, curY, fOpenPit)
+      setFloorAction(g_map, curX, curY, fOpenPit, um)
 
     elif win.isKeyDown(key8):
-      setFloorAction(g_map, curX, curY, fHiddenPit)
+      setFloorAction(g_map, curX, curY, fHiddenPit, um)
 
     elif win.isKeyDown(key9):
-      setFloorAction(g_map, curX, curY, fCeilingPit)
+      setFloorAction(g_map, curX, curY, fCeilingPit, um)
 
     elif win.isKeyDown(key0):
-      setFloorAction(g_map, curX, curY, fStairsDown)
+      setFloorAction(g_map, curX, curY, fStairsDown, um)
 
     elif win.isKeyDown(keyF):
-      setFloor(g_map, curX, curY, fEmptyFloor)
+      setFloorAction(g_map, curX, curY, fEmptyFloor, um)
 
     elif win.isKeyDown(keyD):
-      excavateAction(g_map, curX, curY)
+      excavateAction(g_map, curX, curY, um)
 
     elif win.isKeyDown(keyE):
-      eraseCellAction(g_map, curX, curY)
+      eraseCellAction(g_map, curX, curY, um)
 
     elif win.isKeyDown(keyW) and ke.mods == {mkAlt}:
-      eraseCellWallsAction(g_map, curX, curY)
+      eraseCellWallsAction(g_map, curX, curY, um)
 
   clearKeyBuf()
 
