@@ -6,6 +6,7 @@ from glfw/wrapper import showWindow
 import koi
 import nanovg
 
+import actions
 import common
 import drawmap
 import map
@@ -132,65 +133,6 @@ proc cleanup() =
 
 # }}}
 
-type
-  ActionProc = proc (m: var Map)
-
-  UndoStateKind = enum
-    uskRectAreaChange
-
-  UndoState = object
-    case kind: UndoStateKind
-    of uskRectAreaChange:
-      rectX, rectY: Natural
-      map: Map
-      # TODO skipGrid
-
-var
-  g_undoStates: seq[UndoState]
-  g_undoPos: int
-  g_redoActions: seq[ActionProc]
-
-
-proc initUndo() =
-  g_undoStates = @[]
-  g_undoPos = -1
-  g_redoActions = @[]
-
-
-proc storeUndo(undoState: UndoState, redoAction: ActionProc) =
-  # Discard later undo states if we're not at the last step in the history
-  if g_undoPos < g_undoStates.len-1:
-    let newLen = g_undoPos+1
-    g_undoStates.setLen(newLen)
-    g_redoActions.setLen(newLen)
-
-  g_undoStates.add(undoState)
-  g_redoActions.add(redoAction)
-  inc(g_undoPos)
-
-
-proc restoreUndoState(m: var Map, undoState: UndoState) =
-  # TODO
-  discard
-
-
-proc canUndo(): bool = g_undoStates.len > 0
-
-proc undo(m: var Map) =
-  if canUndo():
-    restoreUndoState(m, g_undoStates[g_undoPos])
-    dec(g_undoPos)
-
-
-proc canRedo(): bool = g_undoPos+1 <= g_redoActions.len-1
-
-proc redo(m: var Map) =
-  if canRedo():
-    let redoAction = g_redoActions[g_undoPos+1]
-    redoAction(m)
-    inc(g_undoPos)
-
-
 # {{{ setCursor()
 proc setCursor(m: Map, x, y: Natural) =
   g_cursorX = min(x, m.width-1)
@@ -208,123 +150,6 @@ proc moveCursor(m: Map, dir: Direction) =
     setCursor(m, g_cursorX,   g_cursorY+1)
   of West:
     if g_cursorX > 0: setCursor(m, g_cursorX-1, g_cursorY)
-
-# }}}
-# {{{ eraseCellWalls()
-proc eraseCellWalls(m: var Map, x, y: Natural) =
-  m.setWall(x,y, North, wNone)
-  m.setWall(x,y, West,  wNone)
-  m.setWall(x,y, South, wNone)
-  m.setWall(x,y, East,  wNone)
-
-# }}}
-# {{{ eraseCellAction()
-proc eraseCellAction(m: var Map, x, y: Natural) =
-  let action = proc (m: var Map) =
-    # TODO fill should be improved
-    m.fill(x, y, x, y)
-    m.eraseCellWalls(x, y)
-
-  storeUndo(
-    UndoState(
-      kind: uskRectAreaChange,
-      rectX: x, rectY: y,
-      map: newMapFrom(m, x, y, width=1, height=1)
-    ),
-    redoAction=action
-  )
-
-  action(m)
-
-# }}}
-# {{{ setWallAction()
-proc setWallAction(m: var Map, x, y: Natural, dir: Direction, w: Wall) =
-  let action = proc (m: var Map) =
-    m.setWall(x, y, dir, w)
-
-  storeUndo(
-    UndoState(
-      kind: uskRectAreaChange,
-      rectX: x, rectY: y,
-      map: newMapFrom(m, x, y, width=1, height=1)
-    ),
-    redoAction=action
-  )
-
-  action(m)
-
-# }}}
-# {{{ setFloorAction()
-proc setFloorAction(m: var Map, x, y: Natural, f: Floor) =
-  let action = proc (m: var Map) =
-    m.setFloor(x, y, f)
-
-  storeUndo(
-    UndoState(
-      kind: uskRectAreaChange,
-      rectX: x, rectY: y,
-      map: newMapFrom(m, x, y, width=1, height=1)
-    ),
-    redoAction=action
-  )
-
-  action(m)
-
-# }}}
-# {{{ excavateAction()
-proc excavateAction(m: var Map, x, y: Natural) =
-  let action = proc (m: var Map) =
-    if m.getFloor(x,y) == fNone:
-      m.setFloor(x,y, fEmptyFloor)
-
-    if y == 0 or m.getFloor(x,y-1) == fNone:
-      m.setWall(x,y, North, wWall)
-    else:
-      m.setWall(x,y, North, wNone)
-
-    if x == 0 or m.getFloor(x-1,y) == fNone:
-      m.setWall(x,y, West, wWall)
-    else:
-      m.setWall(x,y, West, wNone)
-
-    if y == m.height-1 or m.getFloor(x,y+1) == fNone:
-      m.setWall(x,y, South, wWall)
-    else:
-      m.setWall(x,y, South, wNone)
-
-    if x == m.width-1 or m.getFloor(x+1,y) == fNone:
-      m.setWall(x,y, East, wWall)
-    else:
-      m.setWall(x,y, East, wNone)
-
-  storeUndo(
-    UndoState(
-      kind: uskRectAreaChange,
-      rectX: x, rectY: y,
-      map: newMapFrom(m, x, y, width=1, height=1)
-    ),
-    redoAction=action
-  )
-
-  action(m)
-
-# }}}
-# {{{ toggleFloorOrientationAction()
-proc toggleFloorOrientationAction(m: var Map, x, y: Natural) =
-  let action = proc (m: var Map) =
-    let newOt = if m.getFloorOrientation(x, y) == Horiz: Vert else: Horiz
-    m.setFloorOrientation(x, y, newOt)
-
-  storeUndo(
-    UndoState(
-      kind: uskRectAreaChange,
-      rectX: x, rectY: y,
-      map: newMapFrom(m, x, y, width=1, height=1)
-    ),
-    redoAction=action
-  )
-
-  action(m)
 
 # }}}
 # {{{ handleEvents()
@@ -401,7 +226,7 @@ proc handleEvents(win: Window) =
       eraseCellAction(g_map, curX, curY)
 
     elif win.isKeyDown(keyW) and ke.mods == {mkAlt}:
-      g_map.eraseCellWalls(curX, curY)
+      eraseCellWallsAction(g_map, curX, curY)
 
   clearKeyBuf()
 
@@ -421,5 +246,6 @@ proc main() =
 # }}}
 
 main()
+
 
 # vim: et:ts=2:sw=2:fdm=marker
