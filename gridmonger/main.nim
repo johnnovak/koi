@@ -26,7 +26,7 @@ var
 proc createWindow(): Window =
   var cfg = DefaultOpenglWindowConfig
   cfg.size = (w: 800, h: 800)
-  cfg.title = "Dungeon PowerMapper Deluxe v0.1 alpha"
+  cfg.title = "GridMonger v0.1 alpha"
   cfg.resizable = true
   cfg.visible = false
   cfg.bits = (r: 8, g: 8, b: 8, a: 8, stencil: 8, depth: 16)

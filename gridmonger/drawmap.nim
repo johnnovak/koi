@@ -47,7 +47,7 @@ type
 # {{{ initDrawParams()
 proc initDrawParams(): DrawParams =
   var dp: DrawParams
-  dp.gridSize = 22.0
+  dp.gridSize = 32.0
 
   dp.startX = 50.0
   dp.startY = 50.0
