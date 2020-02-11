@@ -97,7 +97,7 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
 
 # }}}
 
-# {{{ GLFw callbacks
+# {{{ GLFW callbacks
 proc windowPosCb(win: Window, pos: tuple[x, y: int32]) =
   render(win)
 
