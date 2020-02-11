@@ -10,6 +10,7 @@ import actions
 import common
 import drawmap
 import map
+import selection
 import undomanager
 import utils
 
@@ -21,9 +22,11 @@ type
     win:         Window
 
     map:         Map
-    drawParams:  DrawParams
     cursorX:     Natural
     cursorY:     Natural
+    selection:   Selection
+    mapCopyBuf:  Map
+    drawParams:  DrawParams
 
     undoManager: UndoManager[Map]
 

@@ -47,34 +47,35 @@ type
     height: Natural
     cells:  seq[Cell]
 
+using m: Map
 
-func width*(m: Map): Natural =
+func width*(m): Natural =
   result = m.width-1
 
-func height*(m: Map): Natural =
+func height*(m): Natural =
   result = m.height-1
 
-proc `[]=`(m: var Map, x, y: Natural, c: Cell) =
+proc `[]=`(m; x, y: Natural, c: Cell) =
   assert x < m.width
   assert y < m.height
   m.cells[m.width * y + x] = c
 
-proc `[]`(m: Map, x, y: Natural): var Cell =
+proc `[]`(m; x, y: Natural): var Cell =
   assert x < m.width
   assert y < m.height
   result = m.cells[m.width * y + x]
 
-proc fill*(m: var Map, x1, y1, x2, y2: Natural, cell: Cell = Cell.default) =
+proc fill*(m; x1, y1, x2, y2: Natural, cell: Cell = Cell.default) =
   assert x1 < m.width-1
   assert y1 < m.height-1
   for y in y1..y2:
     for x in x1..x2:
       m[x,y] = cell
 
-proc clear*(m: var Map, cell: Cell = Cell.default) =
+proc clear*(m; cell: Cell = Cell.default) =
   m.fill(0, 0, m.width-1, m.height-1, cell)
 
-proc initMap(m: var Map, width, height: Natural) =
+proc initMap(m; width, height: Natural) =
   m.width = width+1
   m.height = height+1
   newSeq(m.cells, m.width * m.height)
@@ -129,32 +130,32 @@ proc newMapFrom*(src: Map, x, y, width, height: Natural): Map =
   result = m
 
 
-proc newMapFrom*(m: Map): Map =
+proc newMapFrom*(m): Map =
   newMapFrom(m, x=0, y=0, m.width-1, m.height-1)
 
 
-proc getFloor*(m: Map, x, y: Natural): Floor =
+proc getFloor*(m; x, y: Natural): Floor =
   assert x < m.width-1
   assert y < m.height-1
   m[x,y].floor
 
-proc getFloorOrientation*(m: Map, x, y: Natural): Orientation =
+proc getFloorOrientation*(m; x, y: Natural): Orientation =
   assert x < m.width-1
   assert y < m.height-1
   m[x,y].floorOrientation
 
-proc setFloorOrientation*(m: Map, x, y: Natural, ot: Orientation) =
+proc setFloorOrientation*(m; x, y: Natural, ot: Orientation) =
   assert x < m.width-1
   assert y < m.height-1
   m[x,y].floorOrientation = ot
 
-proc setFloor*(m: Map, x, y: Natural, f: Floor) =
+proc setFloor*(m; x, y: Natural, f: Floor) =
   assert x < m.width-1
   assert y < m.height-1
   m[x,y].floor = f
 
 
-proc getWall*(m: Map, x, y: Natural, dir: Direction): Wall =
+proc getWall*(m; x, y: Natural, dir: Direction): Wall =
   assert x < m.width-1
   assert y < m.height-1
 
@@ -165,7 +166,7 @@ proc getWall*(m: Map, x, y: Natural, dir: Direction): Wall =
   of East:  m[1+x,   y].wallW
 
 
-proc setWall*(m: var Map, x, y: Natural, dir: Direction, w: Wall) =
+proc setWall*(m; x, y: Natural, dir: Direction, w: Wall) =
   assert x < m.width-1
   assert y < m.height-1
 
@@ -177,7 +178,7 @@ proc setWall*(m: var Map, x, y: Natural, dir: Direction, w: Wall) =
 
 
 # TODO
-proc serialize(m: Map, s: var Stream) =
+proc serialize(m; s: var Stream) =
   discard
 
 # TODO
