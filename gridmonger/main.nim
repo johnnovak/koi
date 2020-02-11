@@ -25,7 +25,7 @@ type
     cursorX:     Natural
     cursorY:     Natural
     selection:   Selection
-    mapCopyBuf:  Map
+    copyBuf:     Map
     drawParams:  DrawParams
 
     undoManager: UndoManager[Map]
