@@ -14,7 +14,6 @@ proc storeSingleCellUndoState(m: var Map, x, y: Natural,
 
   var undoMap = newMapFrom(m, x, y, width=1, height=1)
   var undoAction = proc (s: var Map) = 
-    echo "*** undo action: x: ", x, ", y: ", y 
     s.copyFrom(undoMap, srcX=0, srcY=0, width=1, height=1, destX=x, destY=y)
 
   um.storeUndoState(undoAction, redoAction)

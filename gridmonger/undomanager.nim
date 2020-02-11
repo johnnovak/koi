@@ -29,7 +29,7 @@ proc storeUndoState*[S](m: var UndoManager[S],
     m.currState = 0
 
   # Discard later states if we're not at the last one
-  elif m.currState <= m.states.high:
+  elif m.currState < m.states.high:
     m.states.setLen(m.currState+1)
 
   m.states[m.currState].nextState = redoAction
@@ -41,19 +41,15 @@ proc canUndo*[S](m: var UndoManager[S]): bool =
   m.currState > 0
 
 proc undo*[S](m: var UndoManager[S], s: var S) =
-  echo "ENTER undo"
   if m.canUndo():
-    echo "DO undo"
     m.states[m.currState].prevState(s)
     dec(m.currState)
 
 proc canRedo*[S](m: var UndoManager[S]): bool =
-  m.currState < m.states.high-1
+  m.currState < m.states.high
 
 proc redo*[S](m: var UndoManager[S], s: var S) =
-  echo "ENTER redo"
   if m.canRedo():
-    echo "DO redo"
     m.states[m.currState].nextState(s)
     inc(m.currState)
 
