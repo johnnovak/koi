@@ -3,25 +3,27 @@ import map
 import undomanager
 
 
-
 using
+  m: var Map
   um: var UndoManager[Map]
 
-
-# {{{ storeSingleCellUndoState()
-proc storeSingleCellUndoState(m: var Map, x, y: Natural,
-                              redoAction: proc (s: var Map), um) =
+# {{{ singleCellAction()
+template singleCellAction(m; x, y: Natural, um; body: untyped) =
+  let action = proc (m: var Map) =
+    body
 
   var undoMap = newMapFrom(m, x, y, width=1, height=1)
   var undoAction = proc (s: var Map) = 
     s.copyFrom(undoMap, srcX=0, srcY=0, width=1, height=1, destX=x, destY=y)
 
-  um.storeUndoState(undoAction, redoAction)
+  um.storeUndoState(undoAction, redoAction=action)
+
+  action(m)
 
 # }}}
 
 # {{{ eraseCellWalls()
-proc eraseCellWalls(m: var Map, x, y: Natural) =
+proc eraseCellWalls(m; x, y: Natural) =
   m.setWall(x,y, North, wNone)
   m.setWall(x,y, West,  wNone)
   m.setWall(x,y, South, wNone)
@@ -30,47 +32,34 @@ proc eraseCellWalls(m: var Map, x, y: Natural) =
 # }}}
 
 # {{{ eraseCellWallsAction*()
-proc eraseCellWallsAction*(m: var Map, x, y: Natural, um) =
-  let action = proc (s: var Map) =
-    s.eraseCellWalls(x, y)
-
-  storeSingleCellUndoState(m, x, y, action, um)
-  action(m)
-
+proc eraseCellWallsAction*(m; x, y: Natural, um) =
+  singleCellAction(m, x, y, um):
+    m.eraseCellWalls(x, y)
 
 # }}}
 # {{{ eraseCellAction*()
-proc eraseCellAction*(m: var Map, x, y: Natural, um) =
-  let action = proc (m: var Map) =
+proc eraseCellAction*(m; x, y: Natural, um) =
+  singleCellAction(m, x, y, um):
     # TODO fill should be improved
     m.fill(x, y, x, y)
     m.eraseCellWalls(x, y)
 
-  storeSingleCellUndoState(m, x, y, action, um)
-  action(m)
-
 # }}}
 # {{{ setWallAction*()
-proc setWallAction*(m: var Map, x, y: Natural, dir: Direction, w: Wall, um) =
-  let action = proc (m: var Map) =
+proc setWallAction*(m; x, y: Natural, dir: Direction, w: Wall, um) =
+  singleCellAction(m, x, y, um):
     m.setWall(x, y, dir, w)
-
-  storeSingleCellUndoState(m, x, y, action, um)
-  action(m)
 
 # }}}
 # {{{ setFloorAction*()
-proc setFloorAction*(m: var Map, x, y: Natural, f: Floor, um) =
-  let action = proc (m: var Map) =
+proc setFloorAction*(m; x, y: Natural, f: Floor, um) =
+  singleCellAction(m, x, y, um):
     m.setFloor(x, y, f)
-
-  storeSingleCellUndoState(m, x, y, action, um)
-  action(m)
 
 # }}}
 # {{{ excavateAction*()
-proc excavateAction*(m: var Map, x, y: Natural, um) =
-  let action = proc (m: var Map) =
+proc excavateAction*(m; x, y: Natural, um) =
+  singleCellAction(m, x, y, um):
     if m.getFloor(x,y) == fNone:
       m.setFloor(x,y, fEmptyFloor)
 
@@ -94,20 +83,13 @@ proc excavateAction*(m: var Map, x, y: Natural, um) =
     else:
       m.setWall(x,y, East, wNone)
 
-  storeSingleCellUndoState(m, x, y, action, um)
-  action(m)
-
 # }}}
 # {{{ toggleFloorOrientationAction*()
-proc toggleFloorOrientationAction*(m: var Map, x, y: Natural, um) =
-  let action = proc (m: var Map) =
+proc toggleFloorOrientationAction*(m; x, y: Natural, um) =
+  singleCellAction(m, x, y, um):
     let newOt = if m.getFloorOrientation(x, y) == Horiz: Vert else: Horiz
     m.setFloorOrientation(x, y, newOt)
 
-  storeSingleCellUndoState(m, x, y, action, um)
-  action(m)
-
 # }}}
-
 
 # vim: et:ts=2:sw=2:fdm=marker

@@ -15,7 +15,7 @@ const
 # All drawing procs interpret the passed in (x,y) coordinates as the
 # upper-left corner of the object (e.g. a cell).
 
-# {{{ DrawParams
+# {{{ DrawParams*
 type
   DrawParams* = object
     gridSize*: float
@@ -44,9 +44,8 @@ type
 
 
 # }}}
-# {{{ initDrawParams()
-proc initDrawParams(): DrawParams =
-  var dp: DrawParams
+# {{{ initDrawParams*()
+proc initDrawParams*(dp: var DrawParams) =
   dp.gridSize = 22.0
 
   dp.startX = 50.0
@@ -71,10 +70,11 @@ proc initDrawParams(): DrawParams =
   dp.cellCoordsColorHi   = rgb(1.0, 0.75, 0.0)
   dp.cellCoordsFontSize  = 15.0
 
-  result = dp
 # }}}
 
-var g_drawParams*: DrawParams = initDrawParams()
+using
+  dp: DrawParams
+  vg: NVGContext
 
 # {{{ utils
 
@@ -84,16 +84,16 @@ func snap(f: float, strokeWidth: float): float =
   let (_, offs) = splitDecimal(strokeWidth/2)
   result = i + offs
 
-proc cellX(x: Natural, dp: DrawParams): float =
+proc cellX(x: Natural, dp): float =
   dp.startX + dp.gridSize * x
 
-proc cellY(y: Natural, dp: DrawParams): float =
+proc cellY(y: Natural, dp): float =
   dp.startY + dp.gridSize * y
 
 # }}}
 
 # {{{ drawBackgroundGrid
-proc drawBackgroundGrid(m: Map, dp: DrawParams, vg: NVGContext) =
+proc drawBackgroundGrid(m: Map, dp, vg) =
   let strokeWidth = UltrathinStrokeWidth
 
   vg.lineCap(lcjSquare)
@@ -121,8 +121,7 @@ proc drawBackgroundGrid(m: Map, dp: DrawParams, vg: NVGContext) =
 
 # }}}
 # {{{ drawCellCoords()
-proc drawCellCoords(m: Map, cursorX, cursorY: Natural,
-                    dp: DrawParams, vg: NVGContext) =
+proc drawCellCoords(m: Map, cursorX, cursorY: Natural, dp, vg) =
 
   vg.fontFace("sans")
   vg.fontSize(dp.cellCoordsFontSize)
@@ -161,7 +160,7 @@ proc drawCellCoords(m: Map, cursorX, cursorY: Natural,
 
 # }}}
 # {{{ drawMapBackground()
-proc drawMapBackground(m: Map, dp: DrawParams, vg: NVGContext) =
+proc drawMapBackground(m: Map, dp, vg) =
   let strokeWidth = UltrathinStrokeWidth
 
   vg.strokeColor(dp.mapBackgroundColor)
@@ -199,7 +198,7 @@ proc drawMapBackground(m: Map, dp: DrawParams, vg: NVGContext) =
 
 # }}}
 # {{{ drawCursor()
-proc drawCursor(x, y: float, dp: DrawParams, vg: NVGContext) =
+proc drawCursor(x, y: float, dp, vg) =
   vg.fillColor(dp.cursorColor)
   vg.beginPath()
   vg.rect(x+1, y+1, dp.gridSize-1, dp.gridSize-1)
@@ -207,8 +206,7 @@ proc drawCursor(x, y: float, dp: DrawParams, vg: NVGContext) =
 
 # }}}
 # {{{ drawCursorGuides()
-proc drawCursorGuides(m: Map, cursorX, cursorY: Natural,
-                      dp: DrawParams, vg: NVGContext) =
+proc drawCursorGuides(m: Map, cursorX, cursorY: Natural, dp, vg) =
   let
     x = cellX(cursorX, dp)
     y = cellY(cursorY, dp)
@@ -232,7 +230,7 @@ proc drawCursorGuides(m: Map, cursorX, cursorY: Natural,
 
 # }}}
 # {{{ drawOutline()
-proc drawOutline(m: Map, dp: DrawParams, vg: NVGContext) =
+proc drawOutline(m: Map, dp, vg) =
   func check(x, y: int): bool =
     let x = max(min(x, m.width-1), 0)
     let y = max(min(y, m.height-1), 0)
@@ -268,7 +266,7 @@ proc drawOutline(m: Map, dp: DrawParams, vg: NVGContext) =
 # }}}
 
 # {{{ drawGround()
-proc drawGround(x, y: float, color: Color, dp: DrawParams, vg: NVGContext) =
+proc drawGround(x, y: float, color: Color, dp, vg) =
   let sw = UltrathinStrokeWidth
 
   vg.beginPath()
@@ -281,7 +279,7 @@ proc drawGround(x, y: float, color: Color, dp: DrawParams, vg: NVGContext) =
 
 # }}}
 # {{{ drawPressurePlate()
-proc drawPressurePlate(x, y: float, dp: DrawParams, vg: NVGContext) =
+proc drawPressurePlate(x, y: float, dp, vg) =
   let
     offs = (dp.gridSize * 0.3).int
     a = dp.gridSize - 2*offs + 1
@@ -297,12 +295,12 @@ proc drawPressurePlate(x, y: float, dp: DrawParams, vg: NVGContext) =
 
 # }}}
 # {{{ drawHiddenPressurePlate()
-proc drawHiddenPressurePlate(x, y: float, dp: DrawParams, vg: NVGContext) =
+proc drawHiddenPressurePlate(x, y: float, dp, vg) =
   discard
 
 # }}}
 # {{{ drawClosedPit()
-proc drawClosedPit(x, y: float, dp: DrawParams, vg: NVGContext) =
+proc drawClosedPit(x, y: float, dp, vg) =
   let
     offs = (dp.gridSize * 0.3).int
     a = dp.gridSize - 2*offs + 1
@@ -333,7 +331,7 @@ proc drawClosedPit(x, y: float, dp: DrawParams, vg: NVGContext) =
 
 # }}}
 # {{{ drawOpenPit()
-proc drawOpenPit(x, y: float, dp: DrawParams, vg: NVGContext) =
+proc drawOpenPit(x, y: float, dp, vg) =
   let
     offs = (dp.gridSize * 0.3).int
     a = dp.gridSize - 2*offs + 1
@@ -355,43 +353,43 @@ proc drawOpenPit(x, y: float, dp: DrawParams, vg: NVGContext) =
 
 # }}}
 # {{{ drawHiddenPit()
-proc drawHiddenPit(x, y: float, dp: DrawParams, vg: NVGContext) =
+proc drawHiddenPit(x, y: float, dp, vg) =
   discard
 
 # }}}
 # {{{ drawCeilingPit()
-proc drawCeilingPit(x, y: float, dp: DrawParams, vg: NVGContext) =
+proc drawCeilingPit(x, y: float, dp, vg) =
   discard
 
 # }}}
 # {{{ drawStairsDown()
-proc drawStairsDown(x, y: float, dp: DrawParams, vg: NVGContext) =
+proc drawStairsDown(x, y: float, dp, vg) =
   discard
 
 # }}}
 # {{{ drawStairsUp()
-proc drawStairsUp(x, y: float, dp: DrawParams, vg: NVGContext) =
+proc drawStairsUp(x, y: float, dp, vg) =
   discard
 
 # }}}
 # {{{ drawSpinner()
-proc drawSpinner(x, y: float, dp: DrawParams, vg: NVGContext) =
+proc drawSpinner(x, y: float, dp, vg) =
   discard
 
 # }}}
 # {{{ drawTeleport()
-proc drawTeleport(x, y: float, dp: DrawParams, vg: NVGContext) =
+proc drawTeleport(x, y: float, dp, vg) =
   discard
 
 # }}}
 # {{{ drawCustom()
-proc drawCustom(x, y: float, dp: DrawParams, vg: NVGContext) =
+proc drawCustom(x, y: float, dp, vg) =
   discard
 
 # }}}
 
 # {{{ drawSolidWallHoriz()
-proc drawSolidWallHoriz(x, y: float, dp: DrawParams, vg: NVGContext) =
+proc drawSolidWallHoriz(x, y: float, dp, vg) =
   let
     sw = NormalStrokeWidth
     x = snap(x, sw)
@@ -407,7 +405,7 @@ proc drawSolidWallHoriz(x, y: float, dp: DrawParams, vg: NVGContext) =
 
 # }}}
 # {{{ drawOpenDoorHoriz()
-proc drawOpenDoorHoriz(x, y: float, dp: DrawParams, vg: NVGContext) =
+proc drawOpenDoorHoriz(x, y: float, dp, vg) =
   let
     wallLen = (dp.gridSize * 0.3).int
     doorWidth = round(dp.gridSize * 0.1)
@@ -453,7 +451,7 @@ proc drawOpenDoorHoriz(x, y: float, dp: DrawParams, vg: NVGContext) =
 
 # }}}
 # {{{ drawClosedDoorHoriz()
-proc drawClosedDoorHoriz(x, y: float, dp: DrawParams, vg: NVGContext) =
+proc drawClosedDoorHoriz(x, y: float, dp, vg) =
   let
     wallLen = (dp.gridSize * 0.25).int
     doorWidth = round(dp.gridSize * 0.1)
@@ -499,7 +497,7 @@ proc drawClosedDoorHoriz(x, y: float, dp: DrawParams, vg: NVGContext) =
 
 # }}}
 # {{{ setVertTransform()
-proc setVertTransform(x, y: float, dp: DrawParams, vg: NVGContext) =
+proc setVertTransform(x, y: float, dp, vg) =
   vg.translate(x, y)
   vg.rotate(degToRad(90.0))
 
@@ -509,8 +507,7 @@ proc setVertTransform(x, y: float, dp: DrawParams, vg: NVGContext) =
 
 # }}}
 # {{{ drawFloor()
-proc drawFloor(m: Map, x, y: Natural, cursorActive: bool,
-               dp: DrawParams, vg: NVGContext) =
+proc drawFloor(m: Map, x, y: Natural, cursorActive: bool, dp, vg) =
 
   let xPos = cellX(x, dp)
   let yPos = cellY(y, dp)
@@ -556,8 +553,7 @@ proc drawFloor(m: Map, x, y: Natural, cursorActive: bool,
 
 # }}}
 # {{{ drawWall()
-proc drawWall(x, y: float, wall: Wall,
-              ot: Orientation, dp: DrawParams, vg: NVGContext) =
+proc drawWall(x, y: float, wall: Wall, ot: Orientation, dp, vg) =
 
   template drawOriented(drawProc: untyped) =
     case ot:
@@ -582,7 +578,7 @@ proc drawWall(x, y: float, wall: Wall,
 
 # }}}
 # {{{ drawWalls()
-proc drawWalls(m: Map, x: Natural, y: Natural, dp: DrawParams, vg: NVGContext) =
+proc drawWalls(m: Map, x: Natural, y: Natural, dp, vg) =
   drawWall(cellX(x, dp), cellY(y, dp), m.getWall(x,y, North), Horiz, dp, vg)
   drawWall(cellX(x, dp), cellY(y, dp), m.getWall(x,y, West), Vert, dp, vg)
 
@@ -595,8 +591,7 @@ proc drawWalls(m: Map, x: Natural, y: Natural, dp: DrawParams, vg: NVGContext) =
 # }}}
 
 # {{{ drawMap*()
-proc drawMap*(m: Map, cursorX, cursorY: Natural,
-              dp: DrawParams, vg: NVGContext) =
+proc drawMap*(m: Map, cursorX, cursorY: Natural, dp, vg) =
 
   drawCellCoords(m, cursorX, cursorY, dp, vg)
   drawMapBackground(m, dp, vg)
