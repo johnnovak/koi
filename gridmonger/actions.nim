@@ -8,18 +8,18 @@ using
   um: var UndoManager[Map]
 
 
+# {{{ storeSingleCellUndoState()
 proc storeSingleCellUndoState(m: var Map, x, y: Natural,
                               redoAction: proc (s: var Map), um) =
 
   var undoMap = newMapFrom(m, x, y, width=1, height=1)
+  var undoAction = proc (s: var Map) = 
+    echo "*** undo action: x: ", x, ", y: ", y 
+    s.copyFrom(undoMap, srcX=0, srcY=0, width=1, height=1, destX=x, destY=y)
 
-  um.storeUndoState(
-    undoAction = proc (s: var Map) =
-      s.copyFrom(undoMap, srcX=0, srcY=0, width=1, height=1, destX=x, destY=y),
+  um.storeUndoState(undoAction, redoAction)
 
-    redoAction=redoAction
-  )
-
+# }}}
 
 # {{{ eraseCellWalls()
 proc eraseCellWalls(m: var Map, x, y: Natural) =
@@ -36,7 +36,6 @@ proc eraseCellWallsAction*(m: var Map, x, y: Natural, um) =
     s.eraseCellWalls(x, y)
 
   storeSingleCellUndoState(m, x, y, action, um)
-
   action(m)
 
 
@@ -49,7 +48,6 @@ proc eraseCellAction*(m: var Map, x, y: Natural, um) =
     m.eraseCellWalls(x, y)
 
   storeSingleCellUndoState(m, x, y, action, um)
-
   action(m)
 
 # }}}
@@ -59,7 +57,6 @@ proc setWallAction*(m: var Map, x, y: Natural, dir: Direction, w: Wall, um) =
     m.setWall(x, y, dir, w)
 
   storeSingleCellUndoState(m, x, y, action, um)
-
   action(m)
 
 # }}}
@@ -69,7 +66,6 @@ proc setFloorAction*(m: var Map, x, y: Natural, f: Floor, um) =
     m.setFloor(x, y, f)
 
   storeSingleCellUndoState(m, x, y, action, um)
-
   action(m)
 
 # }}}
@@ -100,7 +96,6 @@ proc excavateAction*(m: var Map, x, y: Natural, um) =
       m.setWall(x,y, East, wNone)
 
   storeSingleCellUndoState(m, x, y, action, um)
-
   action(m)
 
 # }}}
@@ -111,7 +106,6 @@ proc toggleFloorOrientationAction*(m: var Map, x, y: Natural, um) =
     m.setFloorOrientation(x, y, newOt)
 
   storeSingleCellUndoState(m, x, y, action, um)
-
   action(m)
 
 # }}}

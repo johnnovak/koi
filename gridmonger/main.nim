@@ -112,7 +112,7 @@ proc init(): Window =
 
   loadData(g_vg)
 
-  g_map = newMap(32, 32)
+  g_map = newMap(24, 32)
   initUndoManager(g_undoManager)
 
   koi.init(g_vg)
@@ -231,6 +231,12 @@ proc handleEvents(win: Window) =
 
     elif win.isKeyDown(keyW) and ke.mods == {mkAlt}:
       eraseCellWallsAction(g_map, curX, curY, um)
+
+    elif win.isKeyDown(keyZ) and ke.mods == {mkCtrl}:
+      g_undoManager.undo(g_map)
+
+    elif win.isKeyDown(keyY) and ke.mods == {mkCtrl}:
+      g_undoManager.redo(g_map)
 
   clearKeyBuf()
 

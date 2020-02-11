@@ -86,26 +86,29 @@ proc newMap*(width, height: Natural): Map =
   result = m
 
 
-proc copyFrom*(m: var Map,
+proc copyFrom*(dest: var Map,
                src: Map, srcX, srcY, width, height: Natural,
                destX, destY: Natural) =
   let
-    srcWidth = max(src.width - srcX, 0)
-    srcHeight = max(src.height - srcY, 0)
-    destWidth = max(m.width - destX, 0)
-    destHeight = max(m.height - destY, 0)
-    w = min(min(srcWidth, destWidth), width)
+    width  = width  + 1
+    height = height + 1
+    srcWidth   = max(src.width  - srcX,  0)
+    srcHeight  = max(src.height - srcY,  0)
+    destWidth  = max(dest.width    - destX, 0)
+    destHeight = max(dest.height   - destY, 0)
+
+    w = min(min(srcWidth,  destWidth),  width)
     h = min(min(srcHeight, destHeight), height)
 
   for y in 0..h-2:
     for x in 0..w-2:
-      m[x+destX, y+destY] = src[x+srcX, y+srcY]
+      dest[destX + x, destY + y] = src[srcX + x, srcY + y]
 
   for x in 0..w-2:
-    m[x+destX, h-1 + destY].wallN = src[x+srcX, h-1 + destY].wallN
+    dest[destX + x, destY + h-1].wallN = src[srcX + x, srcY + h-1].wallN
 
   for y in 0..h-2:
-    m[w-1 + destX, y+destY].wallW = src[w-1 + destX, y+destY].wallW
+    dest[destX + w-1, destY + y].wallW = src[srcX + w-1, srcY + y].wallW
 
 
 proc copyFrom*(m: var Map, src: Map) =
@@ -113,12 +116,12 @@ proc copyFrom*(m: var Map, src: Map) =
 
 
 proc newMapFrom*(src: Map, x, y, width, height: Natural): Map =
-  assert x < src.width
-  assert y < src.height
+  assert x < src.width-1
+  assert y < src.height-1
   assert width > 0
   assert height > 0
-  assert x + width <= src.width
-  assert y + height <= src.height
+  assert x + width <= src.width-1
+  assert y + height <= src.height-1
 
   var m = new Map
   m.initMap(width, height)
@@ -127,7 +130,7 @@ proc newMapFrom*(src: Map, x, y, width, height: Natural): Map =
 
 
 proc newMapFrom*(m: Map): Map =
-  newMapFrom(m, x=0, y=0, m.width, m.height)
+  newMapFrom(m, x=0, y=0, m.width-1, m.height-1)
 
 
 proc getFloor*(m: Map, x, y: Natural): Floor =
