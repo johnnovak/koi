@@ -10,6 +10,7 @@ import actions
 import common
 import drawmap
 import map
+import options
 import selection
 import undomanager
 import utils
@@ -35,7 +36,7 @@ type
     editMode:    EditMode
     copyBuf:     CopyBuffer
     selection:   Selection
-    selRect:     Rect[Natural]
+    selRect:     Option[Rect[Natural]]
 
     drawParams:  DrawParams
 
@@ -111,6 +112,7 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
     g_app.map,
     g_app.cursorX, g_app.cursorY,
     selection,
+    g_app.selRect.map(normalize),
     g_app.drawParams,
     vg
   )
@@ -260,10 +262,10 @@ proc handleEvents(a) =
   alias(win, a.win)
 
   const
-    MoveKeysLeft  = {keyLeft,  keyA, keyH, keyKp4}
-    MoveKeysRight = {keyRight, keyD, keyL, keyKp6}
-    MoveKeysUp    = {keyUp,    keyW, keyK, keyKp8}
-    MoveKeysDown  = {keyDown,  keyS, keyJ, keyKp2}
+    MoveKeysLeft  = {keyLeft,  keyH, keyKp4}
+    MoveKeysRight = {keyRight, keyL, keyKp6}
+    MoveKeysUp    = {keyUp,    keyK, keyKp8}
+    MoveKeysDown  = {keyDown,  keyJ, keyKp2}
 
   for ke in keyBuf():
     case a.editMode
@@ -271,7 +273,7 @@ proc handleEvents(a) =
 
       proc handleMoveKey(dir: Direction, a) =
   #        if ke.mods == {mkShift}:
-        if win.isKeyDown(keyQ):
+        if win.isKeyDown(keyW):
           let w = if m.getWall(curX, curY, dir) == wNone: wWall
                   else: wNone
           setWallAction(m, curX, curY, dir, w, um)
@@ -291,13 +293,13 @@ proc handleEvents(a) =
       if win.isKeyDown(keyF):
         setFloorAction(m, curX, curY, fEmptyFloor, um)
 
-      elif win.isKeyDown(keyE):
+      elif win.isKeyDown(keyD):
         excavateAction(m, curX, curY, um)
 
-      elif win.isKeyDown(keyX):
+      elif win.isKeyDown(keyE):
         eraseCellAction(m, curX, curY, um)
 
-      elif win.isKeyDown(keyX) and ke.mods == {mkAlt}:
+      elif win.isKeyDown(keyW) and ke.mods == {mkAlt}:
         eraseCellWallsAction(m, curX, curY, um)
 
       elif ke.isKeyDown(key1):
@@ -348,27 +350,30 @@ proc handleEvents(a) =
       if ke.isKeyDown(MoveKeysUp,    repeat=true): moveCursor(North, a)
       if ke.isKeyDown(MoveKeysDown,  repeat=true): moveCursor(South, a)
 
-      if   win.isKeyDown(keyE): a.selection[curX, curY] = true
-      elif win.isKeyDown(keyX): a.selection[curX, curY] = false
+      if   win.isKeyDown(keyD): a.selection[curX, curY] = true
+      elif win.isKeyDown(keyE): a.selection[curX, curY] = false
 
       if ke.isKeyDown(keyR):
         a.editMode = emSelectRect
-        a.selRect = Rect[Natural](x1: curX, y1: curY, x2: curX, y2: curY)
+        a.selRect = some(Rect[Natural](x1: curX, y1: curY,
+                                       x2: curX, y2: curY))
 
       if win.isKeyDown(keyEscape):
         exitSelectMode(a)
 
     of emSelectRect:
-      a.selRect.x2 = curX
-      a.selRect.y2 = curY
-
       if ke.isKeyDown(MoveKeysLeft,  repeat=true): moveCursor(West, a)
       if ke.isKeyDown(MoveKeysRight, repeat=true): moveCursor(East, a)
       if ke.isKeyDown(MoveKeysUp,    repeat=true): moveCursor(North, a)
       if ke.isKeyDown(MoveKeysDown,  repeat=true): moveCursor(South, a)
 
+      a.selRect.get.x2 = curX
+      a.selRect.get.y2 = curY
+
       if ke.key == keyR and ke.action == kaUp:
         a.editMode = emSelectDraw
+        a.selection.fill(a.selRect.get.normalize(), true)
+        a.selRect = none(Rect[Natural])
 
   clearKeyBuf()
 

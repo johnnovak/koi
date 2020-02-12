@@ -41,7 +41,7 @@ proc eraseCellWallsAction*(m; x, y: Natural, um) =
 proc eraseCellAction*(m; x, y: Natural, um) =
   singleCellAction(m, x, y, um):
     # TODO fill should be improved
-    m.fill(x, y, x, y)
+    m.setFloor(x, y, fNone)
     m.eraseCellWalls(x, y)
 
 # }}}

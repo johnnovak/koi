@@ -1,5 +1,6 @@
 import options
 
+import common
 
 type
   # (0,0) is the top-left cell of the selection
@@ -28,28 +29,20 @@ proc `[]`*(s; x, y: Natural): bool =
   result = s.cells[s.width * y + x]
 
 
-proc fill*(s; x1, y1, x2, y2: Natural, v: bool) =
-  assert x1 < s.width
-  assert y1 < s.height
-  assert x2 < s.width
-  assert y2 < s.height
+proc fill*(s; r: Rect[Natural], v: bool) =
+  assert r.x1 < s.width
+  assert r.y1 < s.height
+  assert r.x2 < s.width
+  assert r.y2 < s.height
 
-  var
-    x1 = x1
-    y1 = y1
-    x2 = x2
-    y2 = y2
-
-  if x2 < x1: swap(x1, x2)
-  if y2 < y1: swap(y1, y1)
-
-  for y in y1..y2:
-    for x in x1..x2:
+  for y in r.y1..r.y2:
+    for x in r.x1..r.x2:
       s[x,y] = v
 
 
 proc fill*(s; v: bool) =
-  s.fill(0, 0, s.width-1, s.height-1, v)
+  let r = Rect[Natural](x1: 0, y1: 0, x2: s.width-1, y2: s.height-1)
+  s.fill(r, v)
 
 proc initSelection(s; width, height: Natural) =
   s.width = width

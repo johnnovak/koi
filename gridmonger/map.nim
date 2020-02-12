@@ -64,15 +64,21 @@ proc `[]`(m; x, y: Natural): var Cell =
   assert y < m.height
   result = m.cells[m.width * y + x]
 
-proc fill*(m; x1, y1, x2, y2: Natural, cell: Cell = Cell.default) =
-  assert x1 < m.width-1
-  assert y1 < m.height-1
-  for y in y1..y2:
-    for x in x1..x2:
+proc fill*(m; r: Rect[Natural], cell: Cell) =
+  assert r.x1 < m.width-1
+  assert r.x2 < m.width-1
+  assert r.y1 < m.height-1
+  assert r.y2 < m.height-1
+
+  # TODO fill border
+
+  for y in r.y1..r.y2:
+    for x in r.x1..r.x2:
       m[x,y] = cell
 
-proc clear*(m; cell: Cell = Cell.default) =
-  m.fill(0, 0, m.width-1, m.height-1, cell)
+proc fill*(m; cell: Cell) =
+  let r = Rect[Natural](x1: 0, y1: 0, x2: m.width-2, y2: m.height-2)
+  m.fill(r, cell)
 
 proc initMap(m; width, height: Natural) =
   m.width = width+1
@@ -82,7 +88,7 @@ proc initMap(m; width, height: Natural) =
 proc newMap*(width, height: Natural): Map =
   var m = new Map
   m.initMap(width, height)
-  m.clear()
+  m.fill(Cell.default)
   result = m
 
 
