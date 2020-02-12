@@ -33,7 +33,6 @@ type
     wNiche         = (40, "niche")
     wStatue        = (50, "statue")
 
-
   Cell = object
     floor:            Floor
     floorOrientation: Orientation

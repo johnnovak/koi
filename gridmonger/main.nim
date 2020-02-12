@@ -1,4 +1,4 @@
-import strformat
+import options
 
 import glad/gl
 import glfw
@@ -17,15 +17,26 @@ import utils
 
 # {{{ App context
 type
-  AppContext = object
+  EditMode = enum
+    emNormal, emSelectDraw, emSelectRect
+
+  CopyBuffer = object
+    map:       Map
+    selection: Selection
+
+  AppContext = ref object
     vg:          NVGContext
     win:         Window
 
     map:         Map
     cursorX:     Natural
     cursorY:     Natural
+
+    editMode:    EditMode
+    copyBuf:     CopyBuffer
     selection:   Selection
-    copyBuf:     Map
+    selRect:     Rect[Natural]
+
     drawParams:  DrawParams
 
     undoManager: UndoManager[Map]
@@ -34,6 +45,8 @@ type
 var g_app: AppContext
 
 # }}}
+
+using a: var AppContext
 
 # {{{ createWindow()
 proc createWindow(): Window =
@@ -89,7 +102,18 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
 
   ############################################################
 
-  drawMap(g_app.map, g_app.cursorX, g_app.cursorY, g_app.drawParams, vg)
+  let selection = if g_app.editMode in {emSelectDraw, emSelectRect}:
+    some(g_app.selection)
+  else:
+    none(Selection)
+
+  drawMap(
+    g_app.map,
+    g_app.cursorX, g_app.cursorY,
+    selection,
+    g_app.drawParams,
+    vg
+  )
 
   ############################################################
 
@@ -108,8 +132,39 @@ proc framebufSizeCb(win: Window, size: tuple[w, h: int32]) =
   render(win)
 
 # }}}
+# {{{ initDrawParams*()
+proc initDrawParams*(dp: var DrawParams) =
+  dp.gridSize = 22.0
+
+  dp.startX = 50.0
+  dp.startY = 50.0
+
+  dp.defaultFgColor  = gray(0.1)
+
+  dp.gridColorBackground = gray(0.0, 0.3)
+  dp.gridColorFloor      = gray(0.0, 0.2)
+
+  dp.floorColor          = gray(0.9)
+
+  dp.mapBackgroundColor  = gray(0.0, 0.7)
+  dp.mapOutlineColor     = gray(0.23)
+  dp.drawOutline         = false
+
+  dp.cursorColor         = rgb(1.0, 0.65, 0.0)
+  dp.cursorGuideColor    = rgba(1.0, 0.65, 0.0, 0.2)
+  dp.drawCursorGuides    = false
+
+  dp.selectionColor      = rgba(1.0, 0.5, 0.5, 0.5)
+
+  dp.cellCoordsColor     = gray(0.9)
+  dp.cellCoordsColorHi   = rgb(1.0, 0.75, 0.0)
+  dp.cellCoordsFontSize  = 15.0
+
+# }}}
 # {{{ init()
 proc init(): Window =
+  g_app = new AppContext
+
   glfw.initialize()
 
   var win = createWindow()
@@ -126,8 +181,8 @@ proc init(): Window =
   loadData(g_app.vg)
 
   g_app.map = newMap(24, 32)
-
-  initUndoManager(g_app.undoManager)
+  g_app.undoManager = newUndoManager[Map]()
+  g_app.drawParams = new DrawParams
   initDrawParams(g_app.drawParams)
 
   koi.init(g_app.vg)
@@ -152,13 +207,13 @@ proc cleanup() =
 # }}}
 
 # {{{ setCursor()
-proc setCursor(x, y: Natural, a: var AppContext) =
+proc setCursor(x, y: Natural, a) =
   a.cursorX = min(x, a.map.width-1)
   a.cursorY = min(y, a.map.height-1)
 
 # }}}
 # {{{ moveCursor()
-proc moveCursor(dir: Direction, a: var AppContext) =
+proc moveCursor(dir: Direction, a) =
   let x = a.cursorX
   let y = a.cursory
 
@@ -173,91 +228,147 @@ proc moveCursor(dir: Direction, a: var AppContext) =
     if x > 0: setCursor(x-1, y, a)
 
 # }}}
+# {{{ enterSelectMode()
+proc enterSelectMode(a) =
+  a.editMode = emSelectDraw
+  a.selection = newSelection(a.map.width, a.map.height)
+  a.drawParams.drawCursorGuides = true
+
+# }}}
+# {{{ exitSelectMode()
+proc exitSelectMode(a) =
+  a.editMode = emNormal
+  a.drawParams.drawCursorGuides = false
+
+# }}}
+
+func isKeyDown(ke: KeyEvent, keys: set[Key],
+               mods: set[ModifierKey] = {}, repeat=false): bool =
+  let a = if repeat: {kaDown, kaRepeat} else: {kaDown}
+  ke.action in a and ke.key in keys and ke.mods == mods
+
+func isKeyDown(ke: KeyEvent, key: Key,
+               mods: set[ModifierKey] = {}, repeat=false): bool =
+  isKeyDown(ke, {key}, mods, repeat)
+
 # {{{ handleEvents()
-proc handleEvents(a: var AppContext) =
+proc handleEvents(a) =
   alias(curX, a.cursorX)
   alias(curY, a.cursorY)
   alias(um, a.undoManager)
   alias(m, a.map)
   alias(win, a.win)
 
-  if win.isKeyDown(keyEscape):  # TODO key buf, like char buf?
-    win.shouldClose = true
+  const
+    MoveKeysLeft  = {keyLeft,  keyA, keyH, keyKp4}
+    MoveKeysRight = {keyRight, keyD, keyL, keyKp6}
+    MoveKeysUp    = {keyUp,    keyW, keyK, keyKp8}
+    MoveKeysDown  = {keyDown,  keyS, keyJ, keyKp2}
 
   for ke in keyBuf():
+    case a.editMode
+    of emNormal:
 
-    proc handleMoveKey(dir: Direction, a: var AppContext) =
-#        if ke.mods == {mkShift}:
-      if win.isKeyDown(keyW):
-        let w = if m.getWall(curX, curY, dir) == wNone: wWall
-                else: wNone
-        setWallAction(m, curX, curY, dir, w, um)
+      proc handleMoveKey(dir: Direction, a) =
+  #        if ke.mods == {mkShift}:
+        if win.isKeyDown(keyQ):
+          let w = if m.getWall(curX, curY, dir) == wNone: wWall
+                  else: wNone
+          setWallAction(m, curX, curY, dir, w, um)
 
-      elif ke.mods == {mkAlt}:
-        setWallAction(m, curX, curY, dir, wNone, um)
-      elif ke.mods == {mkAlt, mkShift}:
-        setWallAction(m, curX, curY, dir, wClosedDoor, um)
-      else:
-        moveCursor(dir, a)
+        elif ke.mods == {mkAlt}:
+          setWallAction(m, curX, curY, dir, wNone, um)
+        elif ke.mods == {mkAlt, mkShift}:
+          setWallAction(m, curX, curY, dir, wClosedDoor, um)
+        else:
+          moveCursor(dir, a)
 
-    if ke.key in {keyLeft,  keyH, keyKp4}: handleMoveKey(West, a)
-    if ke.key in {keyRight, keyL, keyKp6}: handleMoveKey(East, a)
-    if ke.key in {keyUp,    keyK, keyKp8}: handleMoveKey(North, a)
-    if ke.key in {keyDown,  keyJ, keyKp2}: handleMoveKey(South, a)
+      if ke.isKeyDown(MoveKeysLeft,  repeat=true): handleMoveKey(West, a)
+      if ke.isKeyDown(MoveKeysRight, repeat=true): handleMoveKey(East, a)
+      if ke.isKeyDown(MoveKeysUp,    repeat=true): handleMoveKey(North, a)
+      if ke.isKeyDown(MoveKeysDown,  repeat=true): handleMoveKey(South, a)
 
-    if   win.isKeyDown(keyF): setFloorAction(m, curX, curY, fEmptyFloor, um)
-    elif win.isKeyDown(key1): setFloorAction(m, curX, curY, fEmptyFloor, um)
+      if win.isKeyDown(keyF):
+        setFloorAction(m, curX, curY, fEmptyFloor, um)
 
-    elif win.isKeyDown(key2):
-      if m.getFloor(curX, curY) == fClosedDoor:
-        toggleFloorOrientationAction(m, curX, curY, um)
-      else:
-        setFloorAction(m, curX, curY, fClosedDoor, um)
+      elif win.isKeyDown(keyE):
+        excavateAction(m, curX, curY, um)
 
-    elif win.isKeyDown(key3):
-      if m.getFloor(curX, curY) == fOpenDoor:
-        toggleFloorOrientationAction(m, curX, curY, um)
-      else:
-        setFloorAction(m, curX, curY, fOpenDoor, um)
+      elif win.isKeyDown(keyX):
+        eraseCellAction(m, curX, curY, um)
 
-    elif win.isKeyDown(key4):
-      setFloorAction(m, curX, curY, fPressurePlate, um)
+      elif win.isKeyDown(keyX) and ke.mods == {mkAlt}:
+        eraseCellWallsAction(m, curX, curY, um)
 
-    elif win.isKeyDown(key5):
-      setFloorAction(m, curX, curY, fHiddenPressurePlate, um)
+      elif ke.isKeyDown(key1):
+        if m.getFloor(curX, curY) == fClosedDoor:
+          toggleFloorOrientationAction(m, curX, curY, um)
+        else:
+          setFloorAction(m, curX, curY, fClosedDoor, um)
 
-    elif win.isKeyDown(key6):
-      setFloorAction(m, curX, curY, fClosedPit, um)
+      elif ke.isKeyDown(key2):
+        if m.getFloor(curX, curY) == fOpenDoor:
+          toggleFloorOrientationAction(m, curX, curY, um)
+        else:
+          setFloorAction(m, curX, curY, fOpenDoor, um)
 
-    elif win.isKeyDown(key7):
-      setFloorAction(m, curX, curY, fOpenPit, um)
+      elif ke.isKeyDown(key3):
+        setFloorAction(m, curX, curY, fPressurePlate, um)
 
-    elif win.isKeyDown(key8):
-      setFloorAction(m, curX, curY, fHiddenPit, um)
+      elif ke.isKeyDown(key4):
+        setFloorAction(m, curX, curY, fHiddenPressurePlate, um)
 
-    elif win.isKeyDown(key9):
-      setFloorAction(m, curX, curY, fCeilingPit, um)
+      elif ke.isKeyDown(key5):
+        setFloorAction(m, curX, curY, fClosedPit, um)
 
-    elif win.isKeyDown(key0):
-      setFloorAction(m, curX, curY, fStairsDown, um)
+      elif ke.isKeyDown(key6):
+        setFloorAction(m, curX, curY, fOpenPit, um)
 
-    elif win.isKeyDown(keyF):
-      setFloorAction(m, curX, curY, fEmptyFloor, um)
+      elif ke.isKeyDown(key7):
+        setFloorAction(m, curX, curY, fHiddenPit, um)
 
-    elif win.isKeyDown(keyD):
-      excavateAction(m, curX, curY, um)
+      elif ke.isKeyDown(key8):
+        setFloorAction(m, curX, curY, fCeilingPit, um)
 
-    elif win.isKeyDown(keyE):
-      eraseCellAction(m, curX, curY, um)
+      elif ke.isKeyDown(key9):
+        setFloorAction(m, curX, curY, fStairsDown, um)
 
-    elif win.isKeyDown(keyW) and ke.mods == {mkAlt}:
-      eraseCellWallsAction(m, curX, curY, um)
+      elif ke.isKeyDown(keyZ, {mkCtrl}, repeat=true):
+        um.undo(m)
 
-    elif win.isKeyDown(keyZ) and ke.mods == {mkCtrl}:
-      um.undo(m)
+      elif ke.isKeyDown(keyY, {mkCtrl}, repeat=true):
+        um.redo(m)
 
-    elif win.isKeyDown(keyY) and ke.mods == {mkCtrl}:
-      um.redo(m)
+      elif ke.isKeyDown(keyM):
+        enterSelectMode(a)
+
+    of emSelectDraw:
+      if ke.isKeyDown(MoveKeysLeft,  repeat=true): moveCursor(West, a)
+      if ke.isKeyDown(MoveKeysRight, repeat=true): moveCursor(East, a)
+      if ke.isKeyDown(MoveKeysUp,    repeat=true): moveCursor(North, a)
+      if ke.isKeyDown(MoveKeysDown,  repeat=true): moveCursor(South, a)
+
+      if   win.isKeyDown(keyE): a.selection[curX, curY] = true
+      elif win.isKeyDown(keyX): a.selection[curX, curY] = false
+
+      if ke.isKeyDown(keyR):
+        a.editMode = emSelectRect
+        a.selRect = Rect[Natural](x1: curX, y1: curY, x2: curX, y2: curY)
+
+      if win.isKeyDown(keyEscape):
+        exitSelectMode(a)
+
+    of emSelectRect:
+      a.selRect.x2 = curX
+      a.selRect.y2 = curY
+
+      if ke.isKeyDown(MoveKeysLeft,  repeat=true): moveCursor(West, a)
+      if ke.isKeyDown(MoveKeysRight, repeat=true): moveCursor(East, a)
+      if ke.isKeyDown(MoveKeysUp,    repeat=true): moveCursor(North, a)
+      if ke.isKeyDown(MoveKeysDown,  repeat=true): moveCursor(South, a)
+
+      if ke.key == keyR and ke.action == kaUp:
+        a.editMode = emSelectDraw
 
   clearKeyBuf()
 

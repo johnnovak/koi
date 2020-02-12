@@ -344,15 +344,17 @@ template hasActiveItem(): bool =
 # {{{ Keyboard handling
 
 type KeyEvent* = object
-  key*:  Key
-  mods*: set[ModifierKey]
+  key*:    Key
+  action*: KeyAction
+  mods*:   set[ModifierKey]
 
-template mkKeyEvent*(k: Key, m: set[ModifierKey]): KeyEvent =
-  KeyEvent(key: k, mods: m)
+template mkKeyDownEvent*(k: Key, m: set[ModifierKey]): KeyEvent =
+  KeyEvent(key: k, action: kaDown, mods: m)
 
 proc hash(ke: KeyEvent): Hash =
   var h: Hash = 0
   h = h !& hash(ord(ke.key))
+  h = h !& hash(ord(ke.action))
   for m in ke.mods:
     h = h !& hash(ord(m))
   result = !$h
@@ -392,64 +394,64 @@ type TextEditShortcuts = enum
 
 
 let textFieldEditShortcuts = {
-  tesCursorOneCharLeft:    @[mkKeyEvent(keyLeft,      {}),
-                             mkKeyEvent(keyB,         {mkCtrl})],
+  tesCursorOneCharLeft:    @[mkKeyDownEvent(keyLeft,      {}),
+                             mkKeyDownEvent(keyB,         {mkCtrl})],
 
-  tesCursorOneCharRight:   @[mkKeyEvent(keyRight,     {}),
-                             mkKeyEvent(keyF,         {mkCtrl})],
+  tesCursorOneCharRight:   @[mkKeyDownEvent(keyRight,     {}),
+                             mkKeyDownEvent(keyF,         {mkCtrl})],
 
-  tesCursorToPreviousWord: @[mkKeyEvent(keyLeft,      {mkAlt})],
-  tesCursorToNextWord:     @[mkKeyEvent(keyRight,     {mkAlt})],
+  tesCursorToPreviousWord: @[mkKeyDownEvent(keyLeft,      {mkAlt})],
+  tesCursorToNextWord:     @[mkKeyDownEvent(keyRight,     {mkAlt})],
 
-  tesCursorToLineStart:    @[mkKeyEvent(keyLeft,      {mkSuper}),
-                             mkKeyEvent(keyA,         {mkCtrl}),
-                             mkKeyEvent(keyP,         {mkCtrl}),
-                             mkKeyEvent(keyV,         {mkShift, mkCtrl}),
-                             mkKeyEvent(keyUp,        {})],
+  tesCursorToLineStart:    @[mkKeyDownEvent(keyLeft,      {mkSuper}),
+                             mkKeyDownEvent(keyA,         {mkCtrl}),
+                             mkKeyDownEvent(keyP,         {mkCtrl}),
+                             mkKeyDownEvent(keyV,         {mkShift, mkCtrl}),
+                             mkKeyDownEvent(keyUp,        {})],
 
-  tesCursorToLineEnd:      @[mkKeyEvent(keyRight,     {mkSuper}),
-                             mkKeyEvent(keyE,         {mkCtrl}),
-                             mkKeyEvent(keyN,         {mkCtrl}),
-                             mkKeyEvent(keyV,         {mkCtrl}),
-                             mkKeyEvent(keyDown,      {})],
+  tesCursorToLineEnd:      @[mkKeyDownEvent(keyRight,     {mkSuper}),
+                             mkKeyDownEvent(keyE,         {mkCtrl}),
+                             mkKeyDownEvent(keyN,         {mkCtrl}),
+                             mkKeyDownEvent(keyV,         {mkCtrl}),
+                             mkKeyDownEvent(keyDown,      {})],
 
-  tesSelectionOneCharLeft:    @[mkKeyEvent(keyLeft,   {mkShift})],
-  tesSelectionOneCharRight:   @[mkKeyEvent(keyRight,  {mkShift})],
-  tesSelectionToPreviousWord: @[mkKeyEvent(keyLeft,   {mkShift, mkAlt})],
-  tesSelectionToNextWord:     @[mkKeyEvent(keyRight,  {mkShift, mkAlt})],
+  tesSelectionOneCharLeft:    @[mkKeyDownEvent(keyLeft,   {mkShift})],
+  tesSelectionOneCharRight:   @[mkKeyDownEvent(keyRight,  {mkShift})],
+  tesSelectionToPreviousWord: @[mkKeyDownEvent(keyLeft,   {mkShift, mkAlt})],
+  tesSelectionToNextWord:     @[mkKeyDownEvent(keyRight,  {mkShift, mkAlt})],
 
-  tesSelectionToLineStart: @[mkKeyEvent(keyLeft,      {mkShift, mkSuper}),
-                             mkKeyEvent(keyA,         {mkShift, mkCtrl}),
-                             mkKeyEvent(keyUp,        {mkShift})],
+  tesSelectionToLineStart: @[mkKeyDownEvent(keyLeft,      {mkShift, mkSuper}),
+                             mkKeyDownEvent(keyA,         {mkShift, mkCtrl}),
+                             mkKeyDownEvent(keyUp,        {mkShift})],
 
-  tesSelectionToLineEnd:   @[mkKeyEvent(keyRight,     {mkShift, mkSuper}),
-                             mkKeyEvent(keyE,         {mkShift, mkCtrl}),
-                             mkKeyEvent(keyDown,      {mkShift})],
+  tesSelectionToLineEnd:   @[mkKeyDownEvent(keyRight,     {mkShift, mkSuper}),
+                             mkKeyDownEvent(keyE,         {mkShift, mkCtrl}),
+                             mkKeyDownEvent(keyDown,      {mkShift})],
 
-  tesDeleteOneCharLeft:    @[mkKeyEvent(keyBackspace, {}),
-                             mkKeyEvent(keyH,         {mkCtrl})],
+  tesDeleteOneCharLeft:    @[mkKeyDownEvent(keyBackspace, {}),
+                             mkKeyDownEvent(keyH,         {mkCtrl})],
 
-  tesDeleteOneCharRight:   @[mkKeyEvent(keyDelete,    {})],
+  tesDeleteOneCharRight:   @[mkKeyDownEvent(keyDelete,    {})],
 
-  tesDeleteWordToRight:    @[mkKeyEvent(keyDelete,    {mkAlt}),
-                             mkKeyEvent(keyD,         {mkCtrl})],
+  tesDeleteWordToRight:    @[mkKeyDownEvent(keyDelete,    {mkAlt}),
+                             mkKeyDownEvent(keyD,         {mkCtrl})],
 
-  tesDeleteWordToLeft:     @[mkKeyEvent(keyBackspace, {mkAlt})],
-  tesDeleteToLineStart:    @[mkKeyEvent(keyBackspace, {mkSuper})],
+  tesDeleteWordToLeft:     @[mkKeyDownEvent(keyBackspace, {mkAlt})],
+  tesDeleteToLineStart:    @[mkKeyDownEvent(keyBackspace, {mkSuper})],
 
-  tesDeleteToLineEnd:      @[mkKeyEvent(keyDelete,    {mkAlt}),
-                             mkKeyEvent(keyK,         {mkCtrl})],
+  tesDeleteToLineEnd:      @[mkKeyDownEvent(keyDelete,    {mkAlt}),
+                             mkKeyDownEvent(keyK,         {mkCtrl})],
 
-  tesSwitchChars:          @[mkKeyEvent(keyT,         {mkCtrl})],
+  tesSwitchChars:          @[mkKeyDownEvent(keyT,         {mkCtrl})],
 
-  tesCutText:              @[mkKeyEvent(keyX,         {mkSuper})],
-  tesCopyText:             @[mkKeyEvent(keyC,         {mkSuper})],
-  tesPasteText:            @[mkKeyEvent(keyV,         {mkSuper})],
+  tesCutText:              @[mkKeyDownEvent(keyX,         {mkSuper})],
+  tesCopyText:             @[mkKeyDownEvent(keyC,         {mkSuper})],
+  tesPasteText:            @[mkKeyDownEvent(keyV,         {mkSuper})],
 
-  tesAccept:               @[mkKeyEvent(keyEnter,     {}),
-                             mkKeyEvent(keyKpEnter,   {})],
+  tesAccept:               @[mkKeyDownEvent(keyEnter,     {}),
+                             mkKeyDownEvent(keyKpEnter,   {})],
 
-  tesCancel:               @[mkKeyEvent(keyEscape,    {})]
+  tesCancel:               @[mkKeyDownEvent(keyEscape,    {})]
 }.toTable
 
 
@@ -491,11 +493,11 @@ var
 proc keyCb(win: Window, key: Key, scanCode: int32, action: KeyAction,
            mods: set[ModifierKey]) =
 
-  let ke = KeyEvent(key: key, mods: mods)
-  if action in {kaDown, kaRepeat}: # TODO ADD BACK! and ke in textFieldEditShortcutKeyEvents:
-    if g_keyBufIdx <= g_keyBuf.high:
-      g_keyBuf[g_keyBufIdx] = ke
-      inc(g_keyBufIdx)
+  let ke = KeyEvent(key: key, action: action, mods: mods)
+#  if action in {kaDown, kaRepeat}: # TODO ADD BACK! and ke in textFieldEditShortcutKeyEvents:
+  if g_keyBufIdx <= g_keyBuf.high:
+    g_keyBuf[g_keyBufIdx] = ke
+    inc(g_keyBufIdx)
 
 proc clearKeyBuf*() = g_keyBufIdx = 0
 

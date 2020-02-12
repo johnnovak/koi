@@ -1,10 +1,12 @@
 import lenientops
 import math
+import options
 
 import nanovg
 
 import common
 import map
+import selection
 
 
 const
@@ -17,7 +19,7 @@ const
 
 # {{{ DrawParams*
 type
-  DrawParams* = object
+  DrawParams* = ref object
     gridSize*: float
 
     startX*:   float
@@ -38,37 +40,11 @@ type
     cursorGuideColor*:    Color
     drawCursorGuides*:    bool
 
+    selectionColor*:      Color
+
     cellCoordsColor*:     Color
     cellCoordsColorHi*:   Color
     cellCoordsFontSize*:  float
-
-
-# }}}
-# {{{ initDrawParams*()
-proc initDrawParams*(dp: var DrawParams) =
-  dp.gridSize = 22.0
-
-  dp.startX = 50.0
-  dp.startY = 50.0
-
-  dp.defaultFgColor  = gray(0.1)
-
-  dp.gridColorBackground = gray(0.0, 0.3)
-  dp.gridColorFloor      = gray(0.0, 0.2)
-
-  dp.floorColor          = gray(0.9)
-
-  dp.mapBackgroundColor  = gray(0.0, 0.7)
-  dp.mapOutlineColor     = gray(0.23)
-  dp.drawOutline         = false
-
-  dp.cursorColor         = rgb(1.0, 0.65, 0.0)
-  dp.cursorGuideColor    = rgba(1.0, 0.65, 0.0, 0.2)
-  dp.drawCursorGuides    = false
-
-  dp.cellCoordsColor     = gray(0.9)
-  dp.cellCoordsColorHi   = rgb(1.0, 0.75, 0.0)
-  dp.cellCoordsFontSize  = 15.0
 
 # }}}
 
@@ -506,6 +482,17 @@ proc setVertTransform(x, y: float, dp, vg) =
   vg.translate(0, -1)
 
 # }}}
+# {{{ drawSelection()
+proc drawSelection(x, y: Natural, dp, vg) =
+  let xPos = cellX(x, dp)
+  let yPos = cellY(y, dp)
+
+  vg.beginPath()
+  vg.fillColor(dp.selectionColor)
+  vg.rect(xPos, yPos, dp.gridSize, dp.gridSize)
+  vg.fill()
+
+# }}}
 # {{{ drawFloor()
 proc drawFloor(m: Map, x, y: Natural, cursorActive: bool, dp, vg) =
 
@@ -522,14 +509,14 @@ proc drawFloor(m: Map, x, y: Natural, cursorActive: bool, dp, vg) =
       drawProc(0, 0, dp, vg)
       vg.resetTransform()
 
+  template draw(drawProc: untyped) =
+    drawBg()
+    drawProc(xPos, yPos, dp, vg)
+
   proc drawBg() =
     drawGround(xPos, yPos, dp.floorColor, dp, vg)
     if cursorActive:
       drawCursor(xPos, yPos, dp, vg)
-
-  template draw(drawProc: untyped) =
-    drawBg()
-    drawProc(xPos, yPos, dp, vg)
 
   case m.getFloor(x,y)
   of fNone:
@@ -591,7 +578,8 @@ proc drawWalls(m: Map, x: Natural, y: Natural, dp, vg) =
 # }}}
 
 # {{{ drawMap*()
-proc drawMap*(m: Map, cursorX, cursorY: Natural, dp, vg) =
+proc drawMap*(m: Map, cursorX, cursorY: Natural, selection: Option[Selection],
+              dp, vg) =
 
   drawCellCoords(m, cursorX, cursorY, dp, vg)
   drawMapBackground(m, dp, vg)
@@ -611,6 +599,11 @@ proc drawMap*(m: Map, cursorX, cursorY: Natural, dp, vg) =
     for x in 0..<m.width:
       drawWalls(m, x, y, dp, vg)
 
+  if selection.isSome:
+    let sel = selection.get
+    for x in 0..<sel.width:
+      for y in 0..<sel.height:
+        if sel[x,y]: drawSelection(x, y, dp, vg)
 # }}}
 
 # vim: et:ts=2:sw=2:fdm=marker

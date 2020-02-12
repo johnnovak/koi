@@ -4,7 +4,7 @@ import map
 
 
 type
-  UndoManager*[S] = object
+  UndoManager*[S] = ref object
     states: seq[UndoState[S]]
     currState: int
 
@@ -18,6 +18,10 @@ type
 proc initUndoManager*[S](m: var UndoManager[S]) =
   m.states = @[]
   m.currState = -1
+
+proc newUndoManager*[S](): UndoManager[S] =
+  result = new UndoManager[S]
+  initUndoManager(result)
 
 
 proc storeUndoState*[S](m: var UndoManager[S],

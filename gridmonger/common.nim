@@ -5,11 +5,6 @@ type
   Direction* = enum
     North, East, South, West
 
-
-func orientation*(dir: Direction): Orientation =
-  case dir:
-  of North: Horiz
-  of East:  Vert
-  of South: Horiz
-  of West:  Vert
+  Rect*[T: SomeNumber | Natural] = object
+    x1*, x2*, y1*, y2*: T
 
