@@ -579,7 +579,7 @@ proc drawWalls(m: Map, x: Natural, y: Natural, dp, vg) =
 
 # {{{ drawMap*()
 proc drawMap*(m: Map, cursorX, cursorY: Natural,
-              selection: Option[Selection], selRect: Option[Rect[Natural]],
+              selection: Option[Selection], selRect: Option[SelectionRect],
               dp, vg) =
 
   drawCellCoords(m, cursorX, cursorY, dp, vg)
@@ -604,9 +604,17 @@ proc drawMap*(m: Map, cursorX, cursorY: Natural,
     let sel = selection.get
     for x in 0..<sel.width:
       for y in 0..<sel.height:
-        let s = if selRect.isSome: selRect.get.contains(x,y) else: false
-        if sel[x,y] or s:
-          drawSelection(x, y, dp, vg)
+        if selRect.isSome:
+          let sr = selRect.get
+          if sr.fillValue == true:
+            if sel[x,y] or sr.rect.contains(x,y):
+              drawSelection(x, y, dp, vg)
+          else:
+            if not sr.rect.contains(x,y) and sel[x,y]:
+              drawSelection(x, y, dp, vg)
+        else:
+          if sel[x,y]:
+            drawSelection(x, y, dp, vg)
 
 # }}}
 

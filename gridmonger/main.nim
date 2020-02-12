@@ -35,8 +35,8 @@ type
 
     editMode:    EditMode
     copyBuf:     CopyBuffer
-    selection:   Selection
-    selRect:     Option[Rect[Natural]]
+    selection:   Option[Selection]
+    selRect:     Option[SelectionRect]
 
     drawParams:  DrawParams
 
@@ -103,16 +103,11 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
 
   ############################################################
 
-  let selection = if g_app.editMode in {emSelectDraw, emSelectRect}:
-    some(g_app.selection)
-  else:
-    none(Selection)
-
   drawMap(
     g_app.map,
     g_app.cursorX, g_app.cursorY,
-    selection,
-    g_app.selRect.map(normalize),
+    g_app.selection,
+    g_app.selRect,
     g_app.drawParams,
     vg
   )
@@ -233,7 +228,7 @@ proc moveCursor(dir: Direction, a) =
 # {{{ enterSelectMode()
 proc enterSelectMode(a) =
   a.editMode = emSelectDraw
-  a.selection = newSelection(a.map.width, a.map.height)
+  a.selection = some(newSelection(a.map.width, a.map.height))
   a.drawParams.drawCursorGuides = true
 
 # }}}
@@ -241,6 +236,7 @@ proc enterSelectMode(a) =
 proc exitSelectMode(a) =
   a.editMode = emNormal
   a.drawParams.drawCursorGuides = false
+  a.selection = none(Selection)
 
 # }}}
 
@@ -350,15 +346,22 @@ proc handleEvents(a) =
       if ke.isKeyDown(MoveKeysUp,    repeat=true): moveCursor(North, a)
       if ke.isKeyDown(MoveKeysDown,  repeat=true): moveCursor(South, a)
 
-      if   win.isKeyDown(keyD): a.selection[curX, curY] = true
-      elif win.isKeyDown(keyE): a.selection[curX, curY] = false
+      if   win.isKeyDown(keyD): a.selection.get[curX, curY] = true
+      elif win.isKeyDown(keyE): a.selection.get[curX, curY] = false
 
-      if ke.isKeyDown(keyR):
+      if   ke.isKeyDown(keyA, {mkCtrl}): a.selection.get.fill(true)
+      elif ke.isKeyDown(keyD, {mkCtrl}): a.selection.get.fill(false)
+      elif ke.isKeyDown(keyC): discard
+      elif ke.isKeyDown(keyX): discard
+
+      if ke.isKeyDown({keyR, keyS}):
         a.editMode = emSelectRect
-        a.selRect = some(Rect[Natural](x1: curX, y1: curY,
-                                       x2: curX, y2: curY))
+        a.selRect = some(SelectionRect(x0: curX, y0: curY,
+                                       rect: Rect[Natural](x1: curX, y1: curY,
+                                                           x2: curX, y2: curY),
+                                       fillValue: ke.isKeyDown(keyR)))
 
-      if win.isKeyDown(keyEscape):
+      elif win.isKeyDown(keyEscape):
         exitSelectMode(a)
 
     of emSelectRect:
@@ -367,13 +370,17 @@ proc handleEvents(a) =
       if ke.isKeyDown(MoveKeysUp,    repeat=true): moveCursor(North, a)
       if ke.isKeyDown(MoveKeysDown,  repeat=true): moveCursor(South, a)
 
-      a.selRect.get.x2 = curX
-      a.selRect.get.y2 = curY
+      a.selRect.get.rect = Rect[Natural](
+        x1: a.selRect.get.x0,
+        y1: a.selRect.get.y0,
+        x2: curX,
+        y2: curY
+      ).normalize()
 
-      if ke.key == keyR and ke.action == kaUp:
+      if ke.key in {keyR, keyS} and ke.action == kaUp:
+        a.selection.get.fill(a.selRect.get.rect, a.selRect.get.fillValue)
+        a.selRect = none(SelectionRect)
         a.editMode = emSelectDraw
-        a.selection.fill(a.selRect.get.normalize(), true)
-        a.selRect = none(Rect[Natural])
 
   clearKeyBuf()
 
