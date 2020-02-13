@@ -12,9 +12,10 @@ template singleCellAction(m; x, y: Natural, um; body: untyped) =
   let action = proc (m: var Map) =
     body
 
-  var undoMap = newMapFrom(m, x, y, width=1, height=1)
+  var undoMap = newMapFrom(m, Rect[Natural](x1: x, y1: y, x2: x+1, y2: y+1))
   var undoAction = proc (s: var Map) = 
-    s.copyFrom(undoMap, srcX=0, srcY=0, width=1, height=1, destX=x, destY=y)
+    s.copyFrom(undoMap, Rect[Natural](x1: 0, y1: 0, x2: 1, y2: 1),
+               destX=x, destY=y)
 
   um.storeUndoState(undoAction, redoAction=action)
 
@@ -73,12 +74,12 @@ proc excavateAction*(m; x, y: Natural, um) =
     else:
       m.setWall(x,y, West, wNone)
 
-    if y == m.height-1 or m.getFloor(x,y+1) == fNone:
+    if y == m.mapHeight()-1 or m.getFloor(x,y+1) == fNone:
       m.setWall(x,y, South, wWall)
     else:
       m.setWall(x,y, South, wNone)
 
-    if x == m.width-1 or m.getFloor(x+1,y) == fNone:
+    if x == m.mapWidth()-1 or m.getFloor(x+1,y) == fNone:
       m.setWall(x,y, East, wWall)
     else:
       m.setWall(x,y, East, wNone)

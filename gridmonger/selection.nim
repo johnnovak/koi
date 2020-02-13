@@ -2,21 +2,8 @@ import options
 
 import common
 
-type
-  # (0,0) is the top-left cell of the selection
-  Selection* = ref object
-    width:  Natural
-    height: Natural
-    cells:  seq[bool]
-
 
 using s: Selection
-
-func width*(s): Natural =
-  result = s.width
-
-func height*(s): Natural =
-  result = s.height
 
 proc `[]=`*(s; x, y: Natural, v: bool) =
   assert x < s.width
@@ -32,8 +19,8 @@ proc `[]`*(s; x, y: Natural): bool =
 proc fill*(s; r: Rect[Natural], v: bool) =
   assert r.x1 < s.width
   assert r.y1 < s.height
-  assert r.x2 < s.width
-  assert r.y2 < s.height
+  assert r.x2 <= s.width
+  assert r.y2 <= s.height
 
   for y in r.y1..r.y2:
     for x in r.x1..r.x2:
@@ -94,14 +81,14 @@ proc newSelectionFrom*(s): Selection =
   newSelectionFrom(s, x=0, y=0, s.width-1, s.height-1)
 
 
-proc trim*(s): Option[Selection] =
+proc trim*(s): Option[tuple[sel: Selection, rect: Rect[Natural]]] =
   proc isRowEmpty(y: Natural): bool =
-    for x in 0..s.width:
+    for x in 0..<s.width:
       if s[x,y]: return false
     return true
 
   proc isColEmpty(x: Natural): bool =
-    for y in 0..s.height:
+    for y in 0..<s.height:
       if s[x,y]: return false
     return true
 
@@ -117,9 +104,13 @@ proc trim*(s): Option[Selection] =
     while isColEmpty(x1) and x1 < s.width: inc(x1)
     while isColEmpty(x2) and x2 > 0: dec(x2)
     while isRowEmpty(y2) and y2 > 0: dec(y2)
-    result = some(s.newSelectionFrom(x1, y1, x2, y2))
+
+    result = some((
+      s.newSelectionFrom(x1, y1, x2, y2),
+      Rect[Natural](x1: x1, y1: y1, x2: x2, y2: y2)
+    ))
   else:
-    result = none(Selection)
+    result = none((Selection, Rect[Natural]))
 
 
 # vim: et:ts=2:sw=2:fdm=marker

@@ -10,7 +10,6 @@ import actions
 import common
 import drawmap
 import map
-import options
 import selection
 import undomanager
 import utils
@@ -21,10 +20,6 @@ type
   EditMode = enum
     emNormal, emSelectDraw, emSelectRect
 
-  CopyBuffer = object
-    map:       Map
-    selection: Selection
-
   AppContext = ref object
     vg:          NVGContext
     win:         Window
@@ -34,9 +29,9 @@ type
     cursorY:     Natural
 
     editMode:    EditMode
-    copyBuf:     CopyBuffer
     selection:   Option[Selection]
     selRect:     Option[SelectionRect]
+    copyBuf:     Option[CopyBuffer]
 
     drawParams:  DrawParams
 
@@ -108,6 +103,7 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
     g_app.cursorX, g_app.cursorY,
     g_app.selection,
     g_app.selRect,
+    none(CopyBuffer),
     g_app.drawParams,
     vg
   )
@@ -240,6 +236,7 @@ proc exitSelectMode(a) =
 
 # }}}
 
+# {{{ isKeyDown()
 func isKeyDown(ke: KeyEvent, keys: set[Key],
                mods: set[ModifierKey] = {}, repeat=false): bool =
   let a = if repeat: {kaDown, kaRepeat} else: {kaDown}
@@ -249,6 +246,7 @@ func isKeyDown(ke: KeyEvent, key: Key,
                mods: set[ModifierKey] = {}, repeat=false): bool =
   isKeyDown(ke, {key}, mods, repeat)
 
+# }}}
 # {{{ handleEvents()
 proc handleEvents(a) =
   alias(curX, a.cursorX)
@@ -268,7 +266,6 @@ proc handleEvents(a) =
     of emNormal:
 
       proc handleMoveKey(dir: Direction, a) =
-  #        if ke.mods == {mkShift}:
         if win.isKeyDown(keyW):
           let w = if m.getWall(curX, curY, dir) == wNone: wWall
                   else: wNone
@@ -356,10 +353,20 @@ proc handleEvents(a) =
 
       if ke.isKeyDown({keyR, keyS}):
         a.editMode = emSelectRect
-        a.selRect = some(SelectionRect(x0: curX, y0: curY,
-                                       rect: Rect[Natural](x1: curX, y1: curY,
-                                                           x2: curX, y2: curY),
-                                       fillValue: ke.isKeyDown(keyR)))
+        a.selRect = some(SelectionRect(
+          x0: curX, y0: curY,
+          rect: Rect[Natural](x1: curX, y1: curY, x2: curX+1, y2: curY+1),
+          fillValue: ke.isKeyDown(keyR)
+        ))
+
+      if ke.isKeyDown(keyC):
+        let sel = a.selection.get.trim()
+        if sel.isSome:
+          let (trimmedSel, trimmedSelRect) = sel.get
+          a.copyBuf = some(CopyBuffer(
+            selection: trimmedSel,
+            map: newMapFrom(a.map, trimmedSelRect)
+          ))
 
       elif win.isKeyDown(keyEscape):
         exitSelectMode(a)
@@ -373,8 +380,8 @@ proc handleEvents(a) =
       a.selRect.get.rect = Rect[Natural](
         x1: a.selRect.get.x0,
         y1: a.selRect.get.y0,
-        x2: curX,
-        y2: curY
+        x2: curX+1,
+        y2: curY+1
       ).normalize()
 
       if ke.key in {keyR, keyS} and ke.action == kaUp:

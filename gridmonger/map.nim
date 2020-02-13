@@ -3,55 +3,12 @@ import streams
 import common
 
 
-type
-  Floor* = enum
-    fNone                = (  0, "blank"),
-    fEmptyFloor          = ( 10, "empty"),
-    fClosedDoor          = ( 20, "closed door"),
-    fOpenDoor            = ( 21, "open door"),
-    fPressurePlate       = ( 30, "pressure plate"),
-    fHiddenPressurePlate = ( 31, "hidden pressure plate"),
-    fClosedPit           = ( 40, "closed pit"),
-    fOpenPit             = ( 41, "open pit"),
-    fHiddenPit           = ( 42, "hidden pit"),
-    fCeilingPit          = ( 43, "ceiling pit"),
-    fStairsDown          = ( 50, "stairs down"),
-    fStairsUp            = ( 51, "stairs up"),
-    fSpinner             = ( 60, "spinner"),
-    fTeleport            = ( 70, "teleport"),
-    fCustom              = (999, "custom")
-
-  Wall* = enum
-    wNone          = ( 0, "none"),
-    wWall          = (10, "wall"),
-    wIllusoryWall  = (11, "illusory wall"),
-    wInvisibleWall = (12, "invisible wall")
-    wOpenDoor      = (20, "closed door"),
-    wClosedDoor    = (21, "open door"),
-    wSecretDoor    = (22, "secret door"),
-    wLever         = (30, "statue")
-    wNiche         = (40, "niche")
-    wStatue        = (50, "statue")
-
-  Cell = object
-    floor:            Floor
-    floorOrientation: Orientation
-    wallN, wallW:     Wall
-    customChar:       char
-    notes:            string
-
-  # (0,0) is the top-left cell of the map
-  Map* = ref object
-    width:  Natural
-    height: Natural
-    cells:  seq[Cell]
-
 using m: Map
 
-func width*(m): Natural =
+func mapWidth*(m): Natural =
   result = m.width-1
 
-func height*(m): Natural =
+func mapHeight*(m): Natural =
   result = m.height-1
 
 proc `[]=`(m; x, y: Natural, c: Cell) =
@@ -66,9 +23,9 @@ proc `[]`(m; x, y: Natural): var Cell =
 
 proc fill*(m; r: Rect[Natural], cell: Cell) =
   assert r.x1 < m.width-1
-  assert r.x2 < m.width-1
   assert r.y1 < m.height-1
-  assert r.y2 < m.height-1
+  assert r.x2 <= m.width-1
+  assert r.y2 <= m.height-1
 
   # TODO fill border
 
@@ -77,7 +34,7 @@ proc fill*(m; r: Rect[Natural], cell: Cell) =
       m[x,y] = cell
 
 proc fill*(m; cell: Cell) =
-  let r = Rect[Natural](x1: 0, y1: 0, x2: m.width-2, y2: m.height-2)
+  let r = Rect[Natural](x1: 0, y1: 0, x2: m.width-1, y2: m.height-1)
   m.fill(r, cell)
 
 proc initMap(m; width, height: Natural) =
@@ -92,16 +49,17 @@ proc newMap*(width, height: Natural): Map =
   result = m
 
 
-proc copyFrom*(dest: var Map,
-               src: Map, srcX, srcY, width, height: Natural,
+proc copyFrom*(dest: var Map, src: Map, srcRect: Rect[Natural],
                destX, destY: Natural) =
   let
-    width  = width  + 1
-    height = height + 1
-    srcWidth   = max(src.width  - srcX,  0)
+    srcX = srcRect.x1
+    srcY = srcRect.y1
+    width  = (srcRect.x2 - srcX) + 2
+    height = (srcRect.y2 - srcY) + 2
+    srcWidth   = max(src.width - srcX,  0)
     srcHeight  = max(src.height - srcY,  0)
-    destWidth  = max(dest.width    - destX, 0)
-    destHeight = max(dest.height   - destY, 0)
+    destWidth  = max(dest.width - destX, 0)
+    destHeight = max(dest.height - destY, 0)
 
     w = min(min(srcWidth,  destWidth),  width)
     h = min(min(srcHeight, destHeight), height)
@@ -118,25 +76,25 @@ proc copyFrom*(dest: var Map,
 
 
 proc copyFrom*(m: var Map, src: Map) =
-  m.copyFrom(src, srcX=0, srcY=0, src.width, src.height, destX=0, destY=0)
+  let srcRect = Rect[Natural](x1: 0, y1: 0,
+                              x2: src.width-1, y2: src.height-1)
+  m.copyFrom(src, srcRect, destX=0, destY=0)
 
 
-proc newMapFrom*(src: Map, x, y, width, height: Natural): Map =
-  assert x < src.width-1
-  assert y < src.height-1
-  assert width > 0
-  assert height > 0
-  assert x + width <= src.width-1
-  assert y + height <= src.height-1
+proc newMapFrom*(src: Map, r: Rect[Natural]): Map =
+  assert r.x1 < src.width-1
+  assert r.y1 < src.height-1
+  assert r.x2 <= src.width-1
+  assert r.y2 <= src.height-1
 
   var m = new Map
-  m.initMap(width, height)
-  m.copyFrom(src, srcX=x, srcY=y, width, height, destX=0, destY=0)
+  m.initMap(r.width, r.height)
+  m.copyFrom(src, srcRect=r, destX=0, destY=0)
   result = m
 
 
 proc newMapFrom*(m): Map =
-  newMapFrom(m, x=0, y=0, m.width-1, m.height-1)
+  newMapFrom(m, Rect[Natural](x1: 0, y1: 0, x2: m.width-1, y2: m.height-1))
 
 
 proc getFloor*(m; x, y: Natural): Floor =
