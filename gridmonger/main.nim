@@ -235,7 +235,18 @@ proc exitSelectMode(a) =
   a.selection = none(Selection)
 
 # }}}
+# {{{ copySelection()
+proc copySelection(a): Option[Rect[Natural]] =
+  let sel = a.selection.get
+  let bbox = sel.boundingBox()
+  if bbox.isSome:
+    a.copyBuf = some(CopyBuffer(
+      selection: newSelectionFrom(a.selection.get, bbox.get),
+      map: newMapFrom(a.map, bbox.get)
+    ))
+  result = bbox
 
+# }}}
 # {{{ isKeyDown()
 func isKeyDown(ke: KeyEvent, keys: set[Key],
                mods: set[ModifierKey] = {}, repeat=false): bool =
@@ -355,18 +366,19 @@ proc handleEvents(a) =
         a.editMode = emSelectRect
         a.selRect = some(SelectionRect(
           x0: curX, y0: curY,
-          rect: Rect[Natural](x1: curX, y1: curY, x2: curX+1, y2: curY+1),
+          rect: rectN(curX, curY, curX+1, curY+1),
           fillValue: ke.isKeyDown(keyR)
         ))
 
-      if ke.isKeyDown(keyC):
-        let sel = a.selection.get.trim()
-        if sel.isSome:
-          let (trimmedSel, trimmedSelRect) = sel.get
-          a.copyBuf = some(CopyBuffer(
-            selection: trimmedSel,
-            map: newMapFrom(a.map, trimmedSelRect)
-          ))
+      elif ke.isKeyDown(keyC):
+        discard copySelection(a)
+        exitSelectMode(a)
+
+      elif ke.isKeyDown(keyX):
+        let selRect = copySelection(a)
+        # TODO erase selection, undoable action
+
+        exitSelectMode(a)
 
       elif win.isKeyDown(keyEscape):
         exitSelectMode(a)
@@ -377,12 +389,22 @@ proc handleEvents(a) =
       if ke.isKeyDown(MoveKeysUp,    repeat=true): moveCursor(North, a)
       if ke.isKeyDown(MoveKeysDown,  repeat=true): moveCursor(South, a)
 
-      a.selRect.get.rect = Rect[Natural](
-        x1: a.selRect.get.x0,
-        y1: a.selRect.get.y0,
-        x2: curX+1,
-        y2: curY+1
-      ).normalize()
+      var x1, y1, x2, y2: Natural
+      if a.selRect.get.x0 <= curX:
+        x1 = a.selRect.get.x0
+        x2 = curX+1
+      else:
+        x1 = curX
+        x2 = a.selRect.get.x0 + 1
+
+      if a.selRect.get.y0 <= curY:
+        y1 = a.selRect.get.y0
+        y2 = curY+1
+      else:
+        y1 = curY
+        y2 = a.selRect.get.y0 + 1
+
+      a.selRect.get.rect = rectN(x1, y1, x2, y2)
 
       if ke.key in {keyR, keyS} and ke.action == kaUp:
         a.selection.get.fill(a.selRect.get.rect, a.selRect.get.fillValue)

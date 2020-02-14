@@ -76,10 +76,10 @@ proc drawBackgroundGrid(m: Map, dp, vg) =
   vg.strokeColor(dp.gridColorBackground)
   vg.strokeWidth(strokeWidth)
 
-  let endX = snap(cellX(m.mapWidth,  dp), strokeWidth)
-  let endY = snap(cellY(m.mapHeight, dp), strokeWidth)
+  let endX = snap(cellX(m.width,  dp), strokeWidth)
+  let endY = snap(cellY(m.height, dp), strokeWidth)
 
-  for x in 0..m.mapWidth:
+  for x in 0..m.width:
     let x = snap(cellX(x, dp), strokeWidth)
     let y = snap(dp.startY, strokeWidth)
     vg.beginPath()
@@ -87,7 +87,7 @@ proc drawBackgroundGrid(m: Map, dp, vg) =
     vg.lineTo(x, endY)
     vg.stroke()
 
-  for y in 0..m.mapHeight:
+  for y in 0..m.height:
     let x = snap(dp.startX, strokeWidth)
     let y = snap(cellY(y, dp), strokeWidth)
     vg.beginPath()
@@ -110,10 +110,10 @@ proc drawCellCoords(m: Map, cursorX, cursorY: Natural, dp, vg) =
       vg.fillColor(dp.cellCoordsColor)
       vg.fontFace("sans")
 
-  let endX = dp.startX + dp.gridSize * m.mapWidth
-  let endY = dp.startY + dp.gridSize * m.mapHeight
+  let endX = dp.startX + dp.gridSize * m.width
+  let endY = dp.startY + dp.gridSize * m.height
 
-  for x in 0..<m.mapWidth:
+  for x in 0..<m.width:
     let
       xPos = cellX(x, dp) + dp.gridSize/2
       coord = $x
@@ -123,7 +123,7 @@ proc drawCellCoords(m: Map, cursorX, cursorY: Natural, dp, vg) =
     discard vg.text(xPos, dp.startY - 12, coord)
     discard vg.text(xPos, endY + 12, coord)
 
-  for y in 0..<m.mapHeight:
+  for y in 0..<m.height:
     let
       yPos = cellY(y, dp) + dp.gridSize/2
       coord = $y
@@ -143,8 +143,8 @@ proc drawMapBackground(m: Map, dp, vg) =
   vg.strokeWidth(strokeWidth)
 
   let
-    w = dp.gridSize * m.mapWidth
-    h = dp.gridSize * m.mapHeight
+    w = dp.gridSize * m.width
+    h = dp.gridSize * m.height
     offs = max(w, h)
     lineSpacing = strokeWidth * 2
 
@@ -186,8 +186,8 @@ proc drawCursorGuides(m: Map, cursorX, cursorY: Natural, dp, vg) =
   let
     x = cellX(cursorX, dp)
     y = cellY(cursorY, dp)
-    w = dp.gridSize * m.mapWidth
-    h = dp.gridSize * m.mapHeight
+    w = dp.gridSize * m.width
+    h = dp.gridSize * m.height
 
   vg.fillColor(dp.cursorGuideColor)
   vg.strokeColor(dp.cursorGuideColor)
@@ -208,8 +208,8 @@ proc drawCursorGuides(m: Map, cursorX, cursorY: Natural, dp, vg) =
 # {{{ drawOutline()
 proc drawOutline(m: Map, dp, vg) =
   func check(x, y: int): bool =
-    let x = max(min(x, m.mapWidth-1), 0)
-    let y = max(min(y, m.mapHeight-1), 0)
+    let x = max(min(x, m.width-1), 0)
+    let y = max(min(y, m.height-1), 0)
     m.getFloor(x,y) != fNone
 
   func isOutline(x, y: Natural): bool =
@@ -222,8 +222,8 @@ proc drawOutline(m: Map, dp, vg) =
     check(x-1, y  ) or
     check(x-1, y+1)
 
-  for y in 0..<m.mapHeight:
-    for x in 0..<m.mapWidth:
+  for y in 0..<m.height:
+    for x in 0..<m.width:
       if isOutline(x, y):
         let
           sw = UltrathinStrokeWidth
@@ -569,10 +569,10 @@ proc drawWalls(m: Map, x: Natural, y: Natural, dp, vg) =
   drawWall(cellX(x, dp), cellY(y, dp), m.getWall(x,y, North), Horiz, dp, vg)
   drawWall(cellX(x, dp), cellY(y, dp), m.getWall(x,y, West), Vert, dp, vg)
 
-  if x == m.mapWidth-1:
+  if x == m.width-1:
     drawWall(cellX(x+1, dp), cellY(y, dp), m.getWall(x,y, East), Vert, dp, vg)
 
-  if y == m.mapHeight-1:
+  if y == m.height-1:
     drawWall(cellX(x, dp), cellY(y+1, dp), m.getWall(x,y, South), Horiz, dp, vg)
 
 # }}}
@@ -589,16 +589,16 @@ proc drawMap*(m: Map, cursorX, cursorY: Natural,
 
   if dp.drawOutline: drawOutline(m, dp, vg)
 
-  for y in 0..<m.mapHeight:
-    for x in 0..<m.mapWidth:
+  for y in 0..<m.height:
+    for x in 0..<m.width:
       let cursorActive = x == cursorX and y == cursorY
       drawFloor(m, x, y, cursorActive, dp, vg)
 
   if dp.drawCursorGuides:
     drawCursorGuides(m, cursorX, cursorY, dp, vg)
 
-  for y in 0..<m.mapHeight:
-    for x in 0..<m.mapWidth:
+  for y in 0..<m.height:
+    for x in 0..<m.width:
       drawWalls(m, x, y, dp, vg)
 
   if selection.isSome:

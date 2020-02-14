@@ -1,7 +1,5 @@
 import options
 
-import map
-
 
 type
   UndoManager*[S] = ref object
