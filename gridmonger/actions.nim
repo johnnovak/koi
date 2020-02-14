@@ -1,5 +1,6 @@
 import common
 import map
+import selection
 import undomanager
 
 
@@ -7,19 +8,24 @@ using
   m: var Map
   um: var UndoManager[Map]
 
-# {{{ singleCellAction()
-template singleCellAction(m; x, y: Natural, um; body: untyped) =
+# {{{ cellAreaAction()
+template cellAreaAction(m; r: Rect[Natural], um; body: untyped) =
   let action = proc (m: var Map) =
     body
 
-  var undoMap = newMapFrom(m, rectN(x, y, x+1, y+1))
-  var undoAction = proc (s: var Map) = 
-    s.copyFrom(destX=x, destY=y,
-               undoMap, rectN(0, 0, 1, 1))
+  var undoMap = newMapFrom(m, r)
+  var undoAction = proc (s: var Map) =
+    s.copyFrom(destX=r.x1, destY=r.y1,
+               undoMap, rectN(0, 0, r.width, r.height))
 
   um.storeUndoState(undoAction, redoAction=action)
 
   action(m)
+
+# }}}
+# {{{ singleCellAction()
+template singleCellAction(m; x, y: Natural, um; body: untyped) =
+  cellAreaAction(m, rectN(x, y, x+1, y+1), um, body)
 
 # }}}
 
@@ -31,7 +37,13 @@ proc eraseCellWalls(m; x, y: Natural) =
   m.setWall(x,y, East,  wNone)
 
 # }}}
+# {{{ eraseCell()
+proc eraseCell(m; x, y: Natural) =
+  m.setFloor(x, y, fNone)
+  m.eraseCellWalls(x, y)
 
+# }}}
+#
 # {{{ eraseCellWallsAction*()
 proc eraseCellWallsAction*(m; x, y: Natural, um) =
   singleCellAction(m, x, y, um):
@@ -41,17 +53,16 @@ proc eraseCellWallsAction*(m; x, y: Natural, um) =
 # {{{ eraseCellAction*()
 proc eraseCellAction*(m; x, y: Natural, um) =
   singleCellAction(m, x, y, um):
-    # TODO fill should be improved
-    m.setFloor(x, y, fNone)
-    m.eraseCellWalls(x, y)
+    eraseCell(m, x, y)
 
 # }}}
-# {{{ eraseRectAction*()
-proc eraseRectAction*(m; sel: Selection, um) =
-  singleCellAction(m, x, y, um):
-    # TODO fill should be improved
-    m.setFloor(x, y, fNone)
-    m.eraseCellWalls(x, y)
+# {{{ eraseSelectionAction*()
+proc eraseSelectionAction*(m; sel: Selection, bbox: Rect[Natural], um) =
+  cellAreaAction(m, bbox, um):
+    for y in bbox.y1..<bbox.y2:
+      for x in bbox.x1..<bbox.x2:
+        if sel[x,y]:
+          eraseCell(m, x, y)
 
 # }}}
 # {{{ setWallAction*()

@@ -18,7 +18,13 @@ import utils
 # {{{ App context
 type
   EditMode = enum
-    emNormal, emSelectDraw, emSelectRect
+    emNormal,
+    emExcavate,
+    emDrawWall,
+    emEraseCell,
+    emClearFloor,
+    emSelectDraw,
+    emSelectRect
 
   AppContext = ref object
     vg:          NVGContext
@@ -257,6 +263,9 @@ func isKeyDown(ke: KeyEvent, key: Key,
                mods: set[ModifierKey] = {}, repeat=false): bool =
   isKeyDown(ke, {key}, mods, repeat)
 
+func isKeyUp(ke: KeyEvent, keys: set[Key]): bool =
+  ke.action == kaUp and ke.key in keys
+
 # }}}
 # {{{ handleEvents()
 proc handleEvents(a) =
@@ -273,37 +282,29 @@ proc handleEvents(a) =
     MoveKeysDown  = {keyDown,  keyJ, keyKp2}
 
   for ke in keyBuf():
-    case a.editMode
+    case a.editMode:
     of emNormal:
+      if ke.isKeyDown(MoveKeysLeft,  repeat=true): moveCursor(West, a)
+      if ke.isKeyDown(MoveKeysRight, repeat=true): moveCursor(East, a)
+      if ke.isKeyDown(MoveKeysUp,    repeat=true): moveCursor(North, a)
+      if ke.isKeyDown(MoveKeysDown,  repeat=true): moveCursor(South, a)
 
-      proc handleMoveKey(dir: Direction, a) =
-        if win.isKeyDown(keyW):
-          let w = if m.getWall(curX, curY, dir) == wNone: wWall
-                  else: wNone
-          setWallAction(m, curX, curY, dir, w, um)
-
-        elif ke.mods == {mkAlt}:
-          setWallAction(m, curX, curY, dir, wNone, um)
-        elif ke.mods == {mkAlt, mkShift}:
-          setWallAction(m, curX, curY, dir, wClosedDoor, um)
-        else:
-          moveCursor(dir, a)
-
-      if ke.isKeyDown(MoveKeysLeft,  repeat=true): handleMoveKey(West, a)
-      if ke.isKeyDown(MoveKeysRight, repeat=true): handleMoveKey(East, a)
-      if ke.isKeyDown(MoveKeysUp,    repeat=true): handleMoveKey(North, a)
-      if ke.isKeyDown(MoveKeysDown,  repeat=true): handleMoveKey(South, a)
-
-      if win.isKeyDown(keyF):
-        setFloorAction(m, curX, curY, fEmptyFloor, um)
-
-      elif win.isKeyDown(keyD):
+      if ke.isKeyDown(keyD):
+        a.editMode = emExcavate
         excavateAction(m, curX, curY, um)
 
-      elif win.isKeyDown(keyE):
+      elif ke.isKeyDown(keyE):
+        a.editMode = emEraseCell
         eraseCellAction(m, curX, curY, um)
 
-      elif win.isKeyDown(keyW) and ke.mods == {mkAlt}:
+      elif ke.isKeyDown(keyF):
+        a.editMode = emClearFloor
+        setFloorAction(m, curX, curY, fEmptyFloor, um)
+
+      elif ke.isKeyDown(keyW):
+        a.editMode = emDrawWall
+
+      elif ke.isKeyDown(keyW) and ke.mods == {mkAlt}:
         eraseCellWallsAction(m, curX, curY, um)
 
       elif ke.isKeyDown(key1):
@@ -348,6 +349,42 @@ proc handleEvents(a) =
       elif ke.isKeyDown(keyM):
         enterSelectMode(a)
 
+    of emExcavate, emEraseCell, emClearFloor:
+      proc handleMoveKey(dir: Direction, a) =
+        if a.editMode == emExcavate:
+          moveCursor(dir, a)
+          excavateAction(m, curX, curY, um)
+
+        elif a.editMode == emEraseCell:
+          moveCursor(dir, a)
+          eraseCellAction(m, curX, curY, um)
+
+        elif a.editMode == emClearFloor:
+          moveCursor(dir, a)
+          setFloorAction(m, curX, curY, fEmptyFloor, um)
+
+      if ke.isKeyDown(MoveKeysLeft,  repeat=true): handleMoveKey(West, a)
+      if ke.isKeyDown(MoveKeysRight, repeat=true): handleMoveKey(East, a)
+      if ke.isKeyDown(MoveKeysUp,    repeat=true): handleMoveKey(North, a)
+      if ke.isKeyDown(MoveKeysDown,  repeat=true): handleMoveKey(South, a)
+
+      elif ke.isKeyUp({keyD, keyE, keyF}):
+        a.editMode = emNormal
+
+    of emDrawWall:
+      proc handleMoveKey(dir: Direction, a) =
+        let w = if m.getWall(curX, curY, dir) == wNone: wWall
+                else: wNone
+        setWallAction(m, curX, curY, dir, w, um)
+
+      if ke.isKeyDown(MoveKeysLeft):  handleMoveKey(West, a)
+      if ke.isKeyDown(MoveKeysRight): handleMoveKey(East, a)
+      if ke.isKeyDown(MoveKeysUp):    handleMoveKey(North, a)
+      if ke.isKeyDown(MoveKeysDown):  handleMoveKey(South, a)
+
+      elif ke.isKeyUp({keyW}):
+        a.editMode = emNormal
+
     of emSelectDraw:
       if ke.isKeyDown(MoveKeysLeft,  repeat=true): moveCursor(West, a)
       if ke.isKeyDown(MoveKeysRight, repeat=true): moveCursor(East, a)
@@ -375,12 +412,12 @@ proc handleEvents(a) =
         exitSelectMode(a)
 
       elif ke.isKeyDown(keyX):
-        let selRect = copySelection(a)
-        # TODO erase selection, undoable action
-
+        let bbox = copySelection(a)
+        if bbox.isSome:
+          eraseSelectionAction(m, a.copyBuf.get.selection, bbox.get, um)
         exitSelectMode(a)
 
-      elif win.isKeyDown(keyEscape):
+      elif ke.isKeyDown(keyEscape):
         exitSelectMode(a)
 
     of emSelectRect:
@@ -406,7 +443,7 @@ proc handleEvents(a) =
 
       a.selRect.get.rect = rectN(x1, y1, x2, y2)
 
-      if ke.key in {keyR, keyS} and ke.action == kaUp:
+      if ke.isKeyUp({keyR, keyS}):
         a.selection.get.fill(a.selRect.get.rect, a.selRect.get.fillValue)
         a.selRect = none(SelectionRect)
         a.editMode = emSelectDraw
