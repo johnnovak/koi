@@ -225,6 +225,12 @@ const
 
 # {{{ Utils
 
+proc setFont(vg: NVGContext, size: float, face: string = "sans-bold",
+             ha: HorizontalAlign = haLeft, va: VerticalAlign = vaMiddle) =
+  vg.fontFace(face)
+  vg.fontSize(size)
+  vg.textAlign(ha, va)
+
 proc hideCursor*() =
   glfw.currentContext().cursorMode = cmDisabled
 
@@ -557,9 +563,7 @@ proc drawTooltip(x, y: float, text: string, alpha: float = 1.0) =
     vg.fillColor(gray(0.1, 0.88 * alpha))
     vg.fill()
 
-    vg.fontSize(17.0)
-    vg.fontFace("sans-bold")
-    vg.textAlign(haLeft, vaMiddle)
+    vg.setFont(17.0)
     vg.fillColor(white(0.9 * alpha))
     discard vg.text(x + 10, y + 10, text)
   )
@@ -626,9 +630,7 @@ proc textLabel(id:         ItemId,
   g_drawLayers.add(DefaultLayer, proc (vg: NVGContext) =
     vg.scissor(x, y, w, h)
 
-    vg.fontSize(fontSize)
-    vg.fontFace(fontFace)
-    vg.textAlign(haLeft, vaMiddle)
+    vg.setFont(fontSize, fontFace)
     vg.fillColor(color)
     discard vg.text(x, y+h*0.5, label)
 
@@ -693,9 +695,7 @@ proc button(id:         ItemId,
 
     vg.scissor(textBoxX, textBoxY, textBoxW, textBoxH)
 
-    vg.fontSize(19.0)
-    vg.fontFace("sans-bold")
-    vg.textAlign(haLeft, vaMiddle)
+    vg.setFont(19.0)
     vg.fillColor(GRAY_LO)
     let tw = vg.horizontalAdvance(0,0, label)
     discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, label)
@@ -830,9 +830,7 @@ proc radioButtons(id:           ItemId,
   const PadX = 2
 
   g_drawLayers.add(DefaultLayer, proc (vg: NVGContext) =
-    vg.fontSize(19.0)
-    vg.fontFace("sans-bold")
-    vg.textAlign(haLeft, vaMiddle)
+    vg.setFont(19.0)
 
     for i, label in labels:
       let fillColor = if   drawState == dsHover  and hotButton == i: GRAY_HI
@@ -944,8 +942,7 @@ proc dropdown(id:           ItemId,
     var maxItemWidth = 0.0
 
     # TODO to be kept up to date with the draw proc
-    g_nvgContext.fontSize(19.0)
-    g_nvgContext.fontFace("sans-bold")
+    g_nvgContext.setFont(19.0)
 
     for i in items:
       let tw = g_nvgContext.horizontalAdvance(0, 0, i)
@@ -1019,9 +1016,7 @@ proc dropdown(id:           ItemId,
 
     vg.scissor(textBoxX, textBoxY, textBoxW, textBoxH)
 
-    vg.fontSize(19.0)
-    vg.fontFace("sans-bold")
-    vg.textAlign(haLeft, vaMiddle)
+    vg.setFont(19.0)
     vg.fillColor(textColor)
     discard vg.text(x + ItemXPad, y+h*0.5, itemText)
 
@@ -1038,9 +1033,7 @@ proc dropdown(id:           ItemId,
       vg.fill()
 
       # Draw items
-      vg.fontSize(19.0)
-      vg.fontFace("sans-bold")
-      vg.textAlign(haLeft, vaMiddle)
+      vg.setFont(19.0)
       vg.fillColor(GRAY_HI)
 
       var
@@ -1130,8 +1123,7 @@ proc textField(id:         ItemId,
 
   proc calcGlyphPos() =
     # TODO to be kept up to date with the draw proc
-    g_nvgContext.fontSize(19.0)
-    g_nvgContext.fontFace("sans-bold")
+    g_nvgContext.setFont(19.0)
     discard g_nvgContext.textGlyphPositions(0, 0, text, glyphs)
 
   proc hasSelection(): bool =
@@ -1500,9 +1492,7 @@ proc textField(id:         ItemId,
     # Draw text
     let textColor = if editing: GRAY_HI else: GRAY_LO
 
-    vg.fontSize(19.0)
-    vg.fontFace("sans-bold")
-    vg.textAlign(haLeft, vaMiddle)
+    vg.setFont(19.0)
     vg.fillColor(textColor)
 
     discard vg.text(textX, textY, text)
@@ -1718,9 +1708,7 @@ proc horizScrollBar(id:         ItemId,
     vg.fillColor(thumbColor)
     vg.fill()
 
-    vg.fontSize(19.0)
-    vg.fontFace("sans-bold")
-    vg.textAlign(haLeft, vaMiddle)
+    vg.setFont(19.0)
     vg.fillColor(white())
     let valueString = fmt"{newValue:.3f}"
     let tw = vg.horizontalAdvance(0,0, valueString)
@@ -2122,9 +2110,7 @@ proc horizSlider(id:         ItemId,
       vg.fill()
 
       # Draw slider text
-      vg.fontSize(19.0)
-      vg.fontFace("sans-bold")
-      vg.textAlign(haLeft, vaMiddle)
+      vg.setFont(19.0)
       vg.fillColor(white())
       let valueString = fmt"{value:.3f}"
       let tw = vg.horizontalAdvance(0,0, valueString)
@@ -2340,9 +2326,7 @@ proc menuBar(id:         ItemId,
 
     vg.scissor(x, y, w, h)
 
-    vg.fontSize(19.0)
-    vg.fontFace("sans-bold")
-    vg.textAlign(haLeft, vaMiddle)
+    vg.setFont(19.0)
     vg.fillColor(GRAY_LO)
 
     for i in 0..names.high:
