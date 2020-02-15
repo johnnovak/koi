@@ -1,3 +1,4 @@
+import lenientops
 import options
 
 import glad/gl
@@ -81,6 +82,8 @@ proc loadData(vg: NVGContext) =
 
 # }}}
 
+var g_textFieldVal1 = "Level 1"
+
 # {{{ render()
 proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
   alias(vg, g_app.vg)
@@ -113,6 +116,9 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
     g_app.drawParams,
     vg
   )
+
+  g_textFieldVal1 = koi.textField(
+    winWidth-200.0, 30.0, 150.0, 24.0, tooltip = "Text field 1", g_textFieldVal1)
 
   ############################################################
 
@@ -348,6 +354,10 @@ proc handleEvents(a) =
 
       elif ke.isKeyDown(keyM):
         enterSelectMode(a)
+
+      elif ke.isKeyDown(keyP):
+        if a.copyBuf.isSome:
+          pasteAction(m, curX, curY, a.copyBuf.get, um)
 
     of emExcavate, emEraseCell, emClearFloor:
       proc handleMoveKey(dir: Direction, a) =

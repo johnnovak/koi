@@ -1,3 +1,5 @@
+import options
+
 type
   Orientation* = enum
     Horiz, Vert
@@ -11,6 +13,7 @@ type
   Rect*[T: SomeNumber | Natural] = object
     x1*, y1*, x2*, y2*: T
 
+
 proc rectN*(x1, y1, x2, y2: Natural): Rect[Natural] =
   assert x1 < x2
   assert y1 < y2
@@ -19,6 +22,23 @@ proc rectN*(x1, y1, x2, y2: Natural): Rect[Natural] =
   result.y1 = y1
   result.x2 = x2
   result.y2 = y2
+
+
+proc intersect*[T: SomeNumber | Natural](a, b: Rect[T]): Option[Rect[T]] =
+  let
+    x = max(a.x1, b.x1)
+    y = max(a.y1, b.y1)
+    n1 = min(a.x1 + a.width,  b.x1 + b.width)
+    n2 = min(a.y1 + a.height, b.y1 + b.height)
+
+  if (n1 >= x and n2 >= y):
+    some(Rect[T](
+      x1: x,
+      y1: y,
+      x2: x + n1-x,
+      y2: y + n2-y
+    ))
+  else: none(Rect[T])
 
 
 func width*[T: SomeNumber | Natural](r: Rect[T]): T = r.x2 - r.x1

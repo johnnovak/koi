@@ -1,3 +1,5 @@
+import options
+
 import common
 import map
 import selection
@@ -59,10 +61,25 @@ proc eraseCellAction*(m; x, y: Natural, um) =
 # {{{ eraseSelectionAction*()
 proc eraseSelectionAction*(m; sel: Selection, bbox: Rect[Natural], um) =
   cellAreaAction(m, bbox, um):
-    for y in bbox.y1..<bbox.y2:
-      for x in bbox.x1..<bbox.x2:
+    for y in 0..<sel.height:
+      for x in 0..<sel.width:
         if sel[x,y]:
-          eraseCell(m, x, y)
+          eraseCell(m, bbox.x1 + x, bbox.y1 + y)
+
+# }}}
+# {{{ pasteAction*()
+proc pasteAction*(m; x, y: Natural, cb: CopyBuffer, um) =
+  let r1 = rectN(x, y, x + cb.map.width, y + cb.map.height)
+  let r2 = rectN(0, 0, m.width, m.height)
+  let r3 = r1.intersect(r2)
+  echo "-----------------"
+  echo "r1: ", r1
+  echo "r2: ", r2
+  echo "r3: ", r3
+
+  if r3.isSome:
+    cellAreaAction(m, r3.get, um):
+      m.copyFrom(x, y, cb.map, rectN(0, 0, cb.map.width, cb.map.height))
 
 # }}}
 # {{{ setWallAction*()
@@ -105,6 +122,7 @@ proc excavateAction*(m; x, y: Natural, um) =
 
 # }}}
 # {{{ toggleFloorOrientationAction*()
+# TODO unnecessary
 proc toggleFloorOrientationAction*(m; x, y: Natural, um) =
   singleCellAction(m, x, y, um):
     let newOt = if m.getFloorOrientation(x, y) == Horiz: Vert else: Horiz
