@@ -503,10 +503,14 @@ proc keyCb(win: Window, key: Key, scanCode: int32, action: KeyAction,
            mods: set[ModifierKey]) =
 
   let shortcut = mkKeyShortcut(key, mods)
-  if action in {kaDown, kaRepeat} and shortcut in textFieldEditShortcutsSet:
+
+  if (not g_uiState.focusCaptured) or
+     (g_uiState.focusCaptured and action in {kaDown, kaRepeat} and
+                                  shortcut in textFieldEditShortcutsSet):
     if g_keyBufIdx <= g_keyBuf.high:
       g_keyBuf[g_keyBufIdx] = KeyEvent(key: key, action: action, mods: mods)
       inc(g_keyBufIdx)
+
 
 proc clearKeyBuf*() = g_keyBufIdx = 0
 
