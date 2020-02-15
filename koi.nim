@@ -180,6 +180,10 @@ type
     # **********************
     tooltipState:     TooltipStateVars
 
+    # Dialog state
+    # **********************
+    dialogActive:   bool
+
 # }}}
 # {{{ DrawState
 
@@ -314,37 +318,37 @@ template generateId(filename: string, line: int, id: string): ItemId =
   generateId(filename & ":" & $line & ":" & id)
 
 proc mouseInside(x, y, w, h: float): bool =
-  alias(gui, g_uiState)
-  gui.mx >= x and gui.mx <= x+w and
-  gui.my >= y and gui.my <= y+h
+  alias(ui, g_uiState)
+  ui.mx >= x and ui.mx <= x+w and
+  ui.my >= y and ui.my <= y+h
 
 template isHot(id: ItemId): bool =
-  alias(gui, g_uiState)
-  gui.hotItem == id
+  alias(ui, g_uiState)
+  ui.hotItem == id
 
 template setHot(id: ItemId) =
-  alias(gui, g_uiState)
-  gui.hotItem = id
+  alias(ui, g_uiState)
+  ui.hotItem = id
 
 template isActive(id: ItemId): bool =
-  alias(gui, g_uiState)
-  gui.activeItem == id
+  alias(ui, g_uiState)
+  ui.activeItem == id
 
 template setActive(id: ItemId) =
-  alias(gui, g_uiState)
-  gui.activeItem = id
+  alias(ui, g_uiState)
+  ui.activeItem = id
 
 template isHotAndActive(id: ItemId): bool =
-  alias(gui, g_uiState)
+  alias(ui, g_uiState)
   isHot(id) and isActive(id)
 
 template noActiveItem(): bool =
-  alias(gui, g_uiState)
-  gui.activeItem == 0
+  alias(ui, g_uiState)
+  ui.activeItem == 0
 
 template hasActiveItem(): bool =
-  alias(gui, g_uiState)
-  gui.activeItem > 0
+  alias(ui, g_uiState)
+  ui.activeItem > 0
 
 # }}}
 # {{{ Keyboard handling
@@ -525,26 +529,26 @@ iterator keyBuf*(): KeyEvent =
 # {{{ handleTooltip
 
 proc handleTooltip(id: ItemId, tooltip: string) =
-  alias(gui, g_uiState)
-  alias(tt, gui.tooltipState)
+  alias(ui, g_uiState)
+  alias(tt, ui.tooltipState)
 
   tt.state = tt.lastState
 
   # Reset the tooltip show delay if the cursor has been moved inside a
   # widget
   if tt.state == tsShowDelay:
-    let cursorMoved = gui.mx != gui.lastmx or gui.my != gui.lastmy
+    let cursorMoved = ui.mx != ui.lastmx or ui.my != ui.lastmy
     if cursorMoved:
       tt.t0 = getTime()
 
   # Hide the tooltip immediately if the LMB is pressed inside the widget
-  if gui.mbLeftDown and hasActiveItem():
+  if ui.mbLeftDown and hasActiveItem():
     tt.state = tsOff
 
   # Start the show delay if we just entered the widget with LMB up and no
   # other tooltip is being shown
-  elif tt.state == tsOff and not gui.mbLeftDown and
-       gui.lastHotItem != id:
+  elif tt.state == tsOff and not ui.mbLeftDown and
+       ui.lastHotItem != id:
     tt.state = tsShowDelay
     tt.t0 = getTime()
 
@@ -576,13 +580,13 @@ proc drawTooltip(x, y: float, text: string, alpha: float = 1.0) =
 # {{{ tooltipPost
 
 proc tooltipPost() =
-  alias(gui, g_uiState)
-  alias(tt, gui.tooltipState)
+  alias(ui, g_uiState)
+  alias(tt, ui.tooltipState)
 
 
   let
-    ttx = gui.mx + 13
-    tty = gui.my + 20
+    ttx = ui.mx + 13
+    tty = ui.my + 20
 
   case tt.state:
   of tsOff: discard
@@ -662,7 +666,7 @@ proc button(id:         ItemId,
             color:      Color,
             tooltip:    string = ""): bool =
 
-  alias(gui, g_uiState)
+  alias(ui, g_uiState)
 
   const TextBoxPadX = 8
   let
@@ -672,13 +676,13 @@ proc button(id:         ItemId,
     textBoxH = h
 
   # Hit testing
-  if not gui.focusCaptured and mouseInside(x, y, w, h):
+  if not ui.focusCaptured and mouseInside(x, y, w, h):
     setHot(id)
-    if gui.mbLeftDown and noActiveItem():
+    if ui.mbLeftDown and noActiveItem():
       setActive(id)
 
   # LMB released over active widget means it was clicked
-  if not gui.mbLeftDown and isHotAndActive(id):
+  if not ui.mbLeftDown and isHotAndActive(id):
     result = true
 
   # Draw button
@@ -729,19 +733,19 @@ proc checkBox(id:      ItemId,
               tooltip: string = "",
               active:  bool): bool =
 
-  alias(gui, g_uiState)
+  alias(ui, g_uiState)
 
   const
     CheckPad = 3
 
   # Hit testing
-  if not gui.focusCaptured and mouseInside(x, y, w, w):
+  if not ui.focusCaptured and mouseInside(x, y, w, w):
     setHot(id)
-    if gui.mbLeftDown and noActiveItem():
+    if ui.mbLeftDown and noActiveItem():
       setActive(id)
 
   # LMB released over active widget means it was clicked
-  let active = if not gui.mbLeftDown and isHotAndActive(id): not active
+  let active = if not ui.mbLeftDown and isHotAndActive(id): not active
                else: active
 
   result = active
@@ -802,24 +806,24 @@ proc radioButtons(id:           ItemId,
   assert activeButton >= 0 and activeButton <= labels.high
   assert tooltips.len == 0 or tooltips.len == labels.len
 
-  alias(gui, g_uiState)
+  alias(ui, g_uiState)
 
   let
     numButtons = labels.len
     buttonW = w / numButtons.float
 
   # Hit testing
-  let hotButton = min(int(floor((gui.mx - x) / buttonW)), numButtons-1)
+  let hotButton = min(int(floor((ui.mx - x) / buttonW)), numButtons-1)
 
-  if not gui.focusCaptured and mouseInside(x, y, w, h):
+  if not ui.focusCaptured and mouseInside(x, y, w, h):
     setHot(id)
-    if gui.mbLeftDown and noActiveItem():
+    if ui.mbLeftDown and noActiveItem():
       setActive(id)
-      gui.radioButtonsActiveItem = hotButton
+      ui.radioButtonsActiveItem = hotButton
 
   # LMB released over active widget means it was clicked
-  if not gui.mbLeftDown and isHotAndActive(id) and
-     gui.radioButtonsActiveItem == hotButton:
+  if not ui.mbLeftDown and isHotAndActive(id) and
+     ui.radioButtonsActiveItem == hotButton:
     result = hotButton
   else:
     result = activeButton
@@ -839,7 +843,7 @@ proc radioButtons(id:           ItemId,
     for i, label in labels:
       let fillColor = if   drawState == dsHover  and hotButton == i: GRAY_HI
                       elif drawState == dsActive and hotButton == i and
-                           gui.radioButtonsActiveItem == i: RED
+                           ui.radioButtonsActiveItem == i: RED
                       else:
                         if activeButton == i: GRAY_LO else : GRAY_MID
 
@@ -900,8 +904,8 @@ proc dropdown(id:           ItemId,
   assert items.len > 0
   assert selectedItem <= items.high
 
-  alias(gui, g_uiState)
-  alias(ds, gui.dropdownState)
+  alias(ui, g_uiState)
+  alias(ds, ui.dropdownState)
 
   const TextBoxPadX = 8
   let
@@ -927,16 +931,16 @@ proc dropdown(id:           ItemId,
   proc closeDropdown() =
     ds.state = dsClosed
     ds.activeItem = 0
-    gui.focusCaptured = false
+    ui.focusCaptured = false
 
   if ds.state == dsClosed:
-    if not gui.focusCaptured and mouseInside(x, y, w, h):
+    if not ui.focusCaptured and mouseInside(x, y, w, h):
       setHot(id)
-      if gui.mbLeftDown and noActiveItem():
+      if ui.mbLeftDown and noActiveItem():
         setActive(id)
         ds.state = dsOpenLMBPressed
         ds.activeItem = id
-        gui.focusCaptured = true
+        ui.focusCaptured = true
 
   # We 'fall through' to the open state to avoid a 1-frame delay when clicking
   # the button
@@ -955,10 +959,10 @@ proc dropdown(id:           ItemId,
     selBoxW = max(maxItemWidth + SelBoxPadX*2, w)
     selBoxH = float(items.len) * itemHeight + SelBoxPadY*2
 
-    selBoxX = if x + selBoxW < gui.winWidth: x
+    selBoxX = if x + selBoxW < ui.winWidth: x
               else: x - (selBoxW - w)
 
-    selBoxY = if y + h + selBoxH < gui.winHeight: y + h
+    selBoxY = if y + h + selBoxH < ui.winHeight: y + h
               else: y - selBoxH
 
     # Hit testing
@@ -973,20 +977,20 @@ proc dropdown(id:           ItemId,
       closeDropdown()
 
     if insideBox:
-      hoverItem = min(int(floor((gui.my - selBoxY - SelBoxPadY) / itemHeight)),
+      hoverItem = min(int(floor((ui.my - selBoxY - SelBoxPadY) / itemHeight)),
                       numItems-1)
 
     # LMB released inside the box selects the item under the cursor and closes
     # the dropdown
     if ds.state == dsOpenLMBPressed:
-      if not gui.mbLeftDown:
+      if not ui.mbLeftDown:
         if hoverItem >= 0:
           result = hoverItem
           closeDropdown()
         else:
           ds.state = dsOpen
     else:
-      if gui.mbLeftDown:
+      if ui.mbLeftDown:
         if hoverItem >= 0:
           result = hoverItem
           closeDropdown()
@@ -1077,8 +1081,8 @@ template dropdown*(x, y, w, h:   float,
 
 # TODO
 proc textFieldEnterEditMode(id: ItemId, text: string, startX: float) =
-  alias(gui, g_uiState)
-  alias(tf, gui.textFieldState)
+  alias(ui, g_uiState)
+  alias(tf, ui.textFieldState)
 
   setActive(id)
   clearCharBuf()
@@ -1093,7 +1097,7 @@ proc textFieldEnterEditMode(id: ItemId, text: string, startX: float) =
   tf.selStartPos = 0
   tf.selEndPos = tf.cursorPos
 
-  gui.focusCaptured = true
+  ui.focusCaptured = true
   showIBeamCursor()
 
 
@@ -1110,8 +1114,8 @@ proc textField(id:         ItemId,
 
   assert text.runeLen <= MaxTextLen
 
-  alias(gui, g_uiState)
-  alias(tf, gui.textFieldState)
+  alias(ui, g_uiState)
+  alias(tf, ui.textFieldState)
 
   # The text is displayed within this rectangle (used for drawing later)
   const TextBoxPadX = 8
@@ -1143,7 +1147,7 @@ proc textField(id:         ItemId,
     # Hit testing
     if mouseInside(x, y, w, h):
       setHot(id)
-      if gui.mbLeftDown and noActiveItem():
+      if ui.mbLeftDown and noActiveItem():
         textFieldEnterEditMode(id, text, textBoxX)
         tf.state = tfEditLMBPressed
 
@@ -1163,7 +1167,7 @@ proc textField(id:         ItemId,
     tf.originalText = ""
     clearSelection()
 
-    gui.focusCaptured = false
+    ui.focusCaptured = false
     showArrowCursor()
 
   # We 'fall through' to the edit state to avoid a 1-frame delay when going
@@ -1173,11 +1177,11 @@ proc textField(id:         ItemId,
     setActive(id)
 
     if tf.state == tfEditLMBPressed:
-      if not gui.mbLeftDown:
+      if not ui.mbLeftDown:
         tf.state = tfEdit
     else:
       # LMB pressed outside the text field exits edit mode
-      if gui.mbLeftDown and not mouseInside(x, y, w, h):
+      if ui.mbLeftDown and not mouseInside(x, y, w, h):
         exitEditMode()
 
     # Handle text field shortcuts
@@ -1548,8 +1552,8 @@ proc horizScrollBar(id:         ItemId,
   assert thumbSize < 0.0 or thumbSize < abs(startVal - endVal)
   assert clickStep < 0.0 or clickStep < abs(startVal - endVal)
 
-  alias(gui, g_uiState)
-  alias(sb, gui.scrollBarState)
+  alias(ui, g_uiState)
+  alias(sb, ui.scrollBarState)
 
   const
     ThumbPad = 3
@@ -1573,9 +1577,9 @@ proc horizScrollBar(id:         ItemId,
   let thumbX = calcThumbX(value)
 
   # Hit testing
-  if not gui.focusCaptured and mouseInside(x, y, w, h):
+  if not ui.focusCaptured and mouseInside(x, y, w, h):
     setHot(id)
-    if gui.mbLeftDown and noActiveItem():
+    if ui.mbLeftDown and noActiveItem():
       setActive(id)
 
   let insideThumb = mouseInside(thumbX, y, thumbW, h)
@@ -1601,30 +1605,30 @@ proc horizScrollBar(id:         ItemId,
     case sb.state
     of sbsDefault:
       if insideThumb:
-        gui.x0 = gui.mx
-        if gui.shiftDown:
+        ui.x0 = ui.mx
+        if ui.shiftDown:
           hideCursor()
           sb.state = sbsDragHidden
         else:
           sb.state = sbsDragNormal
       else:
         let s = sgn(endVal - startVal).float
-        if gui.mx < thumbX: sb.clickDir = -1 * s
+        if ui.mx < thumbX: sb.clickDir = -1 * s
         else:               sb.clickDir =  1 * s
         sb.state = sbsTrackClickFirst
-        gui.t0 = getTime()
+        ui.t0 = getTime()
 
     of sbsDragNormal:
-      if gui.shiftDown:
+      if ui.shiftDown:
         hideCursor()
         sb.state = sbsDragHidden
       else:
-        let dx = gui.mx - gui.x0
+        let dx = ui.mx - ui.x0
 
         newThumbX = clamp(thumbX + dx, thumbMinX, thumbMaxX)
         newValue = calcNewValue(newThumbX)
 
-        gui.x0 = clamp(gui.mx, thumbMinX, thumbMaxX + thumbW)
+        ui.x0 = clamp(ui.mx, thumbMinX, thumbMaxX + thumbW)
 
     of sbsDragHidden:
       # Technically, the cursor can move outside the widget when it's disabled
@@ -1633,53 +1637,53 @@ proc horizScrollBar(id:         ItemId,
       # sure the widget is always hot in "drag hidden" mode.
       setHot(id)
 
-      if gui.shiftDown:
-        let d = if gui.altDown: ScrollBarUltraFineDragDivisor
+      if ui.shiftDown:
+        let d = if ui.altDown: ScrollBarUltraFineDragDivisor
                 else:           ScrollBarFineDragDivisor
-        let dx = (gui.mx - gui.x0) / d
+        let dx = (ui.mx - ui.x0) / d
 
         newThumbX = clamp(thumbX + dx, thumbMinX, thumbMaxX)
         newValue = calcNewValue(newThumbX)
 
-        gui.x0 = gui.mx
-        gui.dragX = newThumbX + thumbW*0.5
-        gui.dragY = -1.0
+        ui.x0 = ui.mx
+        ui.dragX = newThumbX + thumbW*0.5
+        ui.dragY = -1.0
       else:
         sb.state = sbsDragNormal
         showCursor()
-        setCursorPosX(gui.dragX)
-        gui.mx = gui.dragX
-        gui.x0 = gui.dragX
+        setCursorPosX(ui.dragX)
+        ui.mx = ui.dragX
+        ui.x0 = ui.dragX
 
     of sbsTrackClickFirst:
       newValue = calcNewValueTrackClick()
       newThumbX = calcThumbX(newValue)
 
       sb.state = sbsTrackClickDelay
-      gui.t0 = getTime()
+      ui.t0 = getTime()
 
     of sbsTrackClickDelay:
-      if getTime() - gui.t0 > ScrollBarTrackClickRepeatDelay:
+      if getTime() - ui.t0 > ScrollBarTrackClickRepeatDelay:
         sb.state = sbsTrackClickRepeat
 
     of sbsTrackClickRepeat:
       if isHot(id):
-        if getTime() - gui.t0 > ScrollBarTrackClickRepeatTimeout:
+        if getTime() - ui.t0 > ScrollBarTrackClickRepeatTimeout:
           newValue = calcNewValueTrackClick()
           newThumbX = calcThumbX(newValue)
 
           if sb.clickDir * sgn(endVal - startVal).float > 0:
-            if newThumbX + thumbW > gui.mx:
+            if newThumbX + thumbW > ui.mx:
               newThumbX = thumbX
               newValue = value
           else:
-            if newThumbX < gui.mx:
+            if newThumbX < ui.mx:
               newThumbX = thumbX
               newValue = value
 
-          gui.t0 = getTime()
+          ui.t0 = getTime()
       else:
-        gui.t0 = getTime()
+        ui.t0 = getTime()
 
   result = newValue
 
@@ -1758,8 +1762,8 @@ proc vertScrollBar(id:         ItemId,
   assert thumbSize < 0.0 or thumbSize < abs(startVal - endVal)
   assert clickStep < 0.0 or clickStep < abs(startVal - endVal)
 
-  alias(gui, g_uiState)
-  alias(sb, gui.scrollBarState)
+  alias(ui, g_uiState)
+  alias(sb, ui.scrollBarState)
 
   const
     ThumbPad = 3
@@ -1781,9 +1785,9 @@ proc vertScrollBar(id:         ItemId,
   let thumbY = calcThumbY(value)
 
   # Hit testing
-  if not gui.focusCaptured and mouseInside(x, y, w, h):
+  if not ui.focusCaptured and mouseInside(x, y, w, h):
     setHot(id)
-    if gui.mbLeftDown and noActiveItem():
+    if ui.mbLeftDown and noActiveItem():
       setActive(id)
 
   let insideThumb = mouseInside(x, thumbY, w, thumbH)
@@ -1809,30 +1813,30 @@ proc vertScrollBar(id:         ItemId,
     case sb.state
     of sbsDefault:
       if insideThumb:
-        gui.y0 = gui.my
-        if gui.shiftDown:
+        ui.y0 = ui.my
+        if ui.shiftDown:
           hideCursor()
           sb.state = sbsDragHidden
         else:
           sb.state = sbsDragNormal
       else:
         let s = sgn(endVal - startVal).float
-        if gui.my < thumbY: sb.clickDir = -1 * s
+        if ui.my < thumbY: sb.clickDir = -1 * s
         else:               sb.clickDir =  1 * s
         sb.state = sbsTrackClickFirst
-        gui.t0 = getTime()
+        ui.t0 = getTime()
 
     of sbsDragNormal:
-      if gui.shiftDown:
+      if ui.shiftDown:
         hideCursor()
         sb.state = sbsDragHidden
       else:
-        let dy = gui.my - gui.y0
+        let dy = ui.my - ui.y0
 
         newThumbY = clamp(thumbY + dy, thumbMinY, thumbMaxY)
         newValue = calcNewValue(newThumbY)
 
-        gui.y0 = clamp(gui.my, thumbMinY, thumbMaxY + thumbH)
+        ui.y0 = clamp(ui.my, thumbMinY, thumbMaxY + thumbH)
 
     of sbsDragHidden:
       # Technically, the cursor can move outside the widget when it's disabled
@@ -1841,53 +1845,53 @@ proc vertScrollBar(id:         ItemId,
       # sure the widget is always hot in "drag hidden" mode.
       setHot(id)
 
-      if gui.shiftDown:
-        let d = if gui.altDown: ScrollBarUltraFineDragDivisor
+      if ui.shiftDown:
+        let d = if ui.altDown: ScrollBarUltraFineDragDivisor
                 else:           ScrollBarFineDragDivisor
-        let dy = (gui.my - gui.y0) / d
+        let dy = (ui.my - ui.y0) / d
 
         newThumbY = clamp(thumbY + dy, thumbMinY, thumbMaxY)
         newValue = calcNewValue(newThumbY)
 
-        gui.y0 = gui.my
-        gui.dragX = -1.0
-        gui.dragY = newThumbY + thumbH*0.5
+        ui.y0 = ui.my
+        ui.dragX = -1.0
+        ui.dragY = newThumbY + thumbH*0.5
       else:
         sb.state = sbsDragNormal
         showCursor()
-        setCursorPosY(gui.dragY)
-        gui.my = gui.dragY
-        gui.y0 = gui.dragY
+        setCursorPosY(ui.dragY)
+        ui.my = ui.dragY
+        ui.y0 = ui.dragY
 
     of sbsTrackClickFirst:
       newValue = calcNewValueTrackClick()
       newThumbY = calcThumbY(newValue)
 
       sb.state = sbsTrackClickDelay
-      gui.t0 = getTime()
+      ui.t0 = getTime()
 
     of sbsTrackClickDelay:
-      if getTime() - gui.t0 > ScrollBarTrackClickRepeatDelay:
+      if getTime() - ui.t0 > ScrollBarTrackClickRepeatDelay:
         sb.state = sbsTrackClickRepeat
 
     of sbsTrackClickRepeat:
       if isHot(id):
-        if getTime() - gui.t0 > ScrollBarTrackClickRepeatTimeout:
+        if getTime() - ui.t0 > ScrollBarTrackClickRepeatTimeout:
           newValue = calcNewValueTrackClick()
           newThumbY = calcThumbY(newValue)
 
           if sb.clickDir * sgn(endVal - startVal).float > 0:
-            if newThumbY + thumbH > gui.my:
+            if newThumbY + thumbH > ui.my:
               newThumbY = thumbY
               newValue = value
           else:
-            if newThumbY < gui.my:
+            if newThumbY < ui.my:
               newThumbY = thumbY
               newValue = value
 
-          gui.t0 = getTime()
+          ui.t0 = getTime()
       else:
-        gui.t0 = getTime()
+        ui.t0 = getTime()
 
   result = newValue
 
@@ -1945,19 +1949,19 @@ template vertScrollBar*(x, y, w, h: float,
 # {{{ scrollBarPost
 
 proc scrollBarPost() =
-  alias(gui, g_uiState)
-  alias(sb, gui.scrollBarState)
+  alias(ui, g_uiState)
+  alias(sb, ui.scrollBarState)
 
   # Handle release active scrollbar outside of the widget
-  if not gui.mbLeftDown and hasActiveItem():
+  if not ui.mbLeftDown and hasActiveItem():
     case sb.state:
     of sbsDragHidden:
       sb.state = sbsDefault
       showCursor()
-      if gui.dragX > -1.0:
-        setCursorPosX(gui.dragX)
+      if ui.dragX > -1.0:
+        setCursorPosX(ui.dragX)
       else:
-        setCursorPosY(gui.dragY)
+        setCursorPosY(ui.dragY)
 
     else: sb.state = sbsDefault
 
@@ -1976,8 +1980,8 @@ proc horizSlider(id:         ItemId,
   assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
          (endVal   < startVal and value >= endVal   and value <= startVal)
 
-  alias(gui, g_uiState)
-  alias(ss, gui.sliderState)
+  alias(ui, g_uiState)
+  alias(ss, ui.sliderState)
 
   const SliderPad = 3
 
@@ -1995,9 +1999,9 @@ proc horizSlider(id:         ItemId,
   # Hit testing
   if ss.editModeItem == id:
     setActive(id)
-  elif not gui.focusCaptured and mouseInside(x, y, w, h):
+  elif not ui.focusCaptured and mouseInside(x, y, w, h):
     setHot(id)
-    if gui.mbLeftDown and noActiveItem():
+    if ui.mbLeftDown and noActiveItem():
       setActive(id)
 
   # New position & value calculation
@@ -2008,18 +2012,18 @@ proc horizSlider(id:         ItemId,
   if isActive(id):
     case ss.state:
     of ssDefault:
-      gui.x0 = gui.mx
-      gui.dragX = gui.mx
-      gui.dragY = -1.0
+      ui.x0 = ui.mx
+      ui.dragX = ui.mx
+      ui.dragY = -1.0
       ss.state = ssDragHidden
       ss.cursorMoved = false
       hideCursor()
 
     of ssDragHidden:
-      if gui.dragX != gui.mx:
+      if ui.dragX != ui.mx:
         ss.cursorMoved = true
 
-      if not gui.mbLeftDown and not ss.cursorMoved:
+      if not ui.mbLeftDown and not ss.cursorMoved:
         ss.state = ssEditValue
         ss.valueText = fmt"{value:.6f}"
         trimZeros(ss.valueText)
@@ -2036,17 +2040,17 @@ proc horizSlider(id:         ItemId,
         # here sure the widget is always hot in "drag hidden" mode.
         setHot(id)
 
-        let d = if gui.shiftDown:
-          if gui.altDown: SliderUltraFineDragDivisor
+        let d = if ui.shiftDown:
+          if ui.altDown: SliderUltraFineDragDivisor
           else:           SliderFineDragDivisor
         else: 1
 
-        let dx = (gui.mx - gui.x0) / d
+        let dx = (ui.mx - ui.x0) / d
 
         newPosX = clamp(posX + dx, posMinX, posMaxX)
         let t = invLerp(posMinX, posMaxX, newPosX)
         value = lerp(startVal, endVal, t)
-        gui.x0 = gui.mx
+        ui.x0 = ui.mx
 
     of ssEditValue:
       # The textfield will only work correctly if it thinks it's active
@@ -2056,7 +2060,7 @@ proc horizSlider(id:         ItemId,
                                    tooltip = "", drawWidget = false,
                                    ss.valueText)
 
-      if gui.textFieldState.state == tfDefault:
+      if ui.textFieldState.state == tfDefault:
         value = try:
           let f = parseFloat(ss.valueText)
           if startVal < endVal: clamp(f, startVal, endVal)
@@ -2151,8 +2155,8 @@ proc vertSlider(id:         ItemId,
   assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
          (endVal   < startVal and value >= endVal   and value <= startVal)
 
-  alias(gui, g_uiState)
-  alias(ss, gui.sliderState)
+  alias(ui, g_uiState)
+  alias(ss, ui.sliderState)
 
   const SliderPad = 3
 
@@ -2168,9 +2172,9 @@ proc vertSlider(id:         ItemId,
   let posY = calcPosY(value)
 
   # Hit testing
-  if not gui.focusCaptured and mouseInside(x, y, w, h):
+  if not ui.focusCaptured and mouseInside(x, y, w, h):
     setHot(id)
-    if gui.mbLeftDown and noActiveItem():
+    if ui.mbLeftDown and noActiveItem():
       setActive(id)
 
   # New position & value calculation
@@ -2181,9 +2185,9 @@ proc vertSlider(id:         ItemId,
   if isActive(id):
     case ss.state:
     of ssDefault:
-      gui.y0 = gui.my
-      gui.dragX = -1.0
-      gui.dragY = gui.my
+      ui.y0 = ui.my
+      ui.dragX = -1.0
+      ui.dragY = ui.my
       hideCursor()
       ss.state = ssDragHidden
 
@@ -2194,17 +2198,17 @@ proc vertSlider(id:         ItemId,
       # sure the widget is always hot in "drag hidden" mode.
       setHot(id)
 
-      let d = if gui.shiftDown:
-        if gui.altDown: SliderUltraFineDragDivisor
+      let d = if ui.shiftDown:
+        if ui.altDown: SliderUltraFineDragDivisor
         else:           SliderFineDragDivisor
       else: 1
 
-      let dy = (gui.my - gui.y0) / d
+      let dy = (ui.my - ui.y0) / d
 
       newPosY = clamp(posY + dy, posMaxY, posMinY)
       let t = invLerp(posMinY, posMaxY, newPosY)
       newValue = lerp(startVal, endVal, t)
-      gui.y0 = gui.my
+      ui.y0 = ui.my
 
     of ssEditValue:
       discard
@@ -2261,20 +2265,33 @@ template vertSlider*(x, y, w, h: float,
 # {{{ sliderPost
 
 proc sliderPost() =
-  alias(gui, g_uiState)
-  alias(ss, gui.sliderState)
+  alias(ui, g_uiState)
+  alias(ss, ui.sliderState)
 
   # Handle release active slider outside of the widget
-  if not gui.mbLeftDown and hasActiveItem():
+  if not ui.mbLeftDown and hasActiveItem():
     if ss.state == ssDragHidden:
       ss.state = ssDefault
       showCursor()
-      if gui.dragX > -1.0:
-        setCursorPosX(gui.dragX)
+      if ui.dragX > -1.0:
+        setCursorPosX(ui.dragX)
       else:
-        setCursorPosY(gui.dragY)
+        setCursorPosY(ui.dragY)
 
 # }}}
+# }}}
+
+# {{{ Dialog
+
+proc startDialog*(w, h: float, title: string) =
+  discard
+
+proc endDialog*() =
+  discard
+
+proc closeDialog*() =
+  discard
+
 # }}}
 # {{{ Menus
 # {{{ menuBar
@@ -2283,7 +2300,7 @@ proc menuBar(id:         ItemId,
              x, y, w, h: float,
              names:      seq[string]): string =
 
-  alias(gui, g_uiState)
+  alias(ui, g_uiState)
 
   const PadX = 10
 
@@ -2299,16 +2316,16 @@ proc menuBar(id:         ItemId,
   menuPosX.add(posX)
 
   # Hit testing
-  if not gui.focusCaptured and mouseInside(x, y, w, h):
+  if not ui.focusCaptured and mouseInside(x, y, w, h):
     setHot(id)
     for i in 0..<menuPosX.high:
-      if gui.mx >= menuPosX[i] and gui.mx < menuPosX[i+1]:
+      if ui.mx >= menuPosX[i] and ui.mx < menuPosX[i+1]:
         echo fmt"inside {names[i]}"
-    if gui.mbLeftDown and noActiveItem():
+    if ui.mbLeftDown and noActiveItem():
       setActive(id)
 
   # LMB released over active widget means it was clicked
-#  if not gui.mbLeftDown and isHotAndActive(id):
+#  if not ui.mbLeftDown and isHotAndActive(id):
 #    result = true
 
   # Draw menu bar
@@ -2421,36 +2438,36 @@ proc deinit*() =
 proc beginFrame*(winWidth, winHeight: float) =
   let win = glfw.currentContext()
 
-  alias(gui, g_uiState)
+  alias(ui, g_uiState)
 
-  gui.winWidth = winWidth
-  gui.winHeight = winHeight
+  ui.winWidth = winWidth
+  ui.winHeight = winHeight
 
   # Store mouse state
-  gui.lastmx = gui.mx
-  gui.lastmy = gui.my
+  ui.lastmx = ui.mx
+  ui.lastmy = ui.my
 
-  (gui.mx, gui.my) = win.cursorPos()
+  (ui.mx, ui.my) = win.cursorPos()
 
-  gui.mbLeftDown   = win.mouseButtonDown(mbLeft)
-  gui.mbRightDown  = win.mouseButtonDown(mbRight)
-  gui.mbMiddleDown = win.mouseButtonDown(mbMiddle)
+  ui.mbLeftDown   = win.mouseButtonDown(mbLeft)
+  ui.mbRightDown  = win.mouseButtonDown(mbRight)
+  ui.mbMiddleDown = win.mouseButtonDown(mbMiddle)
 
   # Store modifier key state (just for convenience for the GUI functions)
-  gui.shiftDown = win.isKeyDown(keyLeftShift) or
+  ui.shiftDown = win.isKeyDown(keyLeftShift) or
                   win.isKeyDown(keyRightShift)
 
-  gui.ctrlDown  = win.isKeyDown(keyLeftControl) or
+  ui.ctrlDown  = win.isKeyDown(keyLeftControl) or
                   win.isKeyDown(keyRightControl)
 
-  gui.altDown   = win.isKeyDown(keyLeftAlt) or
+  ui.altDown   = win.isKeyDown(keyLeftAlt) or
                   win.isKeyDown(keyRightAlt)
 
-  gui.superDown = win.isKeyDown(keyLeftSuper) or
+  ui.superDown = win.isKeyDown(keyLeftSuper) or
                   win.isKeyDown(keyRightSuper)
 
   # Reset hot item
-  gui.hotItem = 0
+  ui.hotItem = 0
 
   g_drawLayers.init()
 
@@ -2458,14 +2475,14 @@ proc beginFrame*(winWidth, winHeight: float) =
 # {{{ endFrame
 
 proc endFrame*() =
-
-  alias(gui, g_uiState)
+  alias(ui, g_uiState)
 
   tooltipPost()
 
   g_drawLayers.draw(g_nvgContext)
 
-  gui.lastHotItem = gui.hotItem
+  ui.lastHotItem = ui.hotItem
+  ui.dialogActive = false
 
   # Widget specific postprocessing
   #
@@ -2475,19 +2492,19 @@ proc endFrame*() =
   sliderPost()
 
   # Active state reset
-  if gui.mbLeftDown:
-    if gui.activeItem == 0 and gui.hotItem == 0:
+  if ui.mbLeftDown:
+    if ui.activeItem == 0 and ui.hotItem == 0:
       # LMB was pressed outside of any widget. We need to mark this as
       # a separate state so we can't just "drag into" a widget while the LMB
       # is being depressed and activate it.
-      gui.activeItem = -1
+      ui.activeItem = -1
   else:
-    if gui.activeItem != 0:
+    if ui.activeItem != 0:
       # If the LMB was released inside the active widget, that has already
       # been handled at this point--we're just clearing the active item here.
       # This also takes care of the case when the LMB was depressed inside the
       # widget but released outside of it.
-      gui.activeItem = 0
+      ui.activeItem = 0
 
 # }}}
 

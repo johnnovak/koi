@@ -114,7 +114,26 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
   y += pad
   if koi.button(x, y, w, h, "Preferences", color = GRAY_MID,
                 tooltip = "Last button"):
-    echo "button 3 pressed"
+
+    let
+      dialogWidth = 250.0
+      dialogHeight = 250.0
+      bw = 80.0
+      x = dialogWidth - 2*(bw+pad) - pad
+      y = dialogHeight - h - pad
+
+    startDialog(400, 300, "Preferences dialog")
+
+
+    if koi.button(x, y, bw, h, "OK", color = GRAY_MID, tooltip = "OK"):
+      echo "dialog OK"
+      closeDialog()
+
+    if koi.button(x, y, bw, h, "Cancel", color = GRAY_MID, tooltip = "Cancel"):
+      echo "dialog Cancel"
+      closeDialog()
+
+    endDialog()
 
   # ScrollBars
 
