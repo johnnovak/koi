@@ -254,6 +254,7 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
   x = 70.0
   y = 20.0
 
+#[
   case menuBar(x, y, 500, h, names = @["File", "Edit", "Help"]):
   of "File":
     if menuParentItem("&New", some(mkKeyEvent(keyN, {mkSuper}))):
@@ -323,7 +324,7 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
     if menuItem("Save System &Info"): echo "Help -> Save System Info"
 
   else: discard
-
+]#
 
   ############################################################
 

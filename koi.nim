@@ -348,14 +348,17 @@ type KeyEvent* = object
   action*: KeyAction
   mods*:   set[ModifierKey]
 
-template mkKeyDownEvent*(k: Key, m: set[ModifierKey]): KeyEvent =
-  KeyEvent(key: k, action: kaDown, mods: m)
+type KeyShortcut* = object
+  key*:    Key
+  mods*:   set[ModifierKey]
 
-proc hash(ke: KeyEvent): Hash =
+template mkKeyShortcut*(k: Key, m: set[ModifierKey]): KeyShortcut =
+  KeyShortcut(key: k, mods: m)
+
+proc hash(ks: KeyShortcut): Hash =
   var h: Hash = 0
-  h = h !& hash(ord(ke.key))
-  h = h !& hash(ord(ke.action))
-  for m in ke.mods:
+  h = h !& hash(ord(ks.key))
+  for m in ks.mods:
     h = h !& hash(ord(m))
   result = !$h
 
@@ -394,68 +397,68 @@ type TextEditShortcuts = enum
 
 
 let textFieldEditShortcuts = {
-  tesCursorOneCharLeft:    @[mkKeyDownEvent(keyLeft,      {}),
-                             mkKeyDownEvent(keyB,         {mkCtrl})],
+  tesCursorOneCharLeft:    @[mkKeyShortcut(keyLeft,      {}),
+                             mkKeyShortcut(keyB,         {mkCtrl})],
 
-  tesCursorOneCharRight:   @[mkKeyDownEvent(keyRight,     {}),
-                             mkKeyDownEvent(keyF,         {mkCtrl})],
+  tesCursorOneCharRight:   @[mkKeyShortcut(keyRight,     {}),
+                             mkKeyShortcut(keyF,         {mkCtrl})],
 
-  tesCursorToPreviousWord: @[mkKeyDownEvent(keyLeft,      {mkAlt})],
-  tesCursorToNextWord:     @[mkKeyDownEvent(keyRight,     {mkAlt})],
+  tesCursorToPreviousWord: @[mkKeyShortcut(keyLeft,      {mkAlt})],
+  tesCursorToNextWord:     @[mkKeyShortcut(keyRight,     {mkAlt})],
 
-  tesCursorToLineStart:    @[mkKeyDownEvent(keyLeft,      {mkSuper}),
-                             mkKeyDownEvent(keyA,         {mkCtrl}),
-                             mkKeyDownEvent(keyP,         {mkCtrl}),
-                             mkKeyDownEvent(keyV,         {mkShift, mkCtrl}),
-                             mkKeyDownEvent(keyUp,        {})],
+  tesCursorToLineStart:    @[mkKeyShortcut(keyLeft,      {mkSuper}),
+                             mkKeyShortcut(keyA,         {mkCtrl}),
+                             mkKeyShortcut(keyP,         {mkCtrl}),
+                             mkKeyShortcut(keyV,         {mkShift, mkCtrl}),
+                             mkKeyShortcut(keyUp,        {})],
 
-  tesCursorToLineEnd:      @[mkKeyDownEvent(keyRight,     {mkSuper}),
-                             mkKeyDownEvent(keyE,         {mkCtrl}),
-                             mkKeyDownEvent(keyN,         {mkCtrl}),
-                             mkKeyDownEvent(keyV,         {mkCtrl}),
-                             mkKeyDownEvent(keyDown,      {})],
+  tesCursorToLineEnd:      @[mkKeyShortcut(keyRight,     {mkSuper}),
+                             mkKeyShortcut(keyE,         {mkCtrl}),
+                             mkKeyShortcut(keyN,         {mkCtrl}),
+                             mkKeyShortcut(keyV,         {mkCtrl}),
+                             mkKeyShortcut(keyDown,      {})],
 
-  tesSelectionOneCharLeft:    @[mkKeyDownEvent(keyLeft,   {mkShift})],
-  tesSelectionOneCharRight:   @[mkKeyDownEvent(keyRight,  {mkShift})],
-  tesSelectionToPreviousWord: @[mkKeyDownEvent(keyLeft,   {mkShift, mkAlt})],
-  tesSelectionToNextWord:     @[mkKeyDownEvent(keyRight,  {mkShift, mkAlt})],
+  tesSelectionOneCharLeft:    @[mkKeyShortcut(keyLeft,   {mkShift})],
+  tesSelectionOneCharRight:   @[mkKeyShortcut(keyRight,  {mkShift})],
+  tesSelectionToPreviousWord: @[mkKeyShortcut(keyLeft,   {mkShift, mkAlt})],
+  tesSelectionToNextWord:     @[mkKeyShortcut(keyRight,  {mkShift, mkAlt})],
 
-  tesSelectionToLineStart: @[mkKeyDownEvent(keyLeft,      {mkShift, mkSuper}),
-                             mkKeyDownEvent(keyA,         {mkShift, mkCtrl}),
-                             mkKeyDownEvent(keyUp,        {mkShift})],
+  tesSelectionToLineStart: @[mkKeyShortcut(keyLeft,      {mkShift, mkSuper}),
+                             mkKeyShortcut(keyA,         {mkShift, mkCtrl}),
+                             mkKeyShortcut(keyUp,        {mkShift})],
 
-  tesSelectionToLineEnd:   @[mkKeyDownEvent(keyRight,     {mkShift, mkSuper}),
-                             mkKeyDownEvent(keyE,         {mkShift, mkCtrl}),
-                             mkKeyDownEvent(keyDown,      {mkShift})],
+  tesSelectionToLineEnd:   @[mkKeyShortcut(keyRight,     {mkShift, mkSuper}),
+                             mkKeyShortcut(keyE,         {mkShift, mkCtrl}),
+                             mkKeyShortcut(keyDown,      {mkShift})],
 
-  tesDeleteOneCharLeft:    @[mkKeyDownEvent(keyBackspace, {}),
-                             mkKeyDownEvent(keyH,         {mkCtrl})],
+  tesDeleteOneCharLeft:    @[mkKeyShortcut(keyBackspace, {}),
+                             mkKeyShortcut(keyH,         {mkCtrl})],
 
-  tesDeleteOneCharRight:   @[mkKeyDownEvent(keyDelete,    {})],
+  tesDeleteOneCharRight:   @[mkKeyShortcut(keyDelete,    {})],
 
-  tesDeleteWordToRight:    @[mkKeyDownEvent(keyDelete,    {mkAlt}),
-                             mkKeyDownEvent(keyD,         {mkCtrl})],
+  tesDeleteWordToRight:    @[mkKeyShortcut(keyDelete,    {mkAlt}),
+                             mkKeyShortcut(keyD,         {mkCtrl})],
 
-  tesDeleteWordToLeft:     @[mkKeyDownEvent(keyBackspace, {mkAlt})],
-  tesDeleteToLineStart:    @[mkKeyDownEvent(keyBackspace, {mkSuper})],
+  tesDeleteWordToLeft:     @[mkKeyShortcut(keyBackspace, {mkAlt})],
+  tesDeleteToLineStart:    @[mkKeyShortcut(keyBackspace, {mkSuper})],
 
-  tesDeleteToLineEnd:      @[mkKeyDownEvent(keyDelete,    {mkAlt}),
-                             mkKeyDownEvent(keyK,         {mkCtrl})],
+  tesDeleteToLineEnd:      @[mkKeyShortcut(keyDelete,    {mkAlt}),
+                             mkKeyShortcut(keyK,         {mkCtrl})],
 
-  tesSwitchChars:          @[mkKeyDownEvent(keyT,         {mkCtrl})],
+  tesSwitchChars:          @[mkKeyShortcut(keyT,         {mkCtrl})],
 
-  tesCutText:              @[mkKeyDownEvent(keyX,         {mkSuper})],
-  tesCopyText:             @[mkKeyDownEvent(keyC,         {mkSuper})],
-  tesPasteText:            @[mkKeyDownEvent(keyV,         {mkSuper})],
+  tesCutText:              @[mkKeyShortcut(keyX,         {mkSuper})],
+  tesCopyText:             @[mkKeyShortcut(keyC,         {mkSuper})],
+  tesPasteText:            @[mkKeyShortcut(keyV,         {mkSuper})],
 
-  tesAccept:               @[mkKeyDownEvent(keyEnter,     {}),
-                             mkKeyDownEvent(keyKpEnter,   {})],
+  tesAccept:               @[mkKeyShortcut(keyEnter,     {}),
+                             mkKeyShortcut(keyKpEnter,   {})],
 
-  tesCancel:               @[mkKeyDownEvent(keyEscape,    {})]
+  tesCancel:               @[mkKeyShortcut(keyEscape,    {})]
 }.toTable
 
 
-var textFieldEditShortcutKeyEvents =
+var textFieldEditShortcutsSet =
   toSeq(textFieldEditShortcuts.values).concat.toHashSet
 
 # }}}
@@ -493,11 +496,11 @@ var
 proc keyCb(win: Window, key: Key, scanCode: int32, action: KeyAction,
            mods: set[ModifierKey]) =
 
-  let ke = KeyEvent(key: key, action: action, mods: mods)
-#  if action in {kaDown, kaRepeat}: # TODO ADD BACK! and ke in textFieldEditShortcutKeyEvents:
-  if g_keyBufIdx <= g_keyBuf.high:
-    g_keyBuf[g_keyBufIdx] = ke
-    inc(g_keyBufIdx)
+  let shortcut = mkKeyShortcut(key, mods)
+  if action in {kaDown, kaRepeat} and shortcut in textFieldEditShortcutsSet:
+    if g_keyBufIdx <= g_keyBuf.high:
+      g_keyBuf[g_keyBufIdx] = KeyEvent(key: key, action: action, mods: mods)
+      inc(g_keyBufIdx)
 
 proc clearKeyBuf*() = g_keyBufIdx = 0
 
@@ -1224,70 +1227,71 @@ proc textField(id:         ItemId,
             text.insert(s, text.runeOffset(insertPos))
           inc(tf.cursorPos, s.runeLen())
 
-    alias(sc, textFieldEditShortcuts)
-
     for ke in keyBuf():
-      if ke in sc[tesCursorOneCharLeft]:
+      alias(shortcuts, textFieldEditShortcuts)
+      let sc = mkKeyShortcut(ke.key, ke.mods)
+
+      if sc in shortcuts[tesCursorOneCharLeft]:
         let newCursorPos = max(tf.cursorPos - 1, 0)
         clearSelection()
         tf.cursorPos = newCursorPos
 
-      elif ke in sc[tesCursorOneCharRight]:
+      elif sc in shortcuts[tesCursorOneCharRight]:
         let newCursorPos = min(tf.cursorPos + 1, text.runeLen)
         clearSelection()
         tf.cursorPos = newCursorPos
 
-      elif ke in sc[tesCursorToPreviousWord]:
+      elif sc in shortcuts[tesCursorToPreviousWord]:
         let newCursorPos = findPrevWordStart()
         clearSelection()
         tf.cursorPos = newCursorPos
 
-      elif ke in sc[tesCursorToNextWord]:
+      elif sc in shortcuts[tesCursorToNextWord]:
         let newCursorPos = findNextWordEnd()
         clearSelection()
         tf.cursorPos = newCursorPos
 
-      elif ke in sc[tesCursorToLineStart]:
+      elif sc in shortcuts[tesCursorToLineStart]:
         let newCursorPos = 0
         clearSelection()
         tf.cursorPos = newCursorPos
 
-      elif ke in sc[tesCursorToLineEnd]:
+      elif sc in shortcuts[tesCursorToLineEnd]:
         let newCursorPos = text.runeLen
         clearSelection()
         tf.cursorPos = newCursorPos
 
-      elif ke in sc[tesSelectionOneCharLeft]:
+      elif sc in shortcuts[tesSelectionOneCharLeft]:
         let newCursorPos = max(tf.cursorPos - 1, 0)
         updateSelection(newCursorPos)
         tf.cursorPos = newCursorPos
 
-      elif ke in sc[tesSelectionOneCharRight]:
+      elif sc in shortcuts[tesSelectionOneCharRight]:
         let newCursorPos = min(tf.cursorPos + 1, text.runeLen)
         updateSelection(newCursorPos)
         tf.cursorPos = newCursorPos
 
-      elif ke in sc[tesSelectionToPreviousWord]:
+      elif sc in shortcuts[tesSelectionToPreviousWord]:
         let newCursorPos = findPrevWordStart()
         updateSelection(newCursorPos)
         tf.cursorPos = newCursorPos
 
-      elif ke in sc[tesSelectionToNextWord]:
+      elif sc in shortcuts[tesSelectionToNextWord]:
         let newCursorPos = findNextWordEnd()
         updateSelection(newCursorPos)
         tf.cursorPos = newCursorPos
 
-      elif ke in sc[tesSelectionToLineStart]:
+      elif sc in shortcuts[tesSelectionToLineStart]:
         let newCursorPos = 0
         updateSelection(newCursorPos)
         tf.cursorPos = newCursorPos
 
-      elif ke in sc[tesSelectionToLineEnd]:
+      elif sc in shortcuts[tesSelectionToLineEnd]:
         let newCursorPos = text.runeLen
         updateSelection(newCursorPos)
         tf.cursorPos = newCursorPos
 
-      elif ke in sc[tesDeleteOneCharLeft]:
+      elif sc in shortcuts[tesDeleteOneCharLeft]:
         if hasSelection():
           deleteSelection()
         elif tf.cursorPos > 0:
@@ -1295,21 +1299,21 @@ proc textField(id:         ItemId,
                  text.runeSubStr(tf.cursorPos)
           dec(tf.cursorPos)
 
-      elif ke in sc[tesDeleteOneCharRight]:
+      elif sc in shortcuts[tesDeleteOneCharRight]:
         if hasSelection():
           deleteSelection()
         elif text.len > 0:
             text = text.runeSubStr(0, tf.cursorPos) &
                    text.runeSubStr(tf.cursorPos + 1)
 
-      elif ke in sc[tesDeleteWordToRight]:
+      elif sc in shortcuts[tesDeleteWordToRight]:
         if hasSelection():
           deleteSelection()
         else:
           let p = findNextWordEnd()
           text = text.runeSubStr(0, tf.cursorPos) & text.runeSubStr(p)
 
-      elif ke in sc[tesDeleteWordToLeft]:
+      elif sc in shortcuts[tesDeleteWordToLeft]:
         if hasSelection():
           deleteSelection()
         else:
@@ -1317,37 +1321,37 @@ proc textField(id:         ItemId,
           text = text.runeSubStr(0, p) & text.runeSubStr(tf.cursorPos)
           tf.cursorPos = p
 
-      elif ke in sc[tesDeleteToLineStart]:
+      elif sc in shortcuts[tesDeleteToLineStart]:
         text = text.runeSubStr(tf.cursorPos)
         tf.cursorPos = 0
 
-      elif ke in sc[tesDeleteToLineEnd]:
+      elif sc in shortcuts[tesDeleteToLineEnd]:
         text = text.runeSubStr(0, tf.cursorPos)
 
-      elif ke in sc[tesSwitchChars]:
+      elif sc in shortcuts[tesSwitchChars]:
         discard # TODO
 
-      elif ke in sc[tesCutText]:
+      elif sc in shortcuts[tesCutText]:
         if hasSelection():
           let (startPos, endPos) = getSelection()
           toClipboard(text.runeSubStr(startPos, endPos - startPos))
           deleteSelection()
 
-      elif ke in sc[tesCopyText]:
+      elif sc in shortcuts[tesCopyText]:
         if hasSelection():
           let (startPos, endPos) = getSelection()
           toClipboard(text.runeSubStr(startPos, endPos - startPos))
 
-      elif ke in sc[tesPasteText]:
+      elif sc in shortcuts[tesPasteText]:
         let s = fromClipboard()
         insertString(s)
 
-      elif ke in sc[tesAccept]:
+      elif sc in shortcuts[tesAccept]:
         exitEditMode()
         # Note we won't process any remaining characters in the buffer
         # because exitEditMode() clears the key buffer.
 
-      elif ke in sc[tesCancel]:
+      elif sc in shortcuts[tesCancel]:
         text = tf.originalText
         exitEditMode()
         # Note we won't process any remaining characters in the buffer
@@ -2498,5 +2502,9 @@ proc endFrame*() =
       gui.activeItem = 0
 
 # }}}
+
+# TODO hack
+proc focusCaptured*(): bool=
+  g_uiState.focusCaptured
 
 # vim: et:ts=2:sw=2:fdm=marker
