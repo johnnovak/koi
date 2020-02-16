@@ -120,6 +120,12 @@ type
     # General state
     # *************
 
+    # Origin offset, used for relative coordinate handling in dialogs
+    ox, oy: float
+
+    # Widgets will be drawn on this layer by default
+    currentLayer: Natural
+
     # Window dimensions (in virtual pixels)
     winWidth, winHeight: float
 
@@ -161,7 +167,7 @@ type
     # For delays & timeouts
     t0:             float
 
-    # For keeping track of the cursor in hidden drag mode
+    # For keeping track of the cursor in hidden drag mode.
     # Dragging can be only active along the X or Y-axis, but not both:
     # - in horizontal drag mode: dragX >= 0, dragY  < 0
     # - in vertical drag mode:   dragX  < 0, dragY >= 0
@@ -182,7 +188,11 @@ type
 
     # Dialog state
     # **********************
-    dialogActive:   bool
+    activeDialogTitle: Option[string]
+
+    # Only true when we're in a dialog (this is needed so widgets outside
+    # of the dialog won't register any events).
+    insideDialog:      bool
 
 # }}}
 # {{{ DrawState
@@ -196,18 +206,18 @@ type DrawState = enum
 
 var
   g_nvgContext: NVGContext
-  g_uiState    {.threadvar.}: UIState
+  g_uiState: UIState
 
   g_cursorArrow:       Cursor
   g_cursorIBeam:       Cursor
   g_cursorHorizResize: Cursor
 
   # TODO remove these once theming is implemented
-  RED*       {.threadvar.}: Color
-  GRAY_MID*  {.threadvar.}: Color
-  GRAY_HI*   {.threadvar.}: Color
-  GRAY_LO*   {.threadvar.}: Color
-  GRAY_LOHI* {.threadvar.}: Color
+  RED*       : Color
+  GRAY_MID*  : Color
+  GRAY_HI*   : Color
+  GRAY_LO*   : Color
+  GRAY_LOHI* : Color
 
 # }}}
 # {{{ Configuration
@@ -285,7 +295,7 @@ type
     lastUsedLayer: Natural
 
 var
-  g_drawLayers {.threadvar.}: DrawLayers
+  g_drawLayers: DrawLayers
 
 proc init(dl: var DrawLayers) =
   for i in 0..dl.layers.high:
@@ -354,6 +364,15 @@ template noActiveItem(): bool =
 template hasActiveItem(): bool =
   alias(ui, g_uiState)
   ui.activeItem > 0
+
+template isDialogActive(): bool =
+  alias(ui, g_uiState)
+  ui.activeDialogTitle.isSome
+
+template isHit(x, y, w, h: float): bool =
+  alias(ui, g_uiState)
+  not ui.focusCaptured and (ui.insideDialog or not isDialogActive()) and
+    mouseInside(x, y, w, h)
 
 # }}}
 # {{{ Keyboard handling
@@ -528,6 +547,7 @@ iterator keyBuf*(): KeyEvent =
   while i < g_keyBufIdx:
     yield g_keyBuf[i]
     inc(i)
+  clearKeyBuf()
 
 # }}}
 # {{{ Tooltip handling
@@ -639,7 +659,13 @@ proc textLabel(id:         ItemId,
                fontSize:   float = 19.0,
                fontFace:   string = "sans-bold") =
 
-  addDrawLayer(DefaultLayer, vg):
+  alias(ui, g_uiState)
+
+  let
+    x = x + ui.ox
+    y = y + ui.oy
+
+  addDrawLayer(ui.currentLayer, vg):
     vg.scissor(x, y, w, h)
 
     vg.setFont(fontSize, fontFace)
@@ -671,6 +697,10 @@ proc button(id:         ItemId,
 
   alias(ui, g_uiState)
 
+  let
+    x = x + ui.ox
+    y = y + ui.oy
+
   const TextBoxPadX = 8
   let
     textBoxX = x + TextBoxPadX
@@ -679,7 +709,7 @@ proc button(id:         ItemId,
     textBoxH = h
 
   # Hit testing
-  if not ui.focusCaptured and mouseInside(x, y, w, h):
+  if isHit(x, y, w, h):
     setHot(id)
     if ui.mbLeftDown and noActiveItem():
       setActive(id)
@@ -698,7 +728,7 @@ proc button(id:         ItemId,
     of dsActive: RED
     else:        color
 
-  addDrawLayer(DefaultLayer, vg):
+  addDrawLayer(ui.currentLayer, vg):
     vg.beginPath()
     vg.roundedRect(x, y, w, h, 5)
     vg.fillColor(fillColor)
@@ -737,11 +767,15 @@ proc checkBox(id:      ItemId,
 
   alias(ui, g_uiState)
 
+  let
+    x = x + ui.ox
+    y = y + ui.oy
+
   const
     CheckPad = 3
 
   # Hit testing
-  if not ui.focusCaptured and mouseInside(x, y, w, w):
+  if isHit(x, y, w, w):
     setHot(id)
     if ui.mbLeftDown and noActiveItem():
       setActive(id)
@@ -762,7 +796,7 @@ proc checkBox(id:      ItemId,
     of dsHover, dsActive: GRAY_HI
     else:                 GRAY_MID
 
-  addDrawLayer(DefaultLayer, vg):
+  addDrawLayer(ui.currentLayer, vg):
     vg.beginPath()
     vg.roundedRect(x, y, w, w, 5)
     vg.fillColor(bgColor)
@@ -813,10 +847,14 @@ proc radioButtons(id:           ItemId,
     numButtons = labels.len
     buttonW = w / numButtons.float
 
+  var
+    x = x + ui.ox
+    y = y + ui.oy
+
   # Hit testing
   let hotButton = min(int(floor((ui.mx - x) / buttonW)), numButtons-1)
 
-  if not ui.focusCaptured and mouseInside(x, y, w, h):
+  if isHit(x, y, w, h):
     setHot(id)
     if ui.mbLeftDown and noActiveItem():
       setActive(id)
@@ -834,11 +872,10 @@ proc radioButtons(id:           ItemId,
     elif isHotAndActive(id): dsActive
     else: dsNormal
 
-  var x = x
   # TODO this should be done properly, with rounded rectangles, etc.
   const PadX = 2
 
-  addDrawLayer(DefaultLayer, vg):
+  addDrawLayer(ui.currentLayer, vg):
     vg.setFont(19.0)
 
     for i, label in labels:
@@ -907,6 +944,10 @@ proc dropdown(id:           ItemId,
   alias(ui, g_uiState)
   alias(ds, ui.dropdownState)
 
+  let
+    x = x + ui.ox
+    y = y + ui.oy
+
   const TextBoxPadX = 8
   let
     textBoxX = x + TextBoxPadX
@@ -934,7 +975,7 @@ proc dropdown(id:           ItemId,
     ui.focusCaptured = false
 
   if ds.state == dsClosed:
-    if not ui.focusCaptured and mouseInside(x, y, w, h):
+    if isHit(x, y, w, h):
       setHot(id)
       if ui.mbLeftDown and noActiveItem():
         setActive(id)
@@ -1008,7 +1049,7 @@ proc dropdown(id:           ItemId,
     else:        GRAY_MID
 
   # Dropdown button
-  addDrawLayer(DefaultLayer, vg):
+  addDrawLayer(ui.currentLayer, vg):
     vg.beginPath()
     vg.roundedRect(x, y, w, h, 5)
     vg.fillColor(fillColor)
@@ -1031,7 +1072,7 @@ proc dropdown(id:           ItemId,
     vg.resetScissor()
 
   # Dropdown items
-  addDrawLayer(DefaultLayer+1, vg):
+  addDrawLayer(ui.currentLayer + 1, vg):
     if isActive(id) and ds.state >= dsOpenLMBPressed:
       # Draw item list box
       vg.beginPath()
@@ -1115,6 +1156,10 @@ proc textField(id:         ItemId,
   alias(ui, g_uiState)
   alias(tf, ui.textFieldState)
 
+  let
+    x = x + ui.ox
+    y = y + ui.oy
+
   # The text is displayed within this rectangle (used for drawing later)
   const TextBoxPadX = 8
   let
@@ -1143,7 +1188,7 @@ proc textField(id:         ItemId,
 
   if tf.state == tfDefault:
     # Hit testing
-    if mouseInside(x, y, w, h):
+    if isHit(x, y, w, h):
       setHot(id)
       if ui.mbLeftDown and noActiveItem():
         textFieldEnterEditMode(id, text, textBoxX)
@@ -1355,8 +1400,6 @@ proc textField(id:         ItemId,
         # Note we won't process any remaining characters in the buffer
         # because exitEditMode() clears the key buffer.
 
-    clearKeyBuf()
-
     # Splice newly entered characters into the string.
     # (If we exited edit mode in the above key handler, this will result in
     # a noop as exitEditMode() clears the char buffer.)
@@ -1382,7 +1425,7 @@ proc textField(id:         ItemId,
     of dsActive: GRAY_LO
     else:        GRAY_MID
 
-  let layer = if editing: TopLayer-3 else: DefaultLayer
+  let layer = if editing: TopLayer-3 else: ui.currentLayer
 
   addDrawLayer(layer, vg):
     # Draw text field background
@@ -1552,6 +1595,10 @@ proc horizScrollBar(id:         ItemId,
   alias(ui, g_uiState)
   alias(sb, ui.scrollBarState)
 
+  let
+    x = x + ui.ox
+    y = y + ui.oy
+
   const
     ThumbPad = 3
     ThumbMinW = 10
@@ -1574,7 +1621,7 @@ proc horizScrollBar(id:         ItemId,
   let thumbX = calcThumbX(value)
 
   # Hit testing
-  if not ui.focusCaptured and mouseInside(x, y, w, h):
+  if isHit(x, y, w, h):
     setHot(id)
     if ui.mbLeftDown and noActiveItem():
       setActive(id)
@@ -1694,7 +1741,7 @@ proc horizScrollBar(id:         ItemId,
     of dsActive: GRAY_MID
     else:        GRAY_MID
 
-  addDrawLayer(DefaultLayer, vg):
+  addDrawLayer(ui.currentLayer, vg):
     vg.beginPath()
     vg.roundedRect(x, y, w, h, 5)
     vg.fillColor(trackColor)
@@ -1761,6 +1808,10 @@ proc vertScrollBar(id:         ItemId,
   alias(ui, g_uiState)
   alias(sb, ui.scrollBarState)
 
+  let
+    x = x + ui.ox
+    y = y + ui.oy
+
   const
     ThumbPad = 3
     ThumbMinH = 10
@@ -1781,7 +1832,7 @@ proc vertScrollBar(id:         ItemId,
   let thumbY = calcThumbY(value)
 
   # Hit testing
-  if not ui.focusCaptured and mouseInside(x, y, w, h):
+  if isHit(x, y, w, h):
     setHot(id)
     if ui.mbLeftDown and noActiveItem():
       setActive(id)
@@ -1901,7 +1952,7 @@ proc vertScrollBar(id:         ItemId,
     of dsActive: GRAY_MID
     else:        GRAY_MID
 
-  addDrawLayer(DefaultLayer, vg):
+  addDrawLayer(ui.currentLayer, vg):
     vg.beginPath()
     vg.roundedRect(x, y, w, h, 5)
     vg.fillColor(trackColor)
@@ -1978,6 +2029,10 @@ proc horizSlider(id:         ItemId,
   alias(ui, g_uiState)
   alias(ss, ui.sliderState)
 
+  let
+    x = x + ui.ox
+    y = y + ui.oy
+
   const SliderPad = 3
 
   let
@@ -1994,7 +2049,7 @@ proc horizSlider(id:         ItemId,
   # Hit testing
   if ss.editModeItem == id:
     setActive(id)
-  elif not ui.focusCaptured and mouseInside(x, y, w, h):
+  elif isHit(x, y, w, h):
     setHot(id)
     if ui.mbLeftDown and noActiveItem():
       setActive(id)
@@ -2092,7 +2147,7 @@ proc horizSlider(id:         ItemId,
     of dsHover: GRAY_HI
     else:       GRAY_MID
 
-  addDrawLayer(DefaultLayer, vg):
+  addDrawLayer(ui.currentLayer, vg):
     # Draw slider background
     vg.beginPath()
     vg.roundedRect(x, y, w, h, 5)
@@ -2152,6 +2207,10 @@ proc vertSlider(id:         ItemId,
   alias(ui, g_uiState)
   alias(ss, ui.sliderState)
 
+  let
+    x = x + ui.ox
+    y = y + ui.oy
+
   const SliderPad = 3
 
   let
@@ -2166,7 +2225,7 @@ proc vertSlider(id:         ItemId,
   let posY = calcPosY(value)
 
   # Hit testing
-  if not ui.focusCaptured and mouseInside(x, y, w, h):
+  if isHit(x, y, w, h):
     setHot(id)
     if ui.mbLeftDown and noActiveItem():
       setActive(id)
@@ -2218,7 +2277,7 @@ proc vertSlider(id:         ItemId,
     of dsHover: GRAY_HI
     else:       GRAY_MID
 
-  addDrawLayer(DefaultLayer, vg):
+  addDrawLayer(ui.currentLayer, vg):
     vg.beginPath()
     vg.roundedRect(x, y, w, h, 5)
     vg.fillColor(fillColor)
@@ -2276,29 +2335,55 @@ proc sliderPost() =
 
 # {{{ Dialog
 
-proc startDialog*(w, h: float, title: string) =
+type
+  DialogProc = proc ()
+
+var
+  g_dialogs = initTable[string, DialogProc]()
+
+template dialog*(w, h: float, title: string, body: untyped) =
   alias(ui, g_uiState)
 
-  if not ui.dialogActive:
-    ui.dialogActive = true
+  let
+    x = (ui.winWidth - w) / 2
+    y = (ui.winHeight - h) / 2
 
-    let
-      x = (ui.winWidth + w) / 2
-      y = (ui.winHeight + h) / 2
+  g_dialogs[title] = proc() =
+    let oldCurrLayer = ui.currentLayer
+    ui.currentLayer = oldCurrLayer + 2
 
-    addDrawLayer(TopLayer-3, vg):
-      vg.fillColor(gray(0.2))
+    addDrawLayer(ui.currentLayer, vg):
+#      vg.beginPath()
+#      vg.fillColor(gray(0.0, 0.5))
+#      vg.rect(0, 0, ui.winWidth, ui.winHeight)
+#      vg.fill()
+
+      vg.beginPath()
+      vg.fillColor(gray(0.15))
       vg.rect(x, y, w, h)
       vg.fill()
 
+    ui.ox = x
+    ui.oy = y
+    ui.insideDialog = true
 
-proc endDialog*() =
+    body
+
+    ui.ox = 0
+    ui.oy = 0
+    ui.insideDialog = false
+    ui.currentLayer = oldCurrLayer
+
+
+proc openDialog*(title: string) =
   alias(ui, g_uiState)
-  discard
+  if ui.activeDialogTitle.isNone:
+    if g_dialogs.hasKey(title):
+      ui.activeDialogTitle = some(title)
 
 proc closeDialog*() =
   alias(ui, g_uiState)
-  discard
+  ui.activeDialogTitle = none(string)
 
 # }}}
 # {{{ Menus
@@ -2324,7 +2409,7 @@ proc menuBar(id:         ItemId,
   menuPosX.add(posX)
 
   # Hit testing
-  if not ui.focusCaptured and mouseInside(x, y, w, h):
+  if isHit(x, y, w, h):
     setHot(id)
     for i in 0..<menuPosX.high:
       if ui.mx >= menuPosX[i] and ui.mx < menuPosX[i+1]:
@@ -2346,7 +2431,7 @@ proc menuBar(id:         ItemId,
     of dsActive: RED
     else:        GRAY_MID
 
-  addDrawLayer(DefaultLayer, vg):
+  addDrawLayer(ui.currentLayer, vg):
     # Draw bar
     vg.beginPath()
     vg.rect(x, y, w, h)
@@ -2447,6 +2532,10 @@ proc beginFrame*(winWidth, winHeight: float) =
 
   alias(ui, g_uiState)
 
+  ui.ox = 0
+  ui.oy = 0
+  ui.currentLayer = DefaultLayer
+
   ui.winWidth = winWidth
   ui.winHeight = winHeight
 
@@ -2484,12 +2573,19 @@ proc beginFrame*(winWidth, winHeight: float) =
 proc endFrame*() =
   alias(ui, g_uiState)
 
+  # Dialogs need some special handling
+  if ui.activeDialogTitle.isSome:
+    let dialogProc = g_dialogs[ui.activeDialogTitle.get]
+    dialogProc()
+
+  # Post-frame processing
   tooltipPost()
 
   g_drawLayers.draw(g_nvgContext)
 
   ui.lastHotItem = ui.hotItem
-  ui.dialogActive = false
+
+  g_dialogs.clear()
 
   # Widget specific postprocessing
   #

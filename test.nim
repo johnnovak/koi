@@ -40,6 +40,10 @@ var
   textFieldVal2 = "Nobody expects the Spanish Inquisition!"
   textFieldVal3 = "Raw text field"
 
+  dialogTextFieldVal1 = "Grid size"
+  dialogTextFieldVal2 = ""
+
+
 ############################################################
 
 proc createWindow(): Window =
@@ -111,28 +115,50 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
                 tooltip = "Middle one..."):
     echo "button 2 pressed"
 
-  y += pad
-  if koi.button(x, y, w, h, "Preferences", color = GRAY_MID,
-                tooltip = "Last button"):
-
+  # --- DIALOG --------------------------------------------------------------
+  koi.dialog(400, 300, "Preferences dialog"):
     let
-      dialogWidth = 250.0
-      dialogHeight = 250.0
+      dialogWidth = 400.0
+      dialogHeight = 300.0
       bw = 80.0
-      x = dialogWidth - 2*(bw+pad) - pad
-      y = dialogHeight - h - pad
 
-    startDialog(400, 300, "Preferences dialog")
+    var
+      x = dialogWidth - 2*(bw+10)
+      y = dialogHeight - h - 10
 
-    if koi.button(x, y, bw, h, "OK", color = GRAY_MID, tooltip = "OK"):
+    dialogTextFieldVal1 = koi.textField(
+      10, 20, 200, 25, tooltip = "Dialog text field 1", dialogTextFieldVal1)
+
+    dialogTextFieldVal2 = koi.textField(
+      10, 50, 200, 25, tooltip = "Dialog text field 2", dialogTextFieldVal2)
+
+    let okAction = proc () =
       echo "dialog OK"
       closeDialog()
 
-    if koi.button(x, y, bw, h, "Cancel", color = GRAY_MID, tooltip = "Cancel"):
+    let cancelAction = proc () =
       echo "dialog Cancel"
       closeDialog()
 
-    endDialog()
+    if koi.button(x, y, bw, h, "OK", color = GRAY_MID, tooltip = "OK"):
+      okAction()
+
+    x += bw + 10
+    if koi.button(x, y, bw, h, "Cancel", color = GRAY_MID, tooltip = "Cancel"):
+      cancelAction()
+
+    for ke in koi.keyBuf():
+      if ke.action == kaDown and ke.key == keyEscape:
+        cancelAction()
+      elif ke.action == kaDown and ke.key == keyEnter:
+        okAction()
+
+  # -------------------------------------------------------------------------
+
+  y += pad
+  if koi.button(x, y, w, h, "Preferences", color = GRAY_MID,
+                tooltip = "Last button"):
+    openDialog("Preferences dialog")
 
   # ScrollBars
 
