@@ -124,7 +124,6 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
 
     startDialog(400, 300, "Preferences dialog")
 
-
     if koi.button(x, y, bw, h, "OK", color = GRAY_MID, tooltip = "OK"):
       echo "dialog OK"
       closeDialog()

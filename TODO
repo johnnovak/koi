@@ -19,6 +19,8 @@ TASKS
 - theming
 - SweepCheckBox?
 
+- "soft asserts" (check) that print errors to stderr instead of aborting
+
 
 
 DONE

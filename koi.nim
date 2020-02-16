@@ -295,6 +295,11 @@ proc add(dl: var DrawLayers, layer: Natural, p: DrawProc) =
   dl.layers[layer].add(p)
   dl.lastUsedLayer = layer
 
+template addDrawLayer(layer: Natural, vg, body: untyped) =
+  g_drawLayers.add(layer, proc (vg: NVGContext) =
+    body
+  )
+
 proc removeLastAdded(dl: var DrawLayers) =
   discard dl.layers[dl.lastUsedLayer].pop()
 
@@ -561,7 +566,7 @@ proc handleTooltip(id: ItemId, tooltip: string) =
 # {{{ drawTooltip
 
 proc drawTooltip(x, y: float, text: string, alpha: float = 1.0) =
-  g_drawLayers.add(TopLayer-3, proc (vg: NVGContext) =
+  addDrawLayer(TopLayer-3, vg):
     let
       w = 150.0
       h = 40.0
@@ -574,7 +579,6 @@ proc drawTooltip(x, y: float, text: string, alpha: float = 1.0) =
     vg.setFont(17.0)
     vg.fillColor(white(0.9 * alpha))
     discard vg.text(x + 10, y + 10, text)
-  )
 
 # }}}
 # {{{ tooltipPost
@@ -635,7 +639,7 @@ proc textLabel(id:         ItemId,
                fontSize:   float = 19.0,
                fontFace:   string = "sans-bold") =
 
-  g_drawLayers.add(DefaultLayer, proc (vg: NVGContext) =
+  addDrawLayer(DefaultLayer, vg):
     vg.scissor(x, y, w, h)
 
     vg.setFont(fontSize, fontFace)
@@ -643,7 +647,6 @@ proc textLabel(id:         ItemId,
     discard vg.text(x, y+h*0.5, label)
 
     vg.resetScissor()
-  )
 
 
 template label*(x, y, w, h: float,
@@ -695,7 +698,7 @@ proc button(id:         ItemId,
     of dsActive: RED
     else:        color
 
-  g_drawLayers.add(DefaultLayer, proc (vg: NVGContext) =
+  addDrawLayer(DefaultLayer, vg):
     vg.beginPath()
     vg.roundedRect(x, y, w, h, 5)
     vg.fillColor(fillColor)
@@ -709,7 +712,6 @@ proc button(id:         ItemId,
     discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, label)
 
     vg.resetScissor()
-  )
 
   if isHot(id):
     handleTooltip(id, tooltip)
@@ -760,7 +762,7 @@ proc checkBox(id:      ItemId,
     of dsHover, dsActive: GRAY_HI
     else:                 GRAY_MID
 
-  g_drawLayers.add(DefaultLayer, proc (vg: NVGContext) =
+  addDrawLayer(DefaultLayer, vg):
     vg.beginPath()
     vg.roundedRect(x, y, w, w, 5)
     vg.fillColor(bgColor)
@@ -779,7 +781,6 @@ proc checkBox(id:      ItemId,
     vg.roundedRect(x + CheckPad, y + CheckPad, w, w, 5)
     vg.fillColor(checkColor)
     vg.fill()
-  )
 
   if isHot(id):
     handleTooltip(id, tooltip)
@@ -837,7 +838,7 @@ proc radioButtons(id:           ItemId,
   # TODO this should be done properly, with rounded rectangles, etc.
   const PadX = 2
 
-  g_drawLayers.add(DefaultLayer, proc (vg: NVGContext) =
+  addDrawLayer(DefaultLayer, vg):
     vg.setFont(19.0)
 
     for i, label in labels:
@@ -876,7 +877,6 @@ proc radioButtons(id:           ItemId,
       vg.resetScissor()
 
       x += buttonW
-  )
 
   if isHot(id):
     handleTooltip(id, tooltips[hotButton])
@@ -1008,7 +1008,7 @@ proc dropdown(id:           ItemId,
     else:        GRAY_MID
 
   # Dropdown button
-  g_drawLayers.add(DefaultLayer, proc (vg: NVGContext) =
+  addDrawLayer(DefaultLayer, vg):
     vg.beginPath()
     vg.roundedRect(x, y, w, h, 5)
     vg.fillColor(fillColor)
@@ -1029,10 +1029,9 @@ proc dropdown(id:           ItemId,
     discard vg.text(x + ItemXPad, y+h*0.5, itemText)
 
     vg.resetScissor()
-  )
 
   # Dropdown items
-  g_drawLayers.add(DefaultLayer+1, proc (vg: NVGContext) =
+  addDrawLayer(DefaultLayer+1, vg):
     if isActive(id) and ds.state >= dsOpenLMBPressed:
       # Draw item list box
       vg.beginPath()
@@ -1060,7 +1059,6 @@ proc dropdown(id:           ItemId,
         vg.fillColor(textColor)
         discard vg.text(ix, iy + h*0.5, item)
         iy += itemHeight
-  )
 
   if isHot(id):
     handleTooltip(id, tooltip)
@@ -1386,7 +1384,7 @@ proc textField(id:         ItemId,
 
   let layer = if editing: TopLayer-3 else: DefaultLayer
 
-  g_drawLayers.add(layer, proc (vg: NVGContext) =
+  addDrawLayer(layer, vg):
     # Draw text field background
     if drawWidget:
       vg.beginPath()
@@ -1506,7 +1504,6 @@ proc textField(id:         ItemId,
     discard vg.text(textX, textY, text)
 
     vg.resetScissor()
-  )
 
   if isHot(id):
     handleTooltip(id, tooltip)
@@ -1697,7 +1694,7 @@ proc horizScrollBar(id:         ItemId,
     of dsActive: GRAY_MID
     else:        GRAY_MID
 
-  g_drawLayers.add(DefaultLayer, proc (vg: NVGContext) =
+  addDrawLayer(DefaultLayer, vg):
     vg.beginPath()
     vg.roundedRect(x, y, w, h, 5)
     vg.fillColor(trackColor)
@@ -1721,7 +1718,6 @@ proc horizScrollBar(id:         ItemId,
     let valueString = fmt"{newValue:.3f}"
     let tw = vg.horizontalAdvance(0,0, valueString)
     discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, valueString)
-  )
 
   if isHot(id):
     handleTooltip(id, tooltip)
@@ -1905,7 +1901,7 @@ proc vertScrollBar(id:         ItemId,
     of dsActive: GRAY_MID
     else:        GRAY_MID
 
-  g_drawLayers.add(DefaultLayer, proc (vg: NVGContext) =
+  addDrawLayer(DefaultLayer, vg):
     vg.beginPath()
     vg.roundedRect(x, y, w, h, 5)
     vg.fillColor(trackColor)
@@ -1923,7 +1919,6 @@ proc vertScrollBar(id:         ItemId,
     vg.roundedRect(x + ThumbPad, newThumbY, thumbW, thumbH, 5)
     vg.fillColor(thumbColor)
     vg.fill()
-  )
 
   if isHot(id):
     handleTooltip(id, tooltip)
@@ -2097,7 +2092,7 @@ proc horizSlider(id:         ItemId,
     of dsHover: GRAY_HI
     else:       GRAY_MID
 
-  g_drawLayers.add(DefaultLayer, proc (vg: NVGContext) =
+  addDrawLayer(DefaultLayer, vg):
     # Draw slider background
     vg.beginPath()
     vg.roundedRect(x, y, w, h, 5)
@@ -2123,7 +2118,6 @@ proc horizSlider(id:         ItemId,
       let valueString = fmt"{value:.3f}"
       let tw = vg.horizontalAdvance(0,0, valueString)
       discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, valueString)
-  )
 
   if isHot(id):
     handleTooltip(id, tooltip)
@@ -2224,7 +2218,7 @@ proc vertSlider(id:         ItemId,
     of dsHover: GRAY_HI
     else:       GRAY_MID
 
-  g_drawLayers.add(DefaultLayer, proc (vg: NVGContext) =
+  addDrawLayer(DefaultLayer, vg):
     vg.beginPath()
     vg.roundedRect(x, y, w, h, 5)
     vg.fillColor(fillColor)
@@ -2241,7 +2235,6 @@ proc vertSlider(id:         ItemId,
                    w - SliderPad*2, y + h - newPosY - SliderPad, 5)
     vg.fillColor(sliderColor)
     vg.fill()
-  )
 
   if isHot(id):
     handleTooltip(id, tooltip)
@@ -2284,12 +2277,27 @@ proc sliderPost() =
 # {{{ Dialog
 
 proc startDialog*(w, h: float, title: string) =
-  discard
+  alias(ui, g_uiState)
+
+  if not ui.dialogActive:
+    ui.dialogActive = true
+
+    let
+      x = (ui.winWidth + w) / 2
+      y = (ui.winHeight + h) / 2
+
+    addDrawLayer(TopLayer-3, vg):
+      vg.fillColor(gray(0.2))
+      vg.rect(x, y, w, h)
+      vg.fill()
+
 
 proc endDialog*() =
+  alias(ui, g_uiState)
   discard
 
 proc closeDialog*() =
+  alias(ui, g_uiState)
   discard
 
 # }}}
@@ -2338,7 +2346,7 @@ proc menuBar(id:         ItemId,
     of dsActive: RED
     else:        GRAY_MID
 
-  g_drawLayers.add(DefaultLayer, proc (vg: NVGContext) =
+  addDrawLayer(DefaultLayer, vg):
     # Draw bar
     vg.beginPath()
     vg.rect(x, y, w, h)
@@ -2354,7 +2362,6 @@ proc menuBar(id:         ItemId,
       discard vg.text(menuPosX[i], y+h*0.5, names[i])
 
     vg.resetScissor()
-  )
 
 
 template menuBar*(x, y, w, h: float, names: seq[string]): string =
