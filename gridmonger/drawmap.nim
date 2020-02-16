@@ -14,6 +14,7 @@ const
   ThinStrokeWidth      = 2.0
   NormalStrokeWidth    = 3.0
 
+
 # All drawing procs interpret the passed in (x,y) coordinates as the
 # upper-left corner of the object (e.g. a cell).
 
