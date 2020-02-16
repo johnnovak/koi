@@ -16,7 +16,7 @@ import undomanager
 import utils
 
 
-# {{{ App context
+# {{{ AppContext
 type
   EditMode = enum
     emNormal,
@@ -47,167 +47,56 @@ type
 
 var g_app: AppContext
 
-# }}}
-
 using a: var AppContext
 
-# {{{ createWindow()
-proc createWindow(): Window =
-  var cfg = DefaultOpenglWindowConfig
-  cfg.size = (w: 800, h: 800)
-  cfg.title = "GridMonger v0.1 alpha"
-  cfg.resizable = true
-  cfg.visible = false
-  cfg.bits = (r: 8, g: 8, b: 8, a: 8, stencil: 8, depth: 16)
-  cfg.debugContext = true
-  cfg.nMultiSamples = 4
-
-  when defined(macosx):
-    cfg.version = glv32
-    cfg.forwardCompat = true
-    cfg.profile = opCoreProfile
-
-  newWindow(cfg)
-
-# }}}
-# {{{ loadData()
-proc loadData(vg: NVGContext) =
-  let regularFont = vg.createFont("sans", "data/Roboto-Regular.ttf")
-  if regularFont == NoFont:
-    quit "Could not add regular font.\n"
-
-  let boldFont = vg.createFont("sans-bold", "data/Roboto-Bold.ttf")
-  if boldFont == NoFont:
-    quit "Could not add bold font.\n"
-
 # }}}
 
-var g_textFieldVal1 = "Level 1"
+# {{{ Dialogs
+# {{{ definePrefsDialog() =
 
-# {{{ render()
-proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
-  alias(vg, g_app.vg)
+var dialogTextFieldVal1 = "blah"
+let PreferencesDialog = "Preferences dialog"
 
-  let
-    (winWidth, winHeight) = win.size
-    (fbWidth, fbHeight) = win.framebufferSize
-    pxRatio = fbWidth / winWidth
+proc definePrefsDialog() =
+  koi.dialog(400, 300, PreferencesDialog):
+    let
+      dialogWidth = 400.0
+      dialogHeight = 300.0
+      h = 24.0
+      bw = 80.0
 
-  # Update and render
-  glViewport(0, 0, fbWidth, fbHeight)
+    var
+      x = dialogWidth - 2*(bw+10)
+      y = dialogHeight - h - 10
 
-  glClearColor(0.4, 0.4, 0.4, 1.0)
+    dialogTextFieldVal1 = koi.textField(
+      10, 20, 200, 25, tooltip = "Dialog text field 1", dialogTextFieldVal1)
 
-  glClear(GL_COLOR_BUFFER_BIT or
-          GL_DEPTH_BUFFER_BIT or
-          GL_STENCIL_BUFFER_BIT)
+    let okAction = proc () =
+      echo "dialog OK"
+      closeDialog()
 
-  vg.beginFrame(winWidth.float, winHeight.float, pxRatio)
-  koi.beginFrame(winWidth.float, winHeight.float)
+    let cancelAction = proc () =
+      echo "dialog Cancel"
+      closeDialog()
 
-  ############################################################
+    if koi.button(x, y, bw, h, "OK", color = GRAY_MID, tooltip = "OK"):
+      okAction()
 
-  drawMap(
-    g_app.map,
-    g_app.cursorX, g_app.cursorY,
-    g_app.selection,
-    g_app.selRect,
-    none(CopyBuffer),
-    g_app.drawParams,
-    vg
-  )
+    x += bw + 10
+    if koi.button(x, y, bw, h, "Cancel", color = GRAY_MID, tooltip = "Cancel"):
+      cancelAction()
 
-  g_textFieldVal1 = koi.textField(
-    winWidth-200.0, 30.0, 150.0, 24.0, tooltip = "Text field 1", g_textFieldVal1)
-
-  ############################################################
-
-  koi.endFrame()
-  vg.endFrame()
-
-  glfw.swapBuffers(win)
+    for ke in koi.keyBuf():
+      if ke.action == kaDown and ke.key == keyEscape:
+        cancelAction()
+      elif ke.action == kaDown and ke.key == keyEnter:
+        okAction()
 
 # }}}
 
-# {{{ GLFW callbacks
-proc windowPosCb(win: Window, pos: tuple[x, y: int32]) =
-  render(win)
-
-proc framebufSizeCb(win: Window, size: tuple[w, h: int32]) =
-  render(win)
-
-# }}}
-# {{{ initDrawParams*()
-proc initDrawParams*(dp: var DrawParams) =
-  dp.gridSize = 22.0
-
-  dp.startX = 50.0
-  dp.startY = 50.0
-
-  dp.defaultFgColor  = gray(0.1)
-
-  dp.gridColorBackground = gray(0.0, 0.3)
-  dp.gridColorFloor      = gray(0.0, 0.2)
-
-  dp.floorColor          = gray(0.9)
-
-  dp.mapBackgroundColor  = gray(0.0, 0.7)
-  dp.mapOutlineColor     = gray(0.23)
-  dp.drawOutline         = false
-
-  dp.cursorColor         = rgb(1.0, 0.65, 0.0)
-  dp.cursorGuideColor    = rgba(1.0, 0.65, 0.0, 0.2)
-  dp.drawCursorGuides    = false
-
-  dp.selectionColor      = rgba(1.0, 0.5, 0.5, 0.5)
-
-  dp.cellCoordsColor     = gray(0.9)
-  dp.cellCoordsColorHi   = rgb(1.0, 0.75, 0.0)
-  dp.cellCoordsFontSize  = 15.0
-
-# }}}
-# {{{ init()
-proc init(): Window =
-  g_app = new AppContext
-
-  glfw.initialize()
-
-  var win = createWindow()
-  g_app.win = win
-
-  var flags = {nifStencilStrokes, nifDebug}
-  g_app.vg = nvgInit(getProcAddress, flags)
-  if g_app.vg == nil:
-    quit "Error creating NanoVG context"
-
-  if not gladLoadGL(getProcAddress):
-    quit "Error initialising OpenGL"
-
-  loadData(g_app.vg)
-
-  g_app.map = newMap(24, 32)
-  g_app.undoManager = newUndoManager[Map]()
-  g_app.drawParams = new DrawParams
-  initDrawParams(g_app.drawParams)
-
-  koi.init(g_app.vg)
-
-  win.windowPositionCb = windowPosCb
-  win.framebufferSizeCb = framebufSizeCb
-
-  glfw.swapInterval(1)
-
-  win.pos = (150, 150)  # TODO for development
-  wrapper.showWindow(win.getHandle())
-
-  result = win
-
-# }}}
-# {{{ cleanup()
-proc cleanup() =
-  koi.deinit()
-  nvgDeinit(g_app.vg)
-  glfw.terminate()
+template defineDialogs() =
+  definePrefsDialog()
 
 # }}}
 
@@ -273,6 +162,7 @@ func isKeyUp(ke: KeyEvent, keys: set[Key]): bool =
   ke.action == kaUp and ke.key in keys
 
 # }}}
+
 # {{{ handleEvents()
 proc handleEvents(a) =
   alias(curX, a.cursorX)
@@ -358,6 +248,9 @@ proc handleEvents(a) =
       elif ke.isKeyDown(keyP):
         if a.copyBuf.isSome:
           pasteAction(m, curX, curY, a.copyBuf.get, um)
+
+      elif ke.isKeyDown(keyP, {mkCtrl}):
+        openDialog(PreferencesDialog)
 
     of emExcavate, emEraseCell, emClearFloor:
       proc handleMoveKey(dir: Direction, a) =
@@ -459,19 +352,178 @@ proc handleEvents(a) =
         a.editMode = emSelectDraw
 
 # }}}
+# {{{ renderUI()
 
-# {{{ main()
+var g_textFieldVal1 = "Level 1"
+
+proc renderUI() =
+  let (winWidth, winHeight) = g_app.win.size
+
+  drawMap(
+    g_app.map,
+    g_app.cursorX, g_app.cursorY,
+    g_app.selection,
+    g_app.selRect,
+    none(CopyBuffer),
+    g_app.drawParams,
+    g_app.vg
+  )
+
+  g_textFieldVal1 = koi.textField(
+    winWidth-200.0, 30.0, 150.0, 24.0, tooltip = "Text field 1", g_textFieldVal1)
+
+# }}}
+
+# {{{ renderFrame()
+proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
+  alias(vg, g_app.vg)
+
+  let
+    (winWidth, winHeight) = win.size
+    (fbWidth, fbHeight) = win.framebufferSize
+    pxRatio = fbWidth / winWidth
+
+  # Update and render
+  glViewport(0, 0, fbWidth, fbHeight)
+
+  glClearColor(0.4, 0.4, 0.4, 1.0)
+
+  glClear(GL_COLOR_BUFFER_BIT or
+          GL_DEPTH_BUFFER_BIT or
+          GL_STENCIL_BUFFER_BIT)
+
+  vg.beginFrame(winWidth.float, winHeight.float, pxRatio)
+  koi.beginFrame(winWidth.float, winHeight.float)
+
+  ######################################################
+
+  defineDialogs()
+  handleEvents(g_app)
+  renderUI()
+
+  ######################################################
+
+  koi.endFrame()
+  vg.endFrame()
+
+  glfw.swapBuffers(win)
+
+# }}}
+# {{{ framebufSizeCb
+proc framebufSizeCb(win: Window, size: tuple[w, h: int32]) =
+  renderFrame(win)
+  glfw.pollEvents()
+
+# }}}
+
+# {{{ init & cleanup
+proc initDrawParams(dp: var DrawParams) =
+  dp.gridSize = 22.0
+
+  dp.startX = 50.0
+  dp.startY = 50.0
+
+  dp.defaultFgColor  = gray(0.1)
+
+  dp.gridColorBackground = gray(0.0, 0.3)
+  dp.gridColorFloor      = gray(0.0, 0.2)
+
+  dp.floorColor          = gray(0.9)
+
+  dp.mapBackgroundColor  = gray(0.0, 0.7)
+  dp.mapOutlineColor     = gray(0.23)
+  dp.drawOutline         = false
+
+  dp.cursorColor         = rgb(1.0, 0.65, 0.0)
+  dp.cursorGuideColor    = rgba(1.0, 0.65, 0.0, 0.2)
+  dp.drawCursorGuides    = false
+
+  dp.selectionColor      = rgba(1.0, 0.5, 0.5, 0.5)
+
+  dp.cellCoordsColor     = gray(0.9)
+  dp.cellCoordsColorHi   = rgb(1.0, 0.75, 0.0)
+  dp.cellCoordsFontSize  = 15.0
+
+
+proc createWindow(): Window =
+  var cfg = DefaultOpenglWindowConfig
+  cfg.size = (w: 800, h: 800)
+  cfg.title = "GridMonger v0.1 alpha"
+  cfg.resizable = true
+  cfg.visible = false
+  cfg.bits = (r: 8, g: 8, b: 8, a: 8, stencil: 8, depth: 16)
+  cfg.debugContext = true
+  cfg.nMultiSamples = 4
+
+  when defined(macosx):
+    cfg.version = glv32
+    cfg.forwardCompat = true
+    cfg.profile = opCoreProfile
+
+  newWindow(cfg)
+
+
+proc loadData(vg: NVGContext) =
+  let regularFont = vg.createFont("sans", "data/Roboto-Regular.ttf")
+  if regularFont == NoFont:
+    quit "Could not add regular font.\n"
+
+  let boldFont = vg.createFont("sans-bold", "data/Roboto-Bold.ttf")
+  if boldFont == NoFont:
+    quit "Could not add bold font.\n"
+
+
+proc init(): Window =
+  g_app = new AppContext
+
+  glfw.initialize()
+
+  var win = createWindow()
+  g_app.win = win
+
+  var flags = {nifStencilStrokes, nifDebug}
+  g_app.vg = nvgInit(getProcAddress, flags)
+  if g_app.vg == nil:
+    quit "Error creating NanoVG context"
+
+  if not gladLoadGL(getProcAddress):
+    quit "Error initialising OpenGL"
+
+  loadData(g_app.vg)
+
+  g_app.map = newMap(24, 32)
+  g_app.undoManager = newUndoManager[Map]()
+  g_app.drawParams = new DrawParams
+  initDrawParams(g_app.drawParams)
+
+  koi.init(g_app.vg)
+
+  win.framebufferSizeCb = framebufSizeCb
+
+  glfw.swapInterval(1)
+
+  win.pos = (150, 150)  # TODO for development
+  wrapper.showWindow(win.getHandle())
+
+  result = win
+
+
+proc cleanup() =
+  koi.deinit()
+  nvgDeinit(g_app.vg)
+  glfw.terminate()
+
+# }}}
+
 proc main() =
   let win = init()
 
   while not win.shouldClose:
-    handleEvents(g_app)
-    render(win)
+    renderFrame(win)
     glfw.pollEvents()
 
   cleanup()
 
-# }}}
 
 main()
 

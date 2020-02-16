@@ -553,7 +553,8 @@ iterator keyBufInternal(): KeyEvent =
 iterator keyBuf*(): KeyEvent =
   alias(ui, g_uiState)
   var i = 0
-  if not ui.focusCaptured:
+
+  if not ui.focusCaptured and (ui.insideDialog or not isDialogActive()):
     while i < g_keyBufIdx:
       yield g_keyBuf[i]
       inc(i)
@@ -2363,13 +2364,8 @@ template dialog*(w, h: float, title: string, body: untyped) =
     ui.currentLayer = oldCurrLayer + 2
 
     addDrawLayer(ui.currentLayer, vg):
-#      vg.beginPath()
-#      vg.fillColor(gray(0.0, 0.5))
-#      vg.rect(0, 0, ui.winWidth, ui.winHeight)
-#      vg.fill()
-
       vg.beginPath()
-      vg.fillColor(gray(0.15))
+      vg.fillColor(gray(0.15, 0.96))
       vg.rect(x, y, w, h)
       vg.fill()
 
