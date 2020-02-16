@@ -568,30 +568,31 @@ proc handleTooltip(id: ItemId, tooltip: string) =
   alias(ui, g_uiState)
   alias(tt, ui.tooltipState)
 
-  tt.state = tt.lastState
+  if tooltip != "":
+    tt.state = tt.lastState
 
-  # Reset the tooltip show delay if the cursor has been moved inside a
-  # widget
-  if tt.state == tsShowDelay:
-    let cursorMoved = ui.mx != ui.lastmx or ui.my != ui.lastmy
-    if cursorMoved:
+    # Reset the tooltip show delay if the cursor has been moved inside a
+    # widget
+    if tt.state == tsShowDelay:
+      let cursorMoved = ui.mx != ui.lastmx or ui.my != ui.lastmy
+      if cursorMoved:
+        tt.t0 = getTime()
+
+    # Hide the tooltip immediately if the LMB is pressed inside the widget
+    if ui.mbLeftDown and hasActiveItem():
+      tt.state = tsOff
+
+    # Start the show delay if we just entered the widget with LMB up and no
+    # other tooltip is being shown
+    elif tt.state == tsOff and not ui.mbLeftDown and
+         ui.lastHotItem != id:
+      tt.state = tsShowDelay
       tt.t0 = getTime()
 
-  # Hide the tooltip immediately if the LMB is pressed inside the widget
-  if ui.mbLeftDown and hasActiveItem():
-    tt.state = tsOff
-
-  # Start the show delay if we just entered the widget with LMB up and no
-  # other tooltip is being shown
-  elif tt.state == tsOff and not ui.mbLeftDown and
-       ui.lastHotItem != id:
-    tt.state = tsShowDelay
-    tt.t0 = getTime()
-
-  elif tt.state >= tsShow:
-    tt.state = tsShow
-    tt.t0 = getTime()
-    tt.text = tooltip
+    elif tt.state >= tsShow:
+      tt.state = tsShow
+      tt.t0 = getTime()
+      tt.text = tooltip
 
 # }}}
 # {{{ drawTooltip
@@ -2365,7 +2366,7 @@ template dialog*(w, h: float, title: string, body: untyped) =
 
     addDrawLayer(ui.currentLayer, vg):
       vg.beginPath()
-      vg.fillColor(gray(0.15, 0.96))
+      vg.fillColor(gray(0.15, 0.98))
       vg.rect(x, y, w, h)
       vg.fill()
 
