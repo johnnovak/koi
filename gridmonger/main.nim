@@ -287,7 +287,7 @@ proc handleEvents(a) =
     MoveKeysUp    = {keyUp,    keyK, keyKp8}
     MoveKeysDown  = {keyDown,  keyJ, keyKp2}
 
-  for ke in keyBuf():
+  for ke in koi.keyBuf():
     case a.editMode:
     of emNormal:
       if ke.isKeyDown(MoveKeysLeft,  repeat=true): moveCursor(West, a)
@@ -457,8 +457,6 @@ proc handleEvents(a) =
         a.selection.get.fill(a.selRect.get.rect, a.selRect.get.fillValue)
         a.selRect = none(SelectionRect)
         a.editMode = emSelectDraw
-
-  clearKeyBuf()
 
 # }}}
 

@@ -542,12 +542,22 @@ proc keyCb(win: Window, key: Key, scanCode: int32, action: KeyAction,
 
 proc clearKeyBuf*() = g_keyBufIdx = 0
 
-iterator keyBuf*(): KeyEvent =
+# TODO maybe there's a better way to reduce duplication
+iterator keyBufInternal(): KeyEvent =
   var i = 0
   while i < g_keyBufIdx:
     yield g_keyBuf[i]
     inc(i)
   clearKeyBuf()
+
+iterator keyBuf*(): KeyEvent =
+  alias(ui, g_uiState)
+  var i = 0
+  if not ui.focusCaptured:
+    while i < g_keyBufIdx:
+      yield g_keyBuf[i]
+      inc(i)
+    clearKeyBuf()
 
 # }}}
 # {{{ Tooltip handling
@@ -1270,7 +1280,7 @@ proc textField(id:         ItemId,
             text.insert(s, text.runeOffset(insertPos))
           inc(tf.cursorPos, s.runeLen())
 
-    for ke in keyBuf():
+    for ke in keyBufInternal():
       alias(shortcuts, textFieldEditShortcuts)
       let sc = mkKeyShortcut(ke.key, ke.mods)
 
