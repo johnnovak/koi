@@ -12,7 +12,7 @@ import selection
 const
   UltrathinStrokeWidth = 1.0
   ThinStrokeWidth      = 2.0
-  NormalStrokeWidth    = 3.0
+  MaxZoomLevel*        = 15
 
 
 # All drawing procs interpret the passed in (x,y) coordinates as the
@@ -21,8 +21,6 @@ const
 # {{{ DrawParams*
 type
   DrawParams* = ref object
-    gridSize*: float
-
     startX*:   float
     startY*:   float
 
@@ -46,6 +44,12 @@ type
     cellCoordsColor*:     Color
     cellCoordsColorHi*:   Color
     cellCoordsFontSize*:  float
+
+    zoomLevel:            Natural
+    gridSize:             float
+    normalStrokeWidth:    float
+
+    vertTransformYFudgeFactor: float
 
 # }}}
 
@@ -368,7 +372,7 @@ proc drawCustom(x, y: float, dp, vg) =
 # {{{ drawSolidWallHoriz()
 proc drawSolidWallHoriz(x, y: float, dp, vg) =
   let
-    sw = NormalStrokeWidth
+    sw = dp.normalStrokeWidth
     x = snap(x, sw)
     y = snap(y, sw)
 
@@ -394,7 +398,7 @@ proc drawOpenDoorHoriz(x, y: float, dp, vg) =
     y1 = y - doorWidth
     y2 = y + doorWidth
 
-  var sw = NormalStrokeWidth
+  var sw = dp.normalStrokeWidth
   vg.strokeWidth(sw)
   vg.strokeColor(dp.defaultFgColor)
 
@@ -418,7 +422,7 @@ proc drawOpenDoorHoriz(x, y: float, dp, vg) =
   vg.stroke()
 
   # Wall end
-  sw = NormalStrokeWidth
+  sw = dp.normalStrokeWidth
   vg.strokeWidth(sw)
   vg.lineCap(lcjRound)
   vg.beginPath()
@@ -440,7 +444,7 @@ proc drawClosedDoorHoriz(x, y: float, dp, vg) =
     y1 = y - doorWidth
     y2 = y + doorWidth
 
-  var sw = NormalStrokeWidth
+  var sw = dp.normalStrokeWidth
   vg.strokeWidth(sw)
   vg.strokeColor(dp.defaultFgColor)
 
@@ -460,7 +464,7 @@ proc drawClosedDoorHoriz(x, y: float, dp, vg) =
   vg.stroke()
 
   # Wall end
-  sw = NormalStrokeWidth
+  sw = dp.normalStrokeWidth
   vg.strokeWidth(sw)
   vg.lineCap(lcjRound)
   vg.beginPath()
@@ -470,17 +474,13 @@ proc drawClosedDoorHoriz(x, y: float, dp, vg) =
 
 # }}}
 
-# {{{ drawOriented()
-
-# }}}
 # {{{ setVertTransform()
 proc setVertTransform(x, y: float, dp, vg) =
   vg.translate(x, y)
   vg.rotate(degToRad(90.0))
 
-  # Because of the grid-snapping, we need to nudge the rotated image to the
-  # left of the X-axis by 1 pixel if the stroke width is odd.
-  vg.translate(0, -1)
+  # We need to use some fudge factor here because of the grid snapping...
+  vg.translate(0, dp.vertTransformYFudgeFactor)
 
 # }}}
 # {{{ drawSelection()
@@ -578,6 +578,40 @@ proc drawWalls(m: Map, x: Natural, y: Natural, dp, vg) =
 
 # }}}
 
+# {{{ zoomLevel*()
+proc getZoomLevel*(dp): Natural = dp.zoomLevel
+
+# }}}
+# {{{ setZoomLevel*()
+proc setZoomLevel*(dp; zl: Natural) =
+  assert zl <= MaxZoomLevel
+  let
+    MinGridSize = 18.0
+    ZoomFactor = 1.08
+
+  dp.zoomLevel = zl
+  dp.gridSize = floor(MinGridSize * pow(ZoomFactor, zl.float))
+
+  if zl <= 10:
+    dp.normalStrokeWidth = 3.0
+    dp.vertTransformYFudgeFactor = -1.0
+  else:
+    dp.normalStrokeWidth = 4.0
+    dp.vertTransformYFudgeFactor = 0.0
+
+# }}}
+# {{{ incZoomLevel*()
+proc incZoomLevel*(dp) =
+  if dp.zoomLevel < MaxZoomLevel:
+    setZoomLevel(dp, dp.zoomLevel+1)
+
+# }}}
+# {{{ decZoomLevel*()
+proc decZoomLevel*(dp) =
+  if dp.zoomLevel > 0:
+    setZoomLevel(dp, dp.zoomLevel-1)
+
+# }}}
 # {{{ drawMap*()
 proc drawMap*(m: Map, cursorX, cursorY: Natural,
               selection: Option[Selection], selRect: Option[SelectionRect],

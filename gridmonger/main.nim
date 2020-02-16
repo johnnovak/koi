@@ -18,6 +18,9 @@ import undomanager
 import utils
 
 
+const
+  DefaultZoomLevel = 5
+
 # {{{ AppContext
 type
   EditMode = enum
@@ -36,7 +39,6 @@ type
     map:         Map
     cursorX:     Natural
     cursorY:     Natural
-    zoomLevel:   Natural
 
     editMode:    EditMode
     selection:   Option[Selection]
@@ -134,23 +136,6 @@ template defineDialogs() =
 proc setCursor(x, y: Natural, a) =
   a.cursorX = min(x, a.map.width-1)
   a.cursorY = min(y, a.map.height-1)
-
-# }}}
-# {{{ setZoomLevel()
-const DefaultZoomLevel = 2
-const MaxZoomLevel = 15
-
-proc calcGridSizeForZoomLevel(zl: Natural): float =
-  let
-    MinGridSize = 18.0
-    ZoomFactor = 1.08
-
-  MinGridSize * pow(ZoomFactor, zl.float)
-
-
-proc setZoomLevel(zl: Natural, a) =
-  a.zoomLevel = zl
-  a.drawParams.gridSize = calcGridSizeForZoomLevel(zl)
 
 # }}}
 # {{{ moveCursor()
@@ -297,11 +282,10 @@ proc handleEvents(a) =
           pasteAction(m, curX, curY, a.copyBuf.get, um)
 
       elif ke.isKeyDown(keyEqual, repeat=true):
-        setZoomLevel(min(a.zoomLevel+1, MaxZoomLevel), a)
+        a.drawParams.incZoomLevel()
 
       elif ke.isKeyDown(keyMinus, repeat=true):
-        if a.zoomLevel > 0:
-          setZoomLevel(a.zoomLevel-1, a)
+        a.drawParams.decZoomLevel()
 
       elif ke.isKeyDown(keyN, {mkCtrl}):
         g_newMapDialog_name = "Level 1"
@@ -376,6 +360,12 @@ proc handleEvents(a) =
         if bbox.isSome:
           eraseSelectionAction(m, a.copyBuf.get.selection, bbox.get, um)
         exitSelectMode(a)
+
+      elif ke.isKeyDown(keyEqual, repeat=true):
+        a.drawParams.incZoomLevel()
+
+      elif ke.isKeyDown(keyMinus, repeat=true):
+        a.drawParams.decZoomLevel()
 
       elif ke.isKeyDown(keyEscape):
         exitSelectMode(a)
@@ -477,8 +467,6 @@ proc framebufSizeCb(win: Window, size: tuple[w, h: int32]) =
 proc initDrawParams(a) =
   alias(dp, a.drawParams)
 
-  setZoomLevel(a.zoomLevel, a)
-
   dp.startX = 50.0
   dp.startY = 50.0
 
@@ -551,10 +539,11 @@ proc init(): Window =
   loadData(g_app.vg)
 
   g_app.map = newMap(16, 16)
-  g_app.zoomLevel = DefaultZoomLevel
   g_app.undoManager = newUndoManager[Map]()
   g_app.drawParams = new DrawParams
   initDrawParams(g_app)
+
+  g_app.drawParams.setZoomLevel(DefaultZoomLevel)
 
   koi.init(g_app.vg)
 
