@@ -1,5 +1,6 @@
 import lenientops
 import options
+import strutils
 
 import glad/gl
 import glfw
@@ -54,37 +55,64 @@ using a: var AppContext
 # {{{ Dialogs
 # {{{ definePrefsDialog() =
 
-var dialogTextFieldVal1 = "blah"
-let PreferencesDialog = "Preferences dialog"
+const NewMapDialogTitle = "New map"
 
-proc definePrefsDialog() =
-  koi.dialog(400, 300, PreferencesDialog):
+var
+  g_newMapDialog_name: string
+  g_newMapDialog_width: string
+  g_newMapDialog_height: string
+
+proc newMapDialog() =
+  koi.dialog(350, 220, NewMapDialogTitle):
     let
-      dialogWidth = 400.0
-      dialogHeight = 300.0
+      dialogWidth = 350.0
+      dialogHeight = 220.0
       h = 24.0
-      bw = 80.0
+      labelWidth = 60.0
+      buttonWidth = 70.0
+      buttonPad = 15.0
 
     var
-      x = dialogWidth - 2*(bw+10)
-      y = dialogHeight - h - 10
+      x = 30.0
+      y = 60.0
 
-    dialogTextFieldVal1 = koi.textField(
-      10, 20, 200, 25, tooltip = "Dialog text field 1", dialogTextFieldVal1)
+    koi.label(x, y, labelWidth, h, "Name", gray(0.70), fontSize=19.0)
+    g_newMapDialog_name = koi.textField(
+      x + labelWidth, y, 230.0, h, tooltip = "", g_newMapDialog_name
+    )
+
+    y = y + 50
+    koi.label(x, y, labelWidth, h, "Width", gray(0.70), fontSize=19.0)
+    g_newMapDialog_width = koi.textField(
+      x + labelWidth, y, 60.0, h, tooltip = "", g_newMapDialog_width
+    )
+
+    y = y + 30
+    koi.label(x, y, labelWidth, h, "Height", gray(0.70), fontSize=19.0)
+    g_newMapDialog_height = koi.textField(
+      x + labelWidth, y, 60.0, h, tooltip = "", g_newMapDialog_height
+    )
+
+    x = dialogWidth - 2 * buttonWidth - buttonPad - 10
+    y = dialogHeight - h - buttonPad
 
     let okAction = proc () =
-      echo "dialog OK"
+      g_app.map = newMap(
+        parseInt(g_newMapDialog_width),
+        parseInt(g_newMapDialog_height)
+      )
+      g_app.cursorX = 0
+      g_app.cursory = 0
       closeDialog()
 
     let cancelAction = proc () =
-      echo "dialog Cancel"
       closeDialog()
 
-    if koi.button(x, y, bw, h, "OK", color = GRAY_MID, tooltip = "OK"):
+    if koi.button(x, y, buttonWidth, h, "OK", color = gray(0.4)):
       okAction()
 
-    x += bw + 10
-    if koi.button(x, y, bw, h, "Cancel", color = GRAY_MID, tooltip = "Cancel"):
+    x += buttonWidth + 10
+    if koi.button(x, y, buttonWidth, h, "Cancel", color = gray(0.4)):
       cancelAction()
 
     for ke in koi.keyBuf():
@@ -96,7 +124,7 @@ proc definePrefsDialog() =
 # }}}
 
 template defineDialogs() =
-  definePrefsDialog()
+  newMapDialog()
 
 # }}}
 
@@ -250,7 +278,10 @@ proc handleEvents(a) =
           pasteAction(m, curX, curY, a.copyBuf.get, um)
 
       elif ke.isKeyDown(keyP, {mkCtrl}):
-        openDialog(PreferencesDialog)
+        g_newMapDialog_name = "Level 1"
+        g_newMapDialog_width = $g_app.map.width
+        g_newMapDialog_height = $g_app.map.height
+        openDialog(NewMapDialogTitle)
 
     of emExcavate, emEraseCell, emClearFloor:
       proc handleMoveKey(dir: Direction, a) =
@@ -491,7 +522,7 @@ proc init(): Window =
 
   loadData(g_app.vg)
 
-  g_app.map = newMap(24, 32)
+  g_app.map = newMap(16, 16)
   g_app.undoManager = newUndoManager[Map]()
   g_app.drawParams = new DrawParams
   initDrawParams(g_app.drawParams)

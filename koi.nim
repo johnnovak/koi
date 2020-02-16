@@ -2357,8 +2357,8 @@ template dialog*(w, h: float, title: string, body: untyped) =
   alias(ui, g_uiState)
 
   let
-    x = (ui.winWidth - w) / 2
-    y = (ui.winHeight - h) / 2
+    x = floor((ui.winWidth - w) / 2)
+    y = floor((ui.winHeight - h) / 2)
 
   g_dialogs[title] = proc() =
     let oldCurrLayer = ui.currentLayer
@@ -2366,9 +2366,20 @@ template dialog*(w, h: float, title: string, body: untyped) =
 
     addDrawLayer(ui.currentLayer, vg):
       vg.beginPath()
-      vg.fillColor(gray(0.15, 0.98))
+      vg.fillColor(gray(0.17))
       vg.rect(x, y, w, h)
       vg.fill()
+
+      vg.beginPath()
+      vg.fillColor(gray(0.06))
+      vg.rect(x, y, w, 30.0)
+      vg.fill()
+
+      vg.fontFace("sans-bold")
+      vg.fontSize(19.0)
+      vg.textAlign(haLeft, vaMiddle)
+      vg.fillColor(gray(0.45))
+      discard vg.text(x+10.0, y+15.0, title)
 
     ui.ox = x
     ui.oy = y
