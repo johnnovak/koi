@@ -45,7 +45,9 @@ type
     selRect:     Option[SelectionRect]
     copyBuf:     Option[CopyBuffer]
 
-    drawParams:  DrawParams
+    startCol, startRow: Natural
+    numCols, numRows:   Natural
+    drawParams:         DrawParams
 
     undoManager: UndoManager[Map]
 
@@ -131,6 +133,15 @@ template defineDialogs() =
   newMapDialog()
 
 # }}}
+
+proc calcMapExtents(a) =
+  let (winWidth, winHeight) = a.win.size
+
+  a.numCols = min(a.drawParams.numDisplayableCols(winWidth - 100.0),
+                  a.map.width)
+
+  a.numRows = min(a.drawParams.numDisplayableRows(winHeight - 100.0),
+                  a.map.height)
 
 # {{{ setCursor()
 proc setCursor(x, y: Natural, a) =
@@ -283,9 +294,11 @@ proc handleEvents(a) =
 
       elif ke.isKeyDown(keyEqual, repeat=true):
         a.drawParams.incZoomLevel()
+        calcMapExtents(a)
 
       elif ke.isKeyDown(keyMinus, repeat=true):
         a.drawParams.decZoomLevel()
+        calcMapExtents(a)
 
       elif ke.isKeyDown(keyN, {mkCtrl}):
         g_newMapDialog_name = "Level 1"
@@ -363,9 +376,11 @@ proc handleEvents(a) =
 
       elif ke.isKeyDown(keyEqual, repeat=true):
         a.drawParams.incZoomLevel()
+        calcMapExtents(a)
 
       elif ke.isKeyDown(keyMinus, repeat=true):
         a.drawParams.decZoomLevel()
+        calcMapExtents(a)
 
       elif ke.isKeyDown(keyEscape):
         exitSelectMode(a)
@@ -404,17 +419,23 @@ proc handleEvents(a) =
 var g_textFieldVal1 = "Level 1"
 
 proc renderUI() =
-  let (winWidth, winHeight) = g_app.win.size
+  alias(a, g_app)
 
-  drawMap(
-    g_app.map,
-    g_app.cursorX, g_app.cursorY,
-    g_app.selection,
-    g_app.selRect,
-    none(CopyBuffer),
-    g_app.drawParams,
-    g_app.vg
-  )
+  let (winWidth, winHeight) = a.win.size
+
+  # TODO move all these into drawparams?
+  if a.numCols > 0 and a.numRows > 0:
+    drawMap(
+      a.map,
+      startCol = a.startCol, startRow = a.startRow,
+      numCols = a.numCols, numRows = a.numRows,
+      a.cursorX, a.cursorY,
+      a.selection,
+      a.selRect,
+      none(CopyBuffer),
+      a.drawParams,
+      a.vg
+    )
 
   g_textFieldVal1 = koi.textField(
     winWidth-200.0, 30.0, 150.0, 24.0, tooltip = "Text field 1", g_textFieldVal1)
@@ -423,6 +444,7 @@ proc renderUI() =
 
 # {{{ renderFrame()
 proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
+  alias(a, g_app)
   alias(vg, g_app.vg)
 
   let
@@ -444,8 +466,9 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
 
   ######################################################
 
+  calcMapExtents(a)
   defineDialogs()
-  handleEvents(g_app)
+  handleEvents(a)
   renderUI()
 
   ######################################################

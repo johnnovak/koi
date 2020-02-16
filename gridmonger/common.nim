@@ -83,7 +83,8 @@ type
     floorOrientation*: Orientation
     wallN*, wallW*:    Wall
     customChar*:       char
-    notes*:            string
+    # TODO store separately
+#    notes*:            string
 
   # (0,0) is the top-left cell of the map
   Map* = ref object

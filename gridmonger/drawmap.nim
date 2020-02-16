@@ -74,17 +74,17 @@ proc cellY(y: Natural, dp): float =
 # }}}
 
 # {{{ drawBackgroundGrid
-proc drawBackgroundGrid(m: Map, dp, vg) =
+proc drawBackgroundGrid(numCols, numRows: Natural, dp, vg) =
   let strokeWidth = UltrathinStrokeWidth
 
   vg.lineCap(lcjSquare)
   vg.strokeColor(dp.gridColorBackground)
   vg.strokeWidth(strokeWidth)
 
-  let endX = snap(cellX(m.width,  dp), strokeWidth)
-  let endY = snap(cellY(m.height, dp), strokeWidth)
+  let endX = snap(cellX(numCols, dp), strokeWidth)
+  let endY = snap(cellY(numRows, dp), strokeWidth)
 
-  for x in 0..m.width:
+  for x in 0..numCols:
     let x = snap(cellX(x, dp), strokeWidth)
     let y = snap(dp.startY, strokeWidth)
     vg.beginPath()
@@ -92,7 +92,7 @@ proc drawBackgroundGrid(m: Map, dp, vg) =
     vg.lineTo(x, endY)
     vg.stroke()
 
-  for y in 0..m.height:
+  for y in 0..numRows:
     let x = snap(dp.startX, strokeWidth)
     let y = snap(cellY(y, dp), strokeWidth)
     vg.beginPath()
@@ -102,7 +102,8 @@ proc drawBackgroundGrid(m: Map, dp, vg) =
 
 # }}}
 # {{{ drawCellCoords()
-proc drawCellCoords(m: Map, cursorX, cursorY: Natural, dp, vg) =
+proc drawCellCoords(startCol, startRow, numCols, numRows: Natural,
+                    cursorX, cursorY: Natural, dp, vg) =
 
   vg.fontFace("sans")
   vg.fontSize(dp.cellCoordsFontSize)
@@ -115,10 +116,10 @@ proc drawCellCoords(m: Map, cursorX, cursorY: Natural, dp, vg) =
       vg.fillColor(dp.cellCoordsColor)
       vg.fontFace("sans")
 
-  let endX = dp.startX + dp.gridSize * m.width
-  let endY = dp.startY + dp.gridSize * m.height
+  let endX = dp.startX + dp.gridSize * numCols
+  let endY = dp.startY + dp.gridSize * numRows
 
-  for x in 0..<m.width:
+  for x in 0..<numCols:
     let
       xPos = cellX(x, dp) + dp.gridSize/2
       coord = $x
@@ -128,7 +129,7 @@ proc drawCellCoords(m: Map, cursorX, cursorY: Natural, dp, vg) =
     discard vg.text(xPos, dp.startY - 12, coord)
     discard vg.text(xPos, endY + 12, coord)
 
-  for y in 0..<m.height:
+  for y in 0..<numRows:
     let
       yPos = cellY(y, dp) + dp.gridSize/2
       coord = $y
@@ -141,15 +142,15 @@ proc drawCellCoords(m: Map, cursorX, cursorY: Natural, dp, vg) =
 
 # }}}
 # {{{ drawMapBackground()
-proc drawMapBackground(m: Map, dp, vg) =
+proc drawMapBackground(numCols, numRows: Natural, dp, vg) =
   let strokeWidth = UltrathinStrokeWidth
 
   vg.strokeColor(dp.mapBackgroundColor)
   vg.strokeWidth(strokeWidth)
 
   let
-    w = dp.gridSize * m.width
-    h = dp.gridSize * m.height
+    w = dp.gridSize * numCols
+    h = dp.gridSize * numRows
     offs = max(w, h)
     lineSpacing = strokeWidth * 2
 
@@ -612,28 +613,47 @@ proc decZoomLevel*(dp) =
     setZoomLevel(dp, dp.zoomLevel-1)
 
 # }}}
+# {{{ numDisplayableRows*()
+proc numDisplayableRows*(dp; height: float): Natural =
+  max(height / dp.gridSize, 0).int
+
+# }}}
+# {{{ numDisplayableCols*()
+proc numDisplayableCols*(dp; width: float): Natural =
+  max(width / dp.gridSize, 0).int
+
+# }}}
 # {{{ drawMap*()
-proc drawMap*(m: Map, cursorX, cursorY: Natural,
+proc drawMap*(m: Map,
+              startCol, startRow, numCols, numRows: Natural,
+              cursorX, cursorY: Natural,
               selection: Option[Selection], selRect: Option[SelectionRect],
               pastPreview: Option[CopyBuffer],
               dp, vg) =
 
-  drawCellCoords(m, cursorX, cursorY, dp, vg)
-  drawMapBackground(m, dp, vg)
-  drawBackgroundGrid(m, dp, vg)
+  assert startCol + numCols <= m.width
+  assert startRow + numRows <= m.height
+
+  drawCellCoords(startCol, startRow, numCols, numRows, cursorX, cursorY, dp, vg)
+  drawMapBackground(numCols, numRows, dp, vg)
+  drawBackgroundGrid(numCols,numRows, dp, vg)
 
   if dp.drawOutline: drawOutline(m, dp, vg)
 
-  for y in 0..<m.height:
-    for x in 0..<m.width:
+  let
+    endRow = startRow + numRows - 1
+    endCell = startCol + numCols - 1
+
+  for y in startRow..endRow:
+    for x in startCol..endCell:
       let cursorActive = x == cursorX and y == cursorY
       drawFloor(m, x, y, cursorActive, dp, vg)
 
   if dp.drawCursorGuides:
     drawCursorGuides(m, cursorX, cursorY, dp, vg)
 
-  for y in 0..<m.height:
-    for x in 0..<m.width:
+  for y in startRow..endRow:
+    for x in startCol..endCell:
       drawWalls(m, x, y, dp, vg)
 
   if selection.isSome:
