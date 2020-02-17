@@ -603,26 +603,35 @@ proc drawWall(x, y: float, wall: Wall, ot: Orientation, dp, vg) =
 
 # }}}
 # {{{ drawWalls()
-proc drawWalls(m: Map, col, row, startCol, startRow: Natural, dp, vg) =
-  drawWall(
-    cellX(col - startCol, dp),
-    cellY(row - startRow, dp),
-    m.getWall(col, row, North), Horiz, dp, vg
-  )
-  drawWall(
-    cellX(col - startCol, dp),
-    cellY(row - startRow, dp),
-    m.getWall(col, row, West), Vert, dp, vg
-  )
+proc drawWalls(m: Map, col, row, startCol, startRow, numCols, numRows: Natural,
+               dp, vg) =
 
-  if col == m.width-1:
+  let floorEmpty = m.getFloor(col, row) == fNone
+
+  if row > startRow or (row == startRow and not floorEmpty):
+    drawWall(
+      cellX(col - startCol, dp),
+      cellY(row - startRow, dp),
+      m.getWall(col, row, North), Horiz, dp, vg
+    )
+
+  if col > startCol or (col == startCol and not floorEmpty):
+    drawWall(
+      cellX(col - startCol, dp),
+      cellY(row - startRow, dp),
+      m.getWall(col, row, West), Vert, dp, vg
+    )
+
+  let endCol = startCol + numCols-1
+  if col < endCol or (col == endCol and not floorEmpty):
     drawWall(
       cellX(col+1 - startCol, dp),
       cellY(row - startRow, dp),
       m.getWall(col, row, East), Vert, dp, vg
     )
 
-  if row == m.height-1:
+  let endRow = startRow + numRows-1
+  if row < endRow or (row == endRow and not floorEmpty):
     drawWall(
       cellX(col - startCol, dp),
       cellY(row+1 - startRow, dp),
@@ -690,7 +699,8 @@ proc drawMap*(m: Map,
   drawMapBackground(numCols, numRows, dp, vg)
   drawBackgroundGrid(numCols,numRows, dp, vg)
 
-  if dp.drawOutline: drawOutline(m, dp, vg)
+  if dp.drawOutline:
+    drawOutline(m, dp, vg)
 
   let
     endRow = startRow + numRows - 1
@@ -700,14 +710,11 @@ proc drawMap*(m: Map,
     for c in startCol..endCell:
       let cursorActive = c == cursorCol and r == cursorRow
       drawFloor(m, c, r, startCol, startRow, cursorActive, dp, vg)
+      drawWalls(m, c, r, startCol, startRow, numCols, numRows, dp, vg)
 
   if dp.drawCursorGuides:
     drawCursorGuides(m, cursorCol, cursorRow, startCol, startRow,
                      numCols, numRows, dp, vg)
-
-  for r in startRow..endRow:
-    for c in startCol..endCell:
-      drawWalls(m, c, r, startCol, startRow, dp, vg)
 
   if selection.isSome:
     drawSelection(selection.get, selRect, startCol, startRow, numCols, numRows,
