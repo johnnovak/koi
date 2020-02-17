@@ -32,21 +32,6 @@ template singleCellAction(currMap; x, y: Natural, um;
 
 # }}}
 
-# {{{ eraseCellWalls()
-proc eraseCellWalls(m: var Map, x, y: Natural) =
-  m.setWall(x,y, North, wNone)
-  m.setWall(x,y, West,  wNone)
-  m.setWall(x,y, South, wNone)
-  m.setWall(x,y, East,  wNone)
-
-# }}}
-# {{{ eraseCell()
-proc eraseCell(m: var Map, x, y: Natural) =
-  m.setFloor(x, y, fNone)
-  m.eraseCellWalls(x, y)
-
-# }}}
-#
 # {{{ eraseCellWallsAction*()
 proc eraseCellWallsAction*(currMap; x, y: Natural, um) =
   singleCellAction(currMap, x, y, um, m):

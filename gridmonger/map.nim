@@ -63,6 +63,8 @@ proc newMap*(width, height: Natural): Map =
 
 proc copyFrom*(dest: var Map, destX, destY: Natural,
                src: Map, srcRect: Rect[Natural]) =
+  # This function cannot fail as the copied area is clipped to the extents of
+  # the destination area (so nothing gets copied in the worst case).
   let
     srcX = srcRect.x1
     srcY = srcRect.y1
@@ -139,15 +141,52 @@ proc getWall*(m; x, y: Natural, dir: Direction): Wall =
   of East:  m[1+x,   y].wallW
 
 
-proc setWall*(m; x, y: Natural, dir: Direction, w: Wall) =
-  assert x < m.width
-  assert y < m.height
+proc isNeighbourCellEmpty*(m; c, r: Natural, dir: Direction): bool =
+  assert c < m.width
+  assert r < m.height
 
   case dir
-  of North: m[  x,   y].wallN = w
-  of West:  m[  x,   y].wallW = w
-  of South: m[  x, 1+y].wallN = w
-  of East:  m[1+x,   y].wallW = w
+  of North: r == 0          or m[c,   r-1].floor == fNone
+  of West:  c == 0          or m[c-1, r  ].floor == fNone
+  of South: r == m.height-1 or m[c,   r+1].floor == fNone
+  of East:  c == m.width-1  or m[c+1, r  ].floor == fNone
+
+
+proc canSetWall*(m; c, r: Natural, dir: Direction): bool =
+  assert c < m.width
+  assert r < m.height
+
+  m[c,r].floor != fNone or not isNeighbourCellEmpty(m, c, r, dir)
+
+
+proc setWall*(m; c, r: Natural, dir: Direction, w: Wall) =
+  assert c < m.width
+  assert r < m.height
+
+  if canSetWall(m, c, r, dir):
+    case dir
+    of North: m[c,   r  ].wallN = w
+    of West:  m[c,   r  ].wallW = w
+    of South: m[c,   r+1].wallN = w
+    of East:  m[c+1, r  ].wallW = w
+
+
+proc eraseCellWalls*(m; c, r: Natural) =
+  assert c < m.width
+  assert r < m.height
+
+  m.setWall(c,r, North, wNone)
+  m.setWall(c,r, West,  wNone)
+  m.setWall(c,r, South, wNone)
+  m.setWall(c,r, East,  wNone)
+
+
+proc eraseCell*(m; c, r: Natural) =
+  assert c < m.width
+  assert r < m.height
+
+  m.eraseCellWalls(c, r)
+  m.setFloor(c, r, fNone)
 
 
 # TODO

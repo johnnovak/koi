@@ -138,7 +138,8 @@ template defineDialogs() =
 
 # }}}
 
-proc calcMapExtents(a) =
+# {{{ updateMapAndCursorPosition()
+proc updateMapAndCursorPosition(a) =
   let (winWidth, winHeight) = a.win.size
 
   # TODO -100
@@ -151,6 +152,7 @@ proc calcMapExtents(a) =
   a.cursorCol = min(max(a.startCol + a.numCols - 1, a.startCol), a.cursorCol)
   a.cursorRow = min(max(a.startRow + a.numRows - 1, a.startRow), a.cursorRow)
 
+# }}}
 # {{{ moveCursor()
 proc moveCursor(dir: Direction, a) =
   var
@@ -313,11 +315,11 @@ proc handleEvents(a) =
 
       elif ke.isKeyDown(keyEqual, repeat=true):
         a.drawParams.incZoomLevel()
-        calcMapExtents(a)
+        updateMapAndCursorPosition(a)
 
       elif ke.isKeyDown(keyMinus, repeat=true):
         a.drawParams.decZoomLevel()
-        calcMapExtents(a)
+        updateMapAndCursorPosition(a)
 
       elif ke.isKeyDown(keyN, {mkCtrl}):
         g_newMapDialog_name = "Level 1"
@@ -349,9 +351,10 @@ proc handleEvents(a) =
 
     of emDrawWall:
       proc handleMoveKey(dir: Direction, a) =
-        let w = if m.getWall(curX, curY, dir) == wNone: wWall
-                else: wNone
-        setWallAction(m, curX, curY, dir, w, um)
+        if canSetWall(m, curX, curY, dir):
+          let w = if m.getWall(curX, curY, dir) == wNone: wWall
+                  else: wNone
+          setWallAction(m, curX, curY, dir, w, um)
 
       if ke.isKeyDown(MoveKeysLeft):  handleMoveKey(West, a)
       if ke.isKeyDown(MoveKeysRight): handleMoveKey(East, a)
@@ -395,11 +398,11 @@ proc handleEvents(a) =
 
       elif ke.isKeyDown(keyEqual, repeat=true):
         a.drawParams.incZoomLevel()
-        calcMapExtents(a)
+        updateMapAndCursorPosition(a)
 
       elif ke.isKeyDown(keyMinus, repeat=true):
         a.drawParams.decZoomLevel()
-        calcMapExtents(a)
+        updateMapAndCursorPosition(a)
 
       elif ke.isKeyDown(keyEscape):
         exitSelectMode(a)
@@ -485,7 +488,7 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
 
   ######################################################
 
-  calcMapExtents(a)
+  updateMapAndCursorPosition(a)
   defineDialogs()
   handleEvents(a)
   renderUI()
