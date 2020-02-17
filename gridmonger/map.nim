@@ -12,38 +12,38 @@ func height*(m): Natural =
   result = m.height
 
 
-proc cellIndex(m; x, y: Natural): Natural =
+proc cellIndex(m; c, r: Natural): Natural =
   # We need to be able to address the bottommost & rightmost "edge" columns
-  # & rows within the module.
+  # & :ows within the module.
   let w = m.width+1
   let h = m.height+1
-  assert x < w+1
-  assert y < h+1
-  result = w*y + x
+  assert c < w+1
+  assert r < h+1
+  result = w*r + c
 
-proc `[]=`(m; x, y: Natural, c: Cell) =
-  m.cells[cellIndex(m, x, y)] = c
+proc `[]=`(m; c, r: Natural, cell: Cell) =
+  m.cells[cellIndex(m, c, r)] = cell
 
-proc `[]`(m; x, y: Natural): var Cell =
+proc `[]`(m; c, r: Natural): var Cell =
   # We need to be able to address the bottommost & rightmost "edge" columns
   # & rows within the module.
-  result = m.cells[cellIndex(m, x, y)]
+  result = m.cells[cellIndex(m, c, r)]
 
-proc fill*(m; r: Rect[Natural], cell: Cell) =
-  assert r.x1 < m.width
-  assert r.y1 < m.height
-  assert r.x2 <= m.width
-  assert r.y2 <= m.height
+proc fill*(m; rect: Rect[Natural], cell: Cell) =
+  assert rect.x1 < m.width
+  assert rect.y1 < m.height
+  assert rect.x2 <= m.width
+  assert rect.y2 <= m.height
 
   # TODO fill border
-  for y in r.y1..<r.y2:
-    for x in r.x1..<r.x2:
-      m[x,y] = cell
+  for r in rect.y1..<rect.y2:
+    for c in rect.x1..<rect.x2:
+      m[c,r] = cell
 
 
 proc fill*(m; cell: Cell) =
-  let r = rectN(0, 0, m.width-1, m.height-1)
-  m.fill(r, cell)
+  let rect = rectN(0, 0, m.width-1, m.height-1)
+  m.fill(rect, cell)
 
 proc initMap(m; width, height: Natural) =
   m.width = width
@@ -61,47 +61,47 @@ proc newMap*(width, height: Natural): Map =
   result = m
 
 
-proc copyFrom*(dest: var Map, destX, destY: Natural,
+proc copyFrom*(dest: var Map, destCol, destRow: Natural,
                src: Map, srcRect: Rect[Natural]) =
   # This function cannot fail as the copied area is clipped to the extents of
   # the destination area (so nothing gets copied in the worst case).
   let
-    srcX = srcRect.x1
-    srcY = srcRect.y1
-    srcWidth   = max(src.width - srcX, 0)
-    srcHeight  = max(src.height - srcY, 0)
-    destWidth  = max(dest.width - destX, 0)
-    destHeight = max(dest.height - destY, 0)
+    srcCol = srcRect.x1
+    srcRow = srcRect.y1
+    srcWidth   = max(src.width - srcCol, 0)
+    srcHeight  = max(src.height - srcRow, 0)
+    destWidth  = max(dest.width - destCol, 0)
+    destHeight = max(dest.height - destRow, 0)
 
     w = min(min(srcWidth,  destWidth),  srcRect.width)
     h = min(min(srcHeight, destHeight), srcRect.height)
 
-  for y in 0..<h:
-    for x in 0..<w:
-      dest[destX + x, destY + y] = src[srcX + x, srcY + y]
+  for r in 0..<h:
+    for c in 0..<w:
+      dest[destCol + c, destRow + r] = src[srcCol + c, srcRow + r]
 
   # Copy the South walls of the bottommost "edge" row
-  for x in 0..<w:
-    dest[destX + x, destY + h].wallN = src[srcX + x, srcY + h].wallN
+  for c in 0..<w:
+    dest[destCol + c, destRow + h].wallN = src[srcCol + c, srcRow + h].wallN
 
   # Copy the East walls of the rightmost "edge" column
-  for y in 0..<h:
-    dest[destX + w, destY + y].wallW = src[srcX + w, srcY + y].wallW
+  for r in 0..<h:
+    dest[destCol + w, destRow + r].wallW = src[srcCol + w, srcRow + r].wallW
 
 
 proc copyFrom*(dest: var Map, src: Map) =
-  dest.copyFrom(destX=0, destY=0, src, rectN(0, 0, src.width, src.height))
+  dest.copyFrom(destCol=0, destRow=0, src, rectN(0, 0, src.width, src.height))
 
 
-proc newMapFrom*(src: Map, r: Rect[Natural]): Map =
-  assert r.x1 < src.width
-  assert r.y1 < src.height
-  assert r.x2 <= src.width
-  assert r.y2 <= src.height
+proc newMapFrom*(src: Map, rect: Rect[Natural]): Map =
+  assert rect.x1 < src.width
+  assert rect.y1 < src.height
+  assert rect.x2 <= src.width
+  assert rect.y2 <= src.height
 
   var dest = new Map
-  dest.initMap(r.width, r.height)
-  dest.copyFrom(destX=0, destY=0, src, srcRect=r)
+  dest.initMap(rect.width, rect.height)
+  dest.copyFrom(destCol=0, destRow=0, src, srcRect=rect)
   result = dest
 
 
@@ -109,36 +109,36 @@ proc newMapFrom*(m): Map =
   newMapFrom(m, rectN(0, 0, m.width, m.height))
 
 
-proc getFloor*(m; x, y: Natural): Floor =
-  assert x < m.width
-  assert y < m.height
-  m[x,y].floor
+proc getFloor*(m; c, r: Natural): Floor =
+  assert c < m.width
+  assert r < m.height
+  m[c,r].floor
 
-proc getFloorOrientation*(m; x, y: Natural): Orientation =
-  assert x < m.width
-  assert y < m.height
-  m[x,y].floorOrientation
+proc getFloorOrientation*(m; c, r: Natural): Orientation =
+  assert c < m.width
+  assert r < m.height
+  m[c,r].floorOrientation
 
-proc setFloorOrientation*(m; x, y: Natural, ot: Orientation) =
-  assert x < m.width
-  assert y < m.height
-  m[x,y].floorOrientation = ot
+proc setFloorOrientation*(m; c, r: Natural, ot: Orientation) =
+  assert c < m.width
+  assert r < m.height
+  m[c,r].floorOrientation = ot
 
-proc setFloor*(m; x, y: Natural, f: Floor) =
-  assert x < m.width
-  assert y < m.height
-  m[x,y].floor = f
+proc setFloor*(m; c, r: Natural, f: Floor) =
+  assert c < m.width
+  assert r < m.height
+  m[c,r].floor = f
 
 
-proc getWall*(m; x, y: Natural, dir: Direction): Wall =
-  assert x < m.width
-  assert y < m.height
+proc getWall*(m; c, r: Natural, dir: Direction): Wall =
+  assert c < m.width
+  assert r < m.height
 
   case dir
-  of North: m[  x,   y].wallN
-  of West:  m[  x,   y].wallW
-  of South: m[  x, 1+y].wallN
-  of East:  m[1+x,   y].wallW
+  of North: m[c,   r  ].wallN
+  of West:  m[c,   r  ].wallW
+  of South: m[c,   r+1].wallN
+  of East:  m[c+1, r  ].wallW
 
 
 proc isNeighbourCellEmpty*(m; c, r: Natural, dir: Direction): bool =

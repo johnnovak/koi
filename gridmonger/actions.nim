@@ -18,7 +18,7 @@ template cellAreaAction(currMap; r: Rect[Natural], um;
 
   var undoMap = newMapFrom(currMap, r)
   var undoAction = proc (m: var Map) =
-    m.copyFrom(destX=r.x1, destY=r.y1,
+    m.copyFrom(destCol=r.x1, destRow=r.y1,
                undoMap, rectN(0, 0, r.width, r.height))
 
   um.storeUndoState(undoAction, redoAction=action)
