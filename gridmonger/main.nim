@@ -2,6 +2,7 @@ import lenientops
 import math
 import options
 import strutils
+import strformat
 
 import glad/gl
 import glfw
@@ -37,8 +38,8 @@ type
     win:         Window
 
     map:         Map
-    cursorX:     Natural
-    cursorY:     Natural
+    cursorCol:   Natural
+    cursorRow:   Natural
 
     editMode:    EditMode
     selection:   Option[Selection]
@@ -107,8 +108,8 @@ proc newMapDialog() =
         parseInt(g_newMapDialog_width),
         parseInt(g_newMapDialog_height)
       )
-      g_app.cursorX = 0
-      g_app.cursory = 0
+      g_app.cursorCol = 0
+      g_app.cursorRow = 0
       closeDialog()
 
     let cancelAction = proc () =
@@ -137,32 +138,44 @@ template defineDialogs() =
 proc calcMapExtents(a) =
   let (winWidth, winHeight) = a.win.size
 
+  # TODO -100
   a.numCols = min(a.drawParams.numDisplayableCols(winWidth - 100.0),
                   a.map.width)
 
   a.numRows = min(a.drawParams.numDisplayableRows(winHeight - 100.0),
                   a.map.height)
 
-# {{{ setCursor()
-proc setCursor(x, y: Natural, a) =
-  a.cursorX = min(x, a.map.width-1)
-  a.cursorY = min(y, a.map.height-1)
-
-# }}}
 # {{{ moveCursor()
 proc moveCursor(dir: Direction, a) =
-  let x = a.cursorX
-  let y = a.cursory
+  var
+    cx = a.cursorCol
+    cy = a.cursorRow
+    sx = a.startCol
+    sy = a.startRow
 
   case dir:
-  of North:
-    if y > 0: setCursor(x, y-1, a)
   of East:
-    setCursor(x+1, y, a)
+    cx = min(cx+1, a.map.width-1)
+    let maxX = sx + a.numCols-1
+    if cx - sx > a.numCols-1: inc(sx)
+
   of South:
-    setCursor(x, y+1, a)
+    cy = min(cy+1, a.map.height-1)
+    let maxY = sy + a.numRows-1
+    if cy - sy > a.numRows-1: inc(sy)
+
   of West:
-    if x > 0: setCursor(x-1, y, a)
+    cx = max(cx-1, 0)
+    if cx < sx: dec(sx)
+
+  of North:
+    cy = max(cy-1, 0)
+    if cy < sy: dec(sy)
+
+  a.cursorCol = cx
+  a.cursorRow = cy
+  a.startCol = sx
+  a.startRow = sy
 
 # }}}
 # {{{ enterSelectMode()
@@ -208,8 +221,8 @@ func isKeyUp(ke: KeyEvent, keys: set[Key]): bool =
 
 # {{{ handleEvents()
 proc handleEvents(a) =
-  alias(curX, a.cursorX)
-  alias(curY, a.cursorY)
+  alias(curX, a.cursorCol)
+  alias(curY, a.cursorRow)
   alias(um, a.undoManager)
   alias(m, a.map)
   alias(win, a.win)
@@ -429,7 +442,7 @@ proc renderUI() =
       a.map,
       startCol = a.startCol, startRow = a.startRow,
       numCols = a.numCols, numRows = a.numRows,
-      a.cursorX, a.cursorY,
+      a.cursorCol, a.cursorRow,
       a.selection,
       a.selRect,
       none(CopyBuffer),

@@ -15,15 +15,23 @@ const
   MaxZoomLevel*        = 15
 
 
-# All drawing procs interpret the passed in (x,y) coordinates as the
+# Naming conventions
+# ------------------
+#
+# The names `col`, `row` (or `c`, `r`) refer to the zero-based coordinates of
+# a cell in a map. The cell in the top-left corner is the origin.
+#
+# Anything with `x` or `y` in the name refers to pixel-coordinates on the
+# screen.
+#
+# All drawing procs interpret the passed in `(x,y)` coordinates as the
 # upper-left corner of the object (e.g. a cell).
+#
 
 # {{{ DrawParams*
 type
+  # TODO separate into MapDrawStyle and MapDrawParams
   DrawParams* = ref object
-    startX*:   float
-    startY*:   float
-
     defaultFgColor*:      Color
 
     mapBackgroundColor*:  Color
@@ -44,6 +52,9 @@ type
     cellCoordsColor*:     Color
     cellCoordsColorHi*:   Color
     cellCoordsFontSize*:  float
+
+    startX*:   float
+    startY*:   float
 
     zoomLevel:            Natural
     gridSize:             float
@@ -103,7 +114,7 @@ proc drawBackgroundGrid(numCols, numRows: Natural, dp, vg) =
 # }}}
 # {{{ drawCellCoords()
 proc drawCellCoords(startCol, startRow, numCols, numRows: Natural,
-                    cursorX, cursorY: Natural, dp, vg) =
+                    cursorCol, cursorRow: Natural, dp, vg) =
 
   vg.fontFace("sans")
   vg.fontSize(dp.cellCoordsFontSize)
@@ -122,9 +133,9 @@ proc drawCellCoords(startCol, startRow, numCols, numRows: Natural,
   for x in 0..<numCols:
     let
       xPos = cellX(x, dp) + dp.gridSize/2
-      coord = $x
+      coord = $(startCol + x)
 
-    setTextHighlight(x == cursorX)
+    setTextHighlight(x == cursorCol)
 
     discard vg.text(xPos, dp.startY - 12, coord)
     discard vg.text(xPos, endY + 12, coord)
@@ -132,9 +143,9 @@ proc drawCellCoords(startCol, startRow, numCols, numRows: Natural,
   for y in 0..<numRows:
     let
       yPos = cellY(y, dp) + dp.gridSize/2
-      coord = $y
+      coord = $(startRow + y)
 
-    setTextHighlight(y == cursorY)
+    setTextHighlight(y == cursorRow)
 
     discard vg.text(dp.startX - 12, yPos, coord)
     discard vg.text(endX + 12, yPos, coord)
@@ -188,12 +199,13 @@ proc drawCursor(x, y: float, dp, vg) =
 
 # }}}
 # {{{ drawCursorGuides()
-proc drawCursorGuides(m: Map, cursorX, cursorY: Natural, dp, vg) =
+proc drawCursorGuides(m: Map, cursorCol, cursorRow: Natural,
+                      startCol, startRow, numCols, numRows: Natural, dp, vg) =
   let
-    x = cellX(cursorX, dp)
-    y = cellY(cursorY, dp)
-    w = dp.gridSize * m.width
-    h = dp.gridSize * m.height
+    x = cellX(cursorCol - startCol, dp)
+    y = cellY(cursorRow - startRow, dp)
+    w = dp.gridSize * numCols
+    h = dp.gridSize * numRows
 
   vg.fillColor(dp.cursorGuideColor)
   vg.strokeColor(dp.cursorGuideColor)
@@ -213,28 +225,28 @@ proc drawCursorGuides(m: Map, cursorX, cursorY: Natural, dp, vg) =
 # }}}
 # {{{ drawOutline()
 proc drawOutline(m: Map, dp, vg) =
-  func check(x, y: int): bool =
-    let x = max(min(x, m.width-1), 0)
-    let y = max(min(y, m.height-1), 0)
-    m.getFloor(x,y) != fNone
+  func check(col, row: int): bool =
+    let c = max(min(col, m.width-1), 0)
+    let r = max(min(row, m.height-1), 0)
+    m.getFloor(c,r) != fNone
 
-  func isOutline(x, y: Natural): bool =
-    check(x,   y+1) or
-    check(x+1, y+1) or
-    check(x+1, y  ) or
-    check(x+1, y-1) or
-    check(x  , y-1) or
-    check(x-1, y-1) or
-    check(x-1, y  ) or
-    check(x-1, y+1)
+  func isOutline(c, r: Natural): bool =
+    check(c,   r+1) or
+    check(c+1, r+1) or
+    check(c+1, r  ) or
+    check(c+1, r-1) or
+    check(c  , r-1) or
+    check(c-1, r-1) or
+    check(c-1, r  ) or
+    check(c-1, r+1)
 
-  for y in 0..<m.height:
-    for x in 0..<m.width:
-      if isOutline(x, y):
+  for r in 0..<m.height:
+    for c in 0..<m.width:
+      if isOutline(c, r):
         let
           sw = UltrathinStrokeWidth
-          x = snap(cellX(x, dp), sw)
-          y = snap(cellY(y, dp), sw)
+          x = snap(cellX(c, dp), sw)
+          y = snap(cellY(r, dp), sw)
 
         vg.strokeWidth(sw)
         vg.fillColor(dp.mapOutlineColor)
@@ -484,46 +496,66 @@ proc setVertTransform(x, y: float, dp, vg) =
   vg.translate(0, dp.vertTransformYFudgeFactor)
 
 # }}}
-# {{{ drawSelection()
-proc drawSelection(x, y: Natural, dp, vg) =
-  let xPos = cellX(x, dp)
-  let yPos = cellY(y, dp)
+# {{{ drawSelectionCell()
+proc drawSelectionCell(col, row, startCol, startRow: Natural, dp, vg) =
+  let x = cellX(col - startCol, dp)
+  let y = cellY(row - startRow, dp)
 
   vg.beginPath()
   vg.fillColor(dp.selectionColor)
-  vg.rect(xPos, yPos, dp.gridSize, dp.gridSize)
+  vg.rect(x, y, dp.gridSize, dp.gridSize)
   vg.fill()
 
 # }}}
-# {{{ drawFloor()
-proc drawFloor(m: Map, x, y: Natural, cursorActive: bool, dp, vg) =
+# {{{ drawSelection()
+proc drawSelection(sel: Selection, selRect: Option[SelectionRect],
+                   startCol, startRow, numCols, numRows: Natural,
+                   dp, vg) =
+  for c in startCol..<(startCol + numCols):
+    for r in startRow..<(startRow + numRows):
+      if selRect.isSome:
+        let sr = selRect.get
+        if sr.fillValue == true:
+          if sel[c,r] or sr.rect.contains(c,r):
+            drawSelectionCell(c, r, startCol, startRow, dp, vg)
+        else:
+          if not sr.rect.contains(c,r) and sel[c,r]:
+            drawSelectionCell(c, r, startCol, startRow, dp, vg)
+      else:
+        if sel[c,r]:
+          drawSelectionCell(c, r, startCol, startRow, dp, vg)
 
-  let xPos = cellX(x, dp)
-  let yPos = cellY(y, dp)
+# }}}
+# {{{ drawFloor()
+proc drawFloor(m: Map, col, row, startCol, startRow: Natural,
+               cursorActive: bool, dp, vg) =
+
+  let x = cellX(col - startCol, dp)
+  let y = cellY(row - startRow, dp)
 
   template drawOriented(drawProc: untyped) =
     drawBg()
-    case m.getFloorOrientation(x,y):
+    case m.getFloorOrientation(col, row):
     of Horiz:
-      drawProc(xPos, yPos + dp.gridSize/2, dp, vg)
+      drawProc(x, y + dp.gridSize/2, dp, vg)
     of Vert:
-      setVertTransform(xPos + dp.gridSize/2, yPos, dp, vg)
+      setVertTransform(x + dp.gridSize/2, y, dp, vg)
       drawProc(0, 0, dp, vg)
       vg.resetTransform()
 
   template draw(drawProc: untyped) =
     drawBg()
-    drawProc(xPos, yPos, dp, vg)
+    drawProc(x, y, dp, vg)
 
   proc drawBg() =
-    drawGround(xPos, yPos, dp.floorColor, dp, vg)
+    drawGround(x, y, dp.floorColor, dp, vg)
     if cursorActive:
-      drawCursor(xPos, yPos, dp, vg)
+      drawCursor(x, y, dp, vg)
 
-  case m.getFloor(x,y)
+  case m.getFloor(col, row)
   of fNone:
     if cursorActive:
-      drawCursor(xPos, yPos, dp, vg)
+      drawCursor(x, y, dp, vg)
 
   of fEmptyFloor:          drawBg()
   of fClosedDoor:          drawOriented(drawClosedDoorHoriz)
@@ -567,15 +599,31 @@ proc drawWall(x, y: float, wall: Wall, ot: Orientation, dp, vg) =
 
 # }}}
 # {{{ drawWalls()
-proc drawWalls(m: Map, x: Natural, y: Natural, dp, vg) =
-  drawWall(cellX(x, dp), cellY(y, dp), m.getWall(x,y, North), Horiz, dp, vg)
-  drawWall(cellX(x, dp), cellY(y, dp), m.getWall(x,y, West), Vert, dp, vg)
+proc drawWalls(m: Map, col, row, startCol, startRow: Natural, dp, vg) =
+  drawWall(
+    cellX(col - startCol, dp),
+    cellY(row - startRow, dp),
+    m.getWall(col, row, North), Horiz, dp, vg
+  )
+  drawWall(
+    cellX(col - startCol, dp),
+    cellY(row - startRow, dp),
+    m.getWall(col, row, West), Vert, dp, vg
+  )
 
-  if x == m.width-1:
-    drawWall(cellX(x+1, dp), cellY(y, dp), m.getWall(x,y, East), Vert, dp, vg)
+  if col == m.width-1:
+    drawWall(
+      cellX(col+1 - startCol, dp),
+      cellY(row - startRow, dp),
+      m.getWall(col, row, East), Vert, dp, vg
+    )
 
-  if y == m.height-1:
-    drawWall(cellX(x, dp), cellY(y+1, dp), m.getWall(x,y, South), Horiz, dp, vg)
+  if row == m.height-1:
+    drawWall(
+      cellX(col - startCol, dp),
+      cellY(row+1 - startRow, dp),
+      m.getWall(col, row, South), Horiz, dp, vg
+    )
 
 # }}}
 
@@ -626,7 +674,7 @@ proc numDisplayableCols*(dp; width: float): Natural =
 # {{{ drawMap*()
 proc drawMap*(m: Map,
               startCol, startRow, numCols, numRows: Natural,
-              cursorX, cursorY: Natural,
+              cursorCol, cursorRow: Natural,
               selection: Option[Selection], selRect: Option[SelectionRect],
               pastPreview: Option[CopyBuffer],
               dp, vg) =
@@ -634,7 +682,7 @@ proc drawMap*(m: Map,
   assert startCol + numCols <= m.width
   assert startRow + numRows <= m.height
 
-  drawCellCoords(startCol, startRow, numCols, numRows, cursorX, cursorY, dp, vg)
+  drawCellCoords(startCol, startRow, numCols, numRows, cursorCol, cursorRow, dp, vg)
   drawMapBackground(numCols, numRows, dp, vg)
   drawBackgroundGrid(numCols,numRows, dp, vg)
 
@@ -644,33 +692,22 @@ proc drawMap*(m: Map,
     endRow = startRow + numRows - 1
     endCell = startCol + numCols - 1
 
-  for y in startRow..endRow:
-    for x in startCol..endCell:
-      let cursorActive = x == cursorX and y == cursorY
-      drawFloor(m, x, y, cursorActive, dp, vg)
+  for r in startRow..endRow:
+    for c in startCol..endCell:
+      let cursorActive = c == cursorCol and r == cursorRow
+      drawFloor(m, c, r, startCol, startRow, cursorActive, dp, vg)
 
   if dp.drawCursorGuides:
-    drawCursorGuides(m, cursorX, cursorY, dp, vg)
+    drawCursorGuides(m, cursorCol, cursorRow, startCol, startRow,
+                     numCols, numRows, dp, vg)
 
-  for y in startRow..endRow:
-    for x in startCol..endCell:
-      drawWalls(m, x, y, dp, vg)
+  for r in startRow..endRow:
+    for c in startCol..endCell:
+      drawWalls(m, c, r, startCol, startRow, dp, vg)
 
   if selection.isSome:
-    let sel = selection.get
-    for x in 0..<sel.width:
-      for y in 0..<sel.height:
-        if selRect.isSome:
-          let sr = selRect.get
-          if sr.fillValue == true:
-            if sel[x,y] or sr.rect.contains(x,y):
-              drawSelection(x, y, dp, vg)
-          else:
-            if not sr.rect.contains(x,y) and sel[x,y]:
-              drawSelection(x, y, dp, vg)
-        else:
-          if sel[x,y]:
-            drawSelection(x, y, dp, vg)
+    drawSelection(selection.get, selRect, startCol, startRow, numCols, numRows,
+                  dp, vg)
 
 # }}}
 
