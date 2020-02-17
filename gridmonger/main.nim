@@ -103,6 +103,7 @@ proc newMapDialog() =
     x = dialogWidth - 2 * buttonWidth - buttonPad - 10
     y = dialogHeight - h - buttonPad
 
+    # TODO make it undoable
     let okAction = proc () =
       g_app.map = newMap(
         parseInt(g_newMapDialog_width),
@@ -110,6 +111,8 @@ proc newMapDialog() =
       )
       g_app.cursorCol = 0
       g_app.cursorRow = 0
+      g_app.startCol = 0
+      g_app.startRow = 0
       closeDialog()
 
     let cancelAction = proc () =
@@ -139,11 +142,14 @@ proc calcMapExtents(a) =
   let (winWidth, winHeight) = a.win.size
 
   # TODO -100
-  a.numCols = min(a.drawParams.numDisplayableCols(winWidth - 100.0),
-                  a.map.width)
+  a.numCols = min(a.drawParams.numDisplayableCols(winWidth - 100.0), a.map.width)
+  a.numRows = min(a.drawParams.numDisplayableRows(winHeight - 100.0), a.map.height)
 
-  a.numRows = min(a.drawParams.numDisplayableRows(winHeight - 100.0),
-                  a.map.height)
+  a.startCol = min(max(a.map.width - a.numCols, 0), a.startCol)
+  a.startRow = min(max(a.map.height - a.numRows, 0), a.startRow)
+
+  a.cursorCol = min(max(a.startCol + a.numCols - 1, a.startCol), a.cursorCol)
+  a.cursorRow = min(max(a.startRow + a.numRows - 1, a.startRow), a.cursorRow)
 
 # {{{ moveCursor()
 proc moveCursor(dir: Direction, a) =

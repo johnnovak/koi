@@ -30,13 +30,13 @@ const
 
 # {{{ DrawParams*
 type
-  # TODO separate into MapDrawStyle and MapDrawParams
+  # TODO separate into style and params
   DrawParams* = ref object
+    # MapStyle
     defaultFgColor*:      Color
 
     mapBackgroundColor*:  Color
     mapOutlineColor*:     Color
-    drawOutline*:         bool
 
     gridColorBackground*: Color
     gridColorFloor*:      Color
@@ -45,7 +45,6 @@ type
 
     cursorColor*:         Color
     cursorGuideColor*:    Color
-    drawCursorGuides*:    bool
 
     selectionColor*:      Color
 
@@ -53,9 +52,14 @@ type
     cellCoordsColorHi*:   Color
     cellCoordsFontSize*:  float
 
+    # DrawMapParams
     startX*:   float
     startY*:   float
 
+    drawOutline*:         bool
+    drawCursorGuides*:    bool
+
+    # internal
     zoomLevel:            Natural
     gridSize:             float
     normalStrokeWidth:    float
