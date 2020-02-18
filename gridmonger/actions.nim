@@ -67,20 +67,21 @@ proc pasteAction*(currMap; destCol, destRow: Natural, cb: CopyBuffer, um) =
     cellAreaAction(currMap, rect.get, um, m):
       for c in 0..<rect.get.width:
         for r in 0..<rect.get.height:
-          let floor = cb.map.getFloor(c,r)
-          m.setFloor(destCol+c, destRow+r, floor)
+          if cb.selection[c,r]:
+            let floor = cb.map.getFloor(c,r)
+            m.setFloor(destCol+c, destRow+r, floor)
 
-          template copyWall(dir: Direction) =
-            let w = cb.map.getWall(c,r, dir)
-            m.setWall(destCol+c, destRow+r, dir, w)
+            template copyWall(dir: Direction) =
+              let w = cb.map.getWall(c,r, dir)
+              m.setWall(destCol+c, destRow+r, dir, w)
 
-          if floor == fNone:
-            m.eraseOrphanedWalls(destCol+c, destRow+r)
-          else:
-            copyWall(North)
-            copyWall(West)
-            copyWall(South)
-            copyWall(East)
+            if floor == fNone:
+              m.eraseOrphanedWalls(destCol+c, destRow+r)
+            else:
+              copyWall(North)
+              copyWall(West)
+              copyWall(South)
+              copyWall(East)
 
 # }}}
 # {{{ setWallAction*()
