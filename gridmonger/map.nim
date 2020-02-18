@@ -1,6 +1,8 @@
+import options
 import streams
 
 import common
+import selection
 
 
 using m: Map
@@ -200,6 +202,34 @@ proc eraseCell*(m; c, r: Natural) =
   m.eraseCellWalls(c, r)
   m.setFloor(c, r, fNone)
 
+
+proc paste*(m; destCol, destRow: Natural, src: Map, sel: Selection) =
+  let rect = rectN(
+    destCol,
+    destRow,
+    destCol + src.width,
+    destRow + src.height
+  ).intersect(
+    rectN(0, 0, m.width, m.height)
+  )
+  if rect.isSome:
+    for c in 0..<rect.get.width:
+      for r in 0..<rect.get.height:
+        if sel[c,r]:
+          let floor = src.getFloor(c,r)
+          m.setFloor(destCol+c, destRow+r, floor)
+
+          template copyWall(dir: Direction) =
+            let w = src.getWall(c,r, dir)
+            m.setWall(destCol+c, destRow+r, dir, w)
+
+          if floor == fNone:
+            m.eraseOrphanedWalls(destCol+c, destRow+r)
+          else:
+            copyWall(North)
+            copyWall(West)
+            copyWall(South)
+            copyWall(East)
 
 # TODO
 proc serialize(m; s: var Stream) =

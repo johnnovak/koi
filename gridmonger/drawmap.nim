@@ -47,6 +47,7 @@ type
     cursorGuideColor*:    Color
 
     selectionColor*:      Color
+    pastePreviewColor*:   Color
 
     cellCoordsColor*:     Color
     cellCoordsColorHi*:   Color
@@ -531,11 +532,10 @@ proc drawSelection(sel: Selection, selRect: Option[SelectionRect],
 
 # }}}
 # {{{ drawFloor()
-proc drawFloor(m: Map, col, row, startCol, startRow: Natural,
-               cursorActive: bool, dp, vg) =
+proc drawFloor(m: Map, col, row: Natural, cursorActive: bool, dp, vg) =
 
-  let x = cellX(col - startCol, dp)
-  let y = cellY(row - startRow, dp)
+  let x = cellX(col, dp)
+  let y = cellY(row, dp)
 
   template drawOriented(drawProc: untyped) =
     drawBg()
@@ -603,38 +603,37 @@ proc drawWall(x, y: float, wall: Wall, ot: Orientation, dp, vg) =
 
 # }}}
 # {{{ drawWalls()
-proc drawWalls(m: Map, col, row, startCol, startRow, numCols, numRows: Natural,
-               dp, vg) =
+proc drawWalls(m: Map, col, row, numCols, numRows: Natural, dp, vg) =
 
   let floorEmpty = m.getFloor(col, row) == fNone
 
-  if row > startRow or (row == startRow and not floorEmpty):
+  if row > 0 or (row == 0 and not floorEmpty):
     drawWall(
-      cellX(col - startCol, dp),
-      cellY(row - startRow, dp),
+      cellX(col, dp),
+      cellY(row, dp),
       m.getWall(col, row, North), Horiz, dp, vg
     )
 
-  if col > startCol or (col == startCol and not floorEmpty):
+  if col > 0 or (col == 0 and not floorEmpty):
     drawWall(
-      cellX(col - startCol, dp),
-      cellY(row - startRow, dp),
+      cellX(col, dp),
+      cellY(row, dp),
       m.getWall(col, row, West), Vert, dp, vg
     )
 
-  let endCol = startCol + numCols-1
+  let endCol = numCols-1
   if col < endCol or (col == endCol and not floorEmpty):
     drawWall(
-      cellX(col+1 - startCol, dp),
-      cellY(row - startRow, dp),
+      cellX(col+1, dp),
+      cellY(row, dp),
       m.getWall(col, row, East), Vert, dp, vg
     )
 
-  let endRow = startRow + numRows-1
+  let endRow = numRows-1
   if row < endRow or (row == endRow and not floorEmpty):
     drawWall(
-      cellX(col - startCol, dp),
-      cellY(row+1 - startRow, dp),
+      cellX(col, dp),
+      cellY(row+1, dp),
       m.getWall(col, row, South), Horiz, dp, vg
     )
 
@@ -689,7 +688,7 @@ proc drawMap*(m: Map,
               startCol, startRow, numCols, numRows: Natural,
               cursorCol, cursorRow: Natural,
               selection: Option[Selection], selRect: Option[SelectionRect],
-              pastPreview: Option[CopyBuffer],
+              pastePreview: Option[CopyBuffer],
               dp, vg) =
 
   assert startCol + numCols <= m.width
@@ -702,15 +701,19 @@ proc drawMap*(m: Map,
   if dp.drawOutline:
     drawOutline(m, dp, vg)
 
-  let
-    endRow = startRow + numRows - 1
-    endCell = startCol + numCols - 1
+  let buf = newMapFrom(
+    m, rectN(startCol, startRow, startCol + numCols, startRow + numRows)
+  )
 
-  for r in startRow..endRow:
-    for c in startCol..endCell:
-      let cursorActive = c == cursorCol and r == cursorRow
-      drawFloor(m, c, r, startCol, startRow, cursorActive, dp, vg)
-      drawWalls(m, c, r, startCol, startRow, numCols, numRows, dp, vg)
+  if pastePreview.isSome:
+    buf.paste(cursorCol, cursorRow,
+              pastePreview.get.map, pastePreview.get.selection)
+
+  for r in 0..<numRows:
+    for c in 0..<numCols:
+      let cursorActive = startCol+c == cursorCol and startRow+r == cursorRow
+      drawFloor(buf, c, r, cursorActive, dp, vg)
+      drawWalls(buf, c, r, numCols, numRows, dp, vg)
 
   if dp.drawCursorGuides:
     drawCursorGuides(m, cursorCol, cursorRow, startCol, startRow,
@@ -719,6 +722,11 @@ proc drawMap*(m: Map,
   if selection.isSome:
     drawSelection(selection.get, selRect, startCol, startRow, numCols, numRows,
                   dp, vg)
+
+#  if pastePreview.isSome:
+#    drawPastePreviewHighlight(pastePreview.get.selection,
+#                              cursorCol - startCol, cursorRow - startRow,
+#                              numCols, numRows, dp, vg)
 
 # }}}
 

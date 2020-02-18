@@ -32,6 +32,7 @@ type
     emClearFloor,
     emSelectDraw,
     emSelectRect
+    emPastePreview
 
   AppContext = ref object
     vg:          NVGContext
@@ -320,6 +321,10 @@ proc handleEvents(a) =
         if a.copyBuf.isSome:
           pasteAction(m, curX, curY, a.copyBuf.get, um)
 
+      elif ke.isKeyDown(keyP, {mkShift}):
+        if a.copyBuf.isSome:
+          a.editMode = emPastePreview
+
       elif ke.isKeyDown(keyEqual, repeat=true):
         a.drawParams.incZoomLevel()
         updateMapAndCursorPosition(a)
@@ -442,6 +447,27 @@ proc handleEvents(a) =
         a.selRect = none(SelectionRect)
         a.editMode = emSelectDraw
 
+    of emPastePreview:
+      if ke.isKeyDown(MoveKeysLeft,  repeat=true): moveCursor(West, a)
+      if ke.isKeyDown(MoveKeysRight, repeat=true): moveCursor(East, a)
+      if ke.isKeyDown(MoveKeysUp,    repeat=true): moveCursor(North, a)
+      if ke.isKeyDown(MoveKeysDown,  repeat=true): moveCursor(South, a)
+
+      elif ke.isKeyDown({keyEnter, keyP}):
+        pasteAction(m, curX, curY, a.copyBuf.get, um)
+        a.editMode = emNormal
+
+      elif ke.isKeyDown(keyEqual, repeat=true):
+        a.drawParams.incZoomLevel()
+        updateMapAndCursorPosition(a)
+
+      elif ke.isKeyDown(keyMinus, repeat=true):
+        a.drawParams.decZoomLevel()
+        updateMapAndCursorPosition(a)
+
+      elif ke.isKeyDown(keyEscape):
+        a.editMode = emNormal
+
 # }}}
 # {{{ renderUI()
 
@@ -461,7 +487,7 @@ proc renderUI() =
       a.cursorCol, a.cursorRow,
       a.selection,
       a.selRect,
-      none(CopyBuffer),
+      if a.editMode == emPastePreview: a.copyBuf else: none(CopyBuffer),
       a.drawParams,
       a.vg
     )
