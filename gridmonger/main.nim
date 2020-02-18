@@ -39,6 +39,7 @@ type
     win:         Window
 
     map:         Map
+    mapStyle:    MapStyle
     cursorCol:   Natural
     cursorRow:   Natural
 
@@ -488,8 +489,7 @@ proc renderUI() =
       a.selection,
       a.selRect,
       if a.editMode == emPastePreview: a.copyBuf else: none(CopyBuffer),
-      a.drawParams,
-      a.vg
+      MapDrawContext(ms: a.mapStyle, dp: a.drawParams, vg: a.vg)
     )
 
   g_textFieldVal1 = koi.textField(
@@ -542,32 +542,29 @@ proc framebufSizeCb(win: Window, size: tuple[w, h: int32]) =
 # }}}
 
 # {{{ init & cleanup
+proc createDefaultMapStyle(): MapStyle =
+  var ms = new MapStyle
+  ms.cellCoordsColor     = gray(0.9)
+  ms.cellCoordsColorHi   = rgb(1.0, 0.75, 0.0)
+  ms.cellCoordsFontSize  = 15.0
+  ms.cursorColor         = rgb(1.0, 0.65, 0.0)
+  ms.cursorGuideColor    = rgba(1.0, 0.65, 0.0, 0.2)
+  ms.defaultFgColor      = gray(0.1)
+  ms.floorColor          = gray(0.9)
+  ms.gridColorBackground = gray(0.0, 0.3)
+  ms.gridColorFloor      = gray(0.0, 0.2)
+  ms.mapBackgroundColor  = gray(0.0, 0.7)
+  ms.mapOutlineColor     = gray(0.23)
+  ms.selectionColor      = rgba(1.0, 0.5, 0.5, 0.5)
+  result = ms
+
 proc initDrawParams(a) =
   alias(dp, a.drawParams)
 
   dp.startX = 50.0
   dp.startY = 50.0
-
-  dp.defaultFgColor  = gray(0.1)
-
-  dp.gridColorBackground = gray(0.0, 0.3)
-  dp.gridColorFloor      = gray(0.0, 0.2)
-
-  dp.floorColor          = gray(0.9)
-
-  dp.mapBackgroundColor  = gray(0.0, 0.7)
-  dp.mapOutlineColor     = gray(0.23)
   dp.drawOutline         = false
-
-  dp.cursorColor         = rgb(1.0, 0.65, 0.0)
-  dp.cursorGuideColor    = rgba(1.0, 0.65, 0.0, 0.2)
   dp.drawCursorGuides    = false
-
-  dp.selectionColor      = rgba(1.0, 0.5, 0.5, 0.5)
-
-  dp.cellCoordsColor     = gray(0.9)
-  dp.cellCoordsColorHi   = rgb(1.0, 0.75, 0.0)
-  dp.cellCoordsFontSize  = 15.0
 
 
 proc createWindow(): Window =
@@ -617,6 +614,7 @@ proc init(): Window =
   loadData(g_app.vg)
 
   g_app.map = newMap(16, 16)
+  g_app.mapStyle = createDefaultMapStyle()
   g_app.undoManager = newUndoManager[Map]()
   g_app.drawParams = new DrawParams
   initDrawParams(g_app)
