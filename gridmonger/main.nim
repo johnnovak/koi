@@ -50,7 +50,7 @@ type
 
     startCol, startRow: Natural
     numCols, numRows:   Natural
-    drawParams:         DrawParams
+    drawMapParams:      DrawMapParams
 
     undoManager: UndoManager[Map]
 
@@ -145,8 +145,8 @@ proc updateMapAndCursorPosition(a) =
   let (winWidth, winHeight) = a.win.size
 
   # TODO -100
-  a.numCols = min(a.drawParams.numDisplayableCols(winWidth - 100.0), a.map.width)
-  a.numRows = min(a.drawParams.numDisplayableRows(winHeight - 100.0), a.map.height)
+  a.numCols = min(a.drawMapParams.numDisplayableCols(winWidth - 100.0), a.map.width)
+  a.numRows = min(a.drawMapParams.numDisplayableRows(winHeight - 100.0), a.map.height)
 
   a.startCol = min(max(a.map.width - a.numCols, 0), a.startCol)
   a.startRow = min(max(a.map.height - a.numRows, 0), a.startRow)
@@ -190,13 +190,13 @@ proc moveCursor(dir: Direction, a) =
 proc enterSelectMode(a) =
   a.editMode = emSelectDraw
   a.selection = some(newSelection(a.map.width, a.map.height))
-  a.drawParams.drawCursorGuides = true
+  a.drawMapParams.drawCursorGuides = true
 
 # }}}
 # {{{ exitSelectMode()
 proc exitSelectMode(a) =
   a.editMode = emNormal
-  a.drawParams.drawCursorGuides = false
+  a.drawMapParams.drawCursorGuides = false
   a.selection = none(Selection)
 
 # }}}
@@ -327,11 +327,11 @@ proc handleEvents(a) =
           a.editMode = emPastePreview
 
       elif ke.isKeyDown(keyEqual, repeat=true):
-        a.drawParams.incZoomLevel()
+        a.drawMapParams.incZoomLevel()
         updateMapAndCursorPosition(a)
 
       elif ke.isKeyDown(keyMinus, repeat=true):
-        a.drawParams.decZoomLevel()
+        a.drawMapParams.decZoomLevel()
         updateMapAndCursorPosition(a)
 
       elif ke.isKeyDown(keyN, {mkCtrl}):
@@ -410,11 +410,11 @@ proc handleEvents(a) =
         exitSelectMode(a)
 
       elif ke.isKeyDown(keyEqual, repeat=true):
-        a.drawParams.incZoomLevel()
+        a.drawMapParams.incZoomLevel()
         updateMapAndCursorPosition(a)
 
       elif ke.isKeyDown(keyMinus, repeat=true):
-        a.drawParams.decZoomLevel()
+        a.drawMapParams.decZoomLevel()
         updateMapAndCursorPosition(a)
 
       elif ke.isKeyDown(keyEscape):
@@ -459,11 +459,11 @@ proc handleEvents(a) =
         a.editMode = emNormal
 
       elif ke.isKeyDown(keyEqual, repeat=true):
-        a.drawParams.incZoomLevel()
+        a.drawMapParams.incZoomLevel()
         updateMapAndCursorPosition(a)
 
       elif ke.isKeyDown(keyMinus, repeat=true):
-        a.drawParams.decZoomLevel()
+        a.drawMapParams.decZoomLevel()
         updateMapAndCursorPosition(a)
 
       elif ke.isKeyDown(keyEscape):
@@ -489,7 +489,7 @@ proc renderUI() =
       a.selection,
       a.selRect,
       if a.editMode == emPastePreview: a.copyBuf else: none(CopyBuffer),
-      MapDrawContext(ms: a.mapStyle, dp: a.drawParams, vg: a.vg)
+      DrawMapContext(ms: a.mapStyle, dp: a.drawMapParams, vg: a.vg)
     )
 
   g_textFieldVal1 = koi.textField(
@@ -558,8 +558,8 @@ proc createDefaultMapStyle(): MapStyle =
   ms.selectionColor      = rgba(1.0, 0.5, 0.5, 0.5)
   result = ms
 
-proc initDrawParams(a) =
-  alias(dp, a.drawParams)
+proc initDrawMapParams(a) =
+  alias(dp, a.drawMapParams)
 
   dp.startX = 50.0
   dp.startY = 50.0
@@ -616,10 +616,10 @@ proc init(): Window =
   g_app.map = newMap(16, 16)
   g_app.mapStyle = createDefaultMapStyle()
   g_app.undoManager = newUndoManager[Map]()
-  g_app.drawParams = new DrawParams
-  initDrawParams(g_app)
+  g_app.drawMapParams = new DrawMapParams
+  initDrawMapParams(g_app)
 
-  g_app.drawParams.setZoomLevel(DefaultZoomLevel)
+  g_app.drawMapParams.setZoomLevel(DefaultZoomLevel)
 
   koi.init(g_app.vg)
 

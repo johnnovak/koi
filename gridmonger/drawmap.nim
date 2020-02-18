@@ -45,7 +45,7 @@ type
     pastePreviewColor*:   Color
     selectionColor*:      Color
 
-  DrawParams* = ref object
+  DrawMapParams* = ref object
     # DrawMapParams
     startX*:   float
     startY*:   float
@@ -60,16 +60,16 @@ type
 
     vertTransformYFudgeFactor: float
 
-  MapDrawContext* = object
+  DrawMapContext* = object
     ms*: MapStyle
-    dp*: DrawParams
+    dp*: DrawMapParams
     vg*: NVGContext
 
 # }}}
 
 using
-  dp: DrawParams
-  ctx: MapDrawContext
+  dp: DrawMapParams
+  ctx: DrawMapContext
 
 # {{{ utils
 
