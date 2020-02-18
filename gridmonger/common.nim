@@ -102,11 +102,13 @@ type
 
 
 type
+  # TODO make ref?
   SelectionRect* = object
     x0*, y0*:   Natural
     rect*:      Rect[Natural]
     fillValue*: bool
 
+  # TODO make ref?
   CopyBuffer* = object
     map*:       Map
     selection*: Selection

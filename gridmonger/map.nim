@@ -66,6 +66,7 @@ proc copyFrom*(dest: var Map, destCol, destRow: Natural,
   # This function cannot fail as the copied area is clipped to the extents of
   # the destination area (so nothing gets copied in the worst case).
   let
+    # TODO use rect.intersect
     srcCol = srcRect.x1
     srcRow = srcRect.y1
     srcWidth   = max(src.width - srcCol, 0)
@@ -163,12 +164,11 @@ proc setWall*(m; c, r: Natural, dir: Direction, w: Wall) =
   assert c < m.width
   assert r < m.height
 
-  if canSetWall(m, c, r, dir):
-    case dir
-    of North: m[c,   r  ].wallN = w
-    of West:  m[c,   r  ].wallW = w
-    of South: m[c,   r+1].wallN = w
-    of East:  m[c+1, r  ].wallW = w
+  case dir
+  of North: m[c,   r  ].wallN = w
+  of West:  m[c,   r  ].wallW = w
+  of South: m[c,   r+1].wallN = w
+  of East:  m[c+1, r  ].wallW = w
 
 
 proc eraseCellWalls*(m; c, r: Natural) =
@@ -179,6 +179,18 @@ proc eraseCellWalls*(m; c, r: Natural) =
   m.setWall(c,r, West,  wNone)
   m.setWall(c,r, South, wNone)
   m.setWall(c,r, East,  wNone)
+
+
+proc eraseOrphanedWalls*(m; c, r: Natural) =
+  template cleanWall(dir: Direction) =
+    if m.isNeighbourCellEmpty(c,r, dir):
+      m.setWall(c,r, dir, wNone)
+
+  if m.getFloor(c,r) == fNone:
+    cleanWall(North)
+    cleanWall(West)
+    cleanWall(South)
+    cleanWall(East)
 
 
 proc eraseCell*(m; c, r: Natural) =

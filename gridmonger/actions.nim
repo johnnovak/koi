@@ -11,103 +11,123 @@ using
   um: var UndoManager[Map]
 
 # {{{ cellAreaAction()
-template cellAreaAction(currMap; r: Rect[Natural], um;
+template cellAreaAction(currMap; rect: Rect[Natural], um;
                         actionMap, actionBody: untyped) =
   let action = proc (actionMap: var Map) =
     actionBody
 
-  var undoMap = newMapFrom(currMap, r)
+  var undoMap = newMapFrom(currMap, rect)
   var undoAction = proc (m: var Map) =
-    m.copyFrom(destCol=r.x1, destRow=r.y1,
-               undoMap, rectN(0, 0, r.width, r.height))
+    m.copyFrom(destCol=rect.x1, destRow=rect.y1,
+               undoMap, rectN(0, 0, rect.width, rect.height))
 
   um.storeUndoState(undoAction, redoAction=action)
   action(currMap)
 
 # }}}
 # {{{ singleCellAction()
-template singleCellAction(currMap; x, y: Natural, um;
+template singleCellAction(currMap; c, r: Natural, um;
                           actionMap, actionBody: untyped) =
-  cellAreaAction(currMap, rectN(x, y, x+1, y+1), um, actionMap, actionBody)
+  cellAreaAction(currMap, rectN(c, r, c+1, r+1), um, actionMap, actionBody)
 
 # }}}
 
 # {{{ eraseCellWallsAction*()
-proc eraseCellWallsAction*(currMap; x, y: Natural, um) =
-  singleCellAction(currMap, x, y, um, m):
-    m.eraseCellWalls(x, y)
+proc eraseCellWallsAction*(currMap; c, r: Natural, um) =
+  singleCellAction(currMap, c, r, um, m):
+    m.eraseCellWalls(c, r)
 
 # }}}
 # {{{ eraseCellAction*()
-proc eraseCellAction*(currMap; x, y: Natural, um) =
-  singleCellAction(currMap, x, y, um, m):
-    m.eraseCell(x, y)
+proc eraseCellAction*(currMap; c, r: Natural, um) =
+  singleCellAction(currMap, c, r, um, m):
+    m.eraseCell(c, r)
 
 # }}}
 # {{{ eraseSelectionAction*()
 proc eraseSelectionAction*(currMap; sel: Selection, bbox: Rect[Natural], um) =
   cellAreaAction(currMap, bbox, um, m):
-    for y in 0..<sel.height:
-      for x in 0..<sel.width:
-        if sel[x,y]:
-          m.eraseCell(bbox.x1 + x, bbox.y1 + y)
+    for r in 0..<sel.height:
+      for c in 0..<sel.width:
+        if sel[c,r]:
+          m.eraseCell(bbox.x1 + c, bbox.y1 + r)
 
 # }}}
 # {{{ pasteAction*()
-proc pasteAction*(currMap; x, y: Natural, cb: CopyBuffer, um) =
-  let r = rectN(x, y, x + cb.map.width, y + cb.map.height).intersect(
+proc pasteAction*(currMap; destCol, destRow: Natural, cb: CopyBuffer, um) =
+  let rect = rectN(
+    destCol,
+    destRow,
+    destCol + cb.map.width,
+    destRow + cb.map.height
+  ).intersect(
     rectN(0, 0, currMap.width, currMap.height)
   )
-  if r.isSome:
-    cellAreaAction(currMap, r.get, um, m):
-      m.copyFrom(x, y, cb.map, rectN(0, 0, cb.map.width, cb.map.height))
+  if rect.isSome:
+    cellAreaAction(currMap, rect.get, um, m):
+      for c in 0..<rect.get.width:
+        for r in 0..<rect.get.height:
+          let floor = cb.map.getFloor(c,r)
+          m.setFloor(destCol+c, destRow+r, floor)
+
+          template copyWall(dir: Direction) =
+            let w = cb.map.getWall(c,r, dir)
+            m.setWall(destCol+c, destRow+r, dir, w)
+
+          if floor == fNone:
+            m.eraseOrphanedWalls(destCol+c, destRow+r)
+          else:
+            copyWall(North)
+            copyWall(West)
+            copyWall(South)
+            copyWall(East)
 
 # }}}
 # {{{ setWallAction*()
-proc setWallAction*(currMap; x, y: Natural, dir: Direction, w: Wall, um) =
-  singleCellAction(currMap, x, y, um, m):
-    m.setWall(x, y, dir, w)
+proc setWallAction*(currMap; c, r: Natural, dir: Direction, w: Wall, um) =
+  singleCellAction(currMap, c, r, um, m):
+    m.setWall(c, r, dir, w)
 
 # }}}
 # {{{ setFloorAction*()
-proc setFloorAction*(currMap; x, y: Natural, f: Floor, um) =
-  singleCellAction(currMap, x, y, um, m):
-    m.setFloor(x, y, f)
+proc setFloorAction*(currMap; c, r: Natural, f: Floor, um) =
+  singleCellAction(currMap, c, r, um, m):
+    m.setFloor(c, r, f)
 
 # }}}
 # {{{ excavateAction*()
-proc excavateAction*(currMap; x, y: Natural, um) =
-  singleCellAction(currMap, x, y, um, m):
-    if m.getFloor(x,y) == fNone:
-      m.setFloor(x,y, fEmptyFloor)
+proc excavateAction*(currMap; c, r: Natural, um) =
+  singleCellAction(currMap, c, r, um, m):
+    if m.getFloor(c,r) == fNone:
+      m.setFloor(c,r, fEmptyFloor)
 
-    if y == 0 or m.getFloor(x,y-1) == fNone:
-      m.setWall(x,y, North, wWall)
+    if r == 0 or m.getFloor(c,r-1) == fNone:
+      m.setWall(c,r, North, wWall)
     else:
-      m.setWall(x,y, North, wNone)
+      m.setWall(c,r, North, wNone)
 
-    if x == 0 or m.getFloor(x-1,y) == fNone:
-      m.setWall(x,y, West, wWall)
+    if c == 0 or m.getFloor(c-1,r) == fNone:
+      m.setWall(c,r, West, wWall)
     else:
-      m.setWall(x,y, West, wNone)
+      m.setWall(c,r, West, wNone)
 
-    if y == m.height-1 or m.getFloor(x,y+1) == fNone:
-      m.setWall(x,y, South, wWall)
+    if r == m.height-1 or m.getFloor(c,r+1) == fNone:
+      m.setWall(c,r, South, wWall)
     else:
-      m.setWall(x,y, South, wNone)
+      m.setWall(c,r, South, wNone)
 
-    if x == m.width-1 or m.getFloor(x+1,y) == fNone:
-      m.setWall(x,y, East, wWall)
+    if c == m.width-1 or m.getFloor(c+1,r) == fNone:
+      m.setWall(c,r, East, wWall)
     else:
-      m.setWall(x,y, East, wNone)
+      m.setWall(c,r, East, wNone)
 
 # }}}
 # {{{ toggleFloorOrientationAction*()
 # TODO unnecessary
-proc toggleFloorOrientationAction*(currMap; x, y: Natural, um) =
-  singleCellAction(currMap, x, y, um, m):
-    let newOt = if m.getFloorOrientation(x, y) == Horiz: Vert else: Horiz
-    m.setFloorOrientation(x, y, newOt)
+proc toggleFloorOrientationAction*(currMap; c, r: Natural, um) =
+  singleCellAction(currMap, c, r, um, m):
+    let newOt = if m.getFloorOrientation(c, r) == Horiz: Vert else: Horiz
+    m.setFloorOrientation(c, r, newOt)
 
 # }}}
 

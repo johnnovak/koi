@@ -164,12 +164,10 @@ proc moveCursor(dir: Direction, a) =
   case dir:
   of East:
     cx = min(cx+1, a.map.width-1)
-    let maxX = sx + a.numCols-1
     if cx - sx > a.numCols-1: inc(sx)
 
   of South:
     cy = min(cy+1, a.map.height-1)
-    let maxY = sy + a.numRows-1
     if cy - sy > a.numRows-1: inc(sy)
 
   of West:
@@ -202,6 +200,14 @@ proc exitSelectMode(a) =
 # }}}
 # {{{ copySelection()
 proc copySelection(a): Option[Rect[Natural]] =
+
+  proc eraseOrphanedWalls(cb: CopyBuffer) =
+    let sel = cb.selection
+    var m = cb.map
+    for c in 0..<m.width:
+      for r in 0..<m.height:
+        m.eraseOrphanedWalls(c,r)
+
   let sel = a.selection.get
   let bbox = sel.boundingBox()
   if bbox.isSome:
@@ -209,6 +215,7 @@ proc copySelection(a): Option[Rect[Natural]] =
       selection: newSelectionFrom(a.selection.get, bbox.get),
       map: newMapFrom(a.map, bbox.get)
     ))
+    eraseOrphanedWalls(a.copyBuf.get)
   result = bbox
 
 # }}}
