@@ -35,21 +35,28 @@ type
     emPastePreview
 
   AppContext = ref object
+    # Context
     win:            Window
     vg:             NVGContext
 
-    map:            Map
-    mapStyle:       MapStyle
-    drawMapParams:  DrawMapParams
+    # Dependencies
+    undoManager:    UndoManager[Map]
 
+    # Document (group under 'doc'?)
+    map:            Map
+
+    # Options (group under 'opts'?)
+    scrollMargin:   Natural
+    mapStyle:       MapStyle
+
+    # UI state (group under 'ui'?)
     editMode:       EditMode
     cursorCol:      Natural
     cursorRow:      Natural
     selection:      Option[Selection]
     selRect:        Option[SelectionRect]
     copyBuf:        Option[CopyBuffer]
-
-    undoManager:    UndoManager[Map]
+    drawMapParams:  DrawMapParams
 
 
 var g_app: AppContext
@@ -173,19 +180,23 @@ proc moveCursor(dir: Direction, a) =
   case dir:
   of East:
     cx = min(cx+1, a.map.cols-1)
-    if cx - sx > dp.viewCols-1: inc(sx)
+    if cx - sx > dp.viewCols-1 - a.scrollMargin:
+      sx = min(max(a.map.cols - dp.viewCols, 0), sx+1)
 
   of South:
     cy = min(cy+1, a.map.rows-1)
-    if cy - sy > dp.viewRows-1: inc(sy)
+    if cy - sy > dp.viewRows-1 - a.scrollMargin:
+      sy = min(max(a.map.rows - dp.viewRows, 0), sy+1)
 
   of West:
     cx = max(cx-1, 0)
-    if cx < sx: dec(sx)
+    if cx < sx + a.scrollMargin:
+      sx = max(sx-1, 0)
 
   of North:
     cy = max(cy-1, 0)
-    if cy < sy: dec(sy)
+    if cy < sy + a.scrollMargin:
+      sy = max(sy-1, 0)
 
   a.cursorCol = cx
   a.cursorRow = cy
@@ -622,10 +633,12 @@ proc init(): Window =
   g_app.map = newMap(16, 16)
   g_app.mapStyle = createDefaultMapStyle()
   g_app.undoManager = newUndoManager[Map]()
+
   g_app.drawMapParams = new DrawMapParams
   initDrawMapParams(g_app)
-
   g_app.drawMapParams.setZoomLevel(DefaultZoomLevel)
+
+  g_app.scrollMargin = 3
 
   koi.init(g_app.vg)
 
