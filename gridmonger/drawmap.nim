@@ -21,9 +21,8 @@ const
 # The names `col`, `row` (or `c`, `r`) refer to the zero-based coordinates of
 # a cell in a map. The cell in the top-left corner is the origin.
 #
-# `screenCol` and `screenRow` refer to the cell coodinates of a screen buffer
-# that contains a rectangular area of a map (just the area that's visible on
-# the screen).
+# `viewCol` and `viewRow` refer to the zero-based cell coodinates of a rectangular
+# subarea of the map (the active view).
 #
 # Anything with `x` or `y` in the name refers to pixel-coordinates within the
 # window's drawing area (top-left corner is the origin).
@@ -34,6 +33,7 @@ const
 
 # {{{ Types
 type
+  # TODO use better names
   MapStyle* = ref object
     cellCoordsColor*:     Color
     cellCoordsColorHi*:   Color
@@ -57,10 +57,10 @@ type
     cursorCol*:    Natural
     cursorRow*:    Natural
 
-    startCol*:     Natural
-    startRow*:     Natural
-    numCols*:      Natural
-    numRows*:      Natural
+    viewStartCol*:     Natural
+    viewStartRow*:     Natural
+    viewCols*:      Natural
+    viewRows*:      Natural
 
     selection*:    Option[Selection]
     selRect*:      Option[SelectionRect]
@@ -85,7 +85,7 @@ type
 # }}}
 
 using
-  dp: DrawMapParams
+  dp:  DrawMapParams
   ctx: DrawMapContext
 
 # {{{ zoomLevel*()
@@ -161,10 +161,10 @@ proc drawBackgroundGrid(ctx) =
   vg.strokeColor(ms.gridColorBackground)
   vg.strokeWidth(strokeWidth)
 
-  let endX = snap(cellX(dp.numCols, dp), strokeWidth)
-  let endY = snap(cellY(dp.numRows, dp), strokeWidth)
+  let endX = snap(cellX(dp.viewCols, dp), strokeWidth)
+  let endY = snap(cellY(dp.viewRows, dp), strokeWidth)
 
-  for x in 0..dp.numCols:
+  for x in 0..dp.viewCols:
     let x = snap(cellX(x, dp), strokeWidth)
     let y = snap(dp.startY, strokeWidth)
     vg.beginPath()
@@ -172,7 +172,7 @@ proc drawBackgroundGrid(ctx) =
     vg.lineTo(x, endY)
     vg.stroke()
 
-  for y in 0..dp.numRows:
+  for y in 0..dp.viewRows:
     let x = snap(dp.startX, strokeWidth)
     let y = snap(cellY(y, dp), strokeWidth)
     vg.beginPath()
@@ -198,23 +198,23 @@ proc drawCellCoords(ctx) =
       vg.fillColor(ms.cellCoordsColor)
       vg.fontFace("sans")
 
-  let endX = dp.startX + dp.gridSize * dp.numCols
-  let endY = dp.startY + dp.gridSize * dp.numRows
+  let endX = dp.startX + dp.gridSize * dp.viewCols
+  let endY = dp.startY + dp.gridSize * dp.viewRows
 
-  for x in 0..<dp.numCols:
+  for x in 0..<dp.viewCols:
     let
       xPos = cellX(x, dp) + dp.gridSize/2
-      coord = $(dp.startCol + x)
+      coord = $(dp.viewStartCol + x)
 
     setTextHighlight(x == dp.cursorCol)
 
     discard vg.text(xPos, dp.startY - 12, coord)
     discard vg.text(xPos, endY + 12, coord)
 
-  for y in 0..<dp.numRows:
+  for y in 0..<dp.viewRows:
     let
       yPos = cellY(y, dp) + dp.gridSize/2
-      coord = $(dp.startRow + y)
+      coord = $(dp.viewStartRow + y)
 
     setTextHighlight(y == dp.cursorRow)
 
@@ -235,8 +235,8 @@ proc drawMapBackground(ctx) =
   vg.strokeWidth(strokeWidth)
 
   let
-    w = dp.gridSize * dp.numCols
-    h = dp.gridSize * dp.numRows
+    w = dp.gridSize * dp.viewCols
+    h = dp.gridSize * dp.viewRows
     offs = max(w, h)
     lineSpacing = strokeWidth * 2
 
@@ -284,10 +284,10 @@ proc drawCursorGuides(m: Map, ctx) =
   let vg = ctx.vg
 
   let
-    x = cellX(dp.cursorCol - dp.startCol, dp)
-    y = cellY(dp.cursorRow - dp.startRow, dp)
-    w = dp.gridSize * dp.numCols
-    h = dp.gridSize * dp.numRows
+    x = cellX(dp.cursorCol - dp.viewStartCol, dp)
+    y = cellY(dp.cursorRow - dp.viewStartRow, dp)
+    w = dp.gridSize * dp.viewCols
+    h = dp.gridSize * dp.viewRows
 
   vg.fillColor(ms.cursorGuideColor)
   vg.strokeColor(ms.cursorGuideColor)
@@ -326,6 +326,7 @@ proc drawOutline(m: Map, ctx) =
     check(c-1, r  ) or
     check(c-1, r+1)
 
+  # TODO just do this for the view
   for r in 0..<m.rows:
     for c in 0..<m.cols:
       if isOutline(c, r):
@@ -613,58 +614,20 @@ proc setVertTransform(x, y: float, ctx) =
   vg.translate(0, dp.vertTransformYFudgeFactor)
 
 # }}}
-# {{{ drawSelectionCell()
-proc drawSelectionCell(col, row: Natural, ctx) =
-  let ms = ctx.ms
-  let dp = ctx.dp
-  let vg = ctx.vg
-
-  let x = cellX(col - dp.startCol, dp)
-  let y = cellY(row - dp.startRow, dp)
-
-  vg.beginPath()
-  vg.fillColor(ms.selectionColor)
-  vg.rect(x, y, dp.gridSize, dp.gridSize)
-  vg.fill()
-
-# }}}
-# {{{ drawSelection()
-proc drawSelection(ctx) =
-  let dp = ctx.dp
-
-  if dp.selection.isSome:
-    let sel = dp.selection.get
-
-    for c in dp.startCol..<(dp.startCol + dp.numCols):
-      for r in dp.startRow..<(dp.startRow + dp.numRows):
-
-        if dp.selRect.isSome:
-          let sr = dp.selRect.get
-          if sr.fillValue == true:
-            if sel[c,r] or sr.rect.contains(c,r):
-              drawSelectionCell(c, r, ctx)
-          else:
-            if not sr.rect.contains(c,r) and sel[c,r]:
-              drawSelectionCell(c, r, ctx)
-        else:
-          if sel[c,r]:
-            drawSelectionCell(c, r, ctx)
-
-# }}}
 # {{{ drawFloor()
-proc drawFloor(screenBuf: Map, screenCol, screenRow: Natural,
+proc drawFloor(viewBuf: Map, viewCol, viewRow: Natural,
                cursorActive: bool, ctx) =
 
   let ms = ctx.ms
   let dp = ctx.dp
   let vg = ctx.vg
 
-  let x = cellX(screenCol, dp)
-  let y = cellY(screenRow, dp)
+  let x = cellX(viewCol, dp)
+  let y = cellY(viewRow, dp)
 
   template drawOriented(drawProc: untyped) =
     drawBg()
-    case screenBuf.getFloorOrientation(screenCol, screenRow):
+    case viewBuf.getFloorOrientation(viewCol, viewRow):
     of Horiz:
       drawProc(x, y + dp.gridSize/2, ctx)
     of Vert:
@@ -681,7 +644,7 @@ proc drawFloor(screenBuf: Map, screenCol, screenRow: Natural,
     if cursorActive:
       drawCursor(x, y, ctx)
 
-  case screenBuf.getFloor(screenCol, screenRow)
+  case viewBuf.getFloor(viewCol, viewRow)
   of fNone:
     if cursorActive:
       drawCursor(x, y, ctx)
@@ -729,40 +692,100 @@ proc drawWall(x, y: float, wall: Wall, ot: Orientation, ctx) =
 
 # }}}
 # {{{ drawWalls()
-proc drawWalls(screenBuf: Map, screenCol, screenRow: Natural, ctx) =
+proc drawWalls(viewBuf: Map, viewCol, viewRow: Natural, ctx) =
   let dp = ctx.dp
 
-  let floorEmpty = screenBuf.getFloor(screenCol, screenRow) == fNone
+  let floorEmpty = viewBuf.getFloor(viewCol, viewRow) == fNone
 
-  if screenRow > 0 or (screenRow == 0 and not floorEmpty):
+  if viewRow > 0 or (viewRow == 0 and not floorEmpty):
     drawWall(
-      cellX(screenCol, dp),
-      cellY(screenRow, dp),
-      screenBuf.getWall(screenCol, screenRow, North), Horiz, ctx
+      cellX(viewCol, dp),
+      cellY(viewRow, dp),
+      viewBuf.getWall(viewCol, viewRow, North), Horiz, ctx
     )
 
-  if screenCol > 0 or (screenCol == 0 and not floorEmpty):
+  if viewCol > 0 or (viewCol == 0 and not floorEmpty):
     drawWall(
-      cellX(screenCol, dp),
-      cellY(screenRow, dp),
-      screenBuf.getWall(screenCol, screenRow, West), Vert, ctx
+      cellX(viewCol, dp),
+      cellY(viewRow, dp),
+      viewBuf.getWall(viewCol, viewRow, West), Vert, ctx
     )
 
-  let endCol = dp.numCols-1
-  if screenCol < endCol or (screenCol == endCol and not floorEmpty):
+  let viewEndCol = dp.viewCols-1
+  if viewCol < viewEndCol or (viewCol == viewEndCol and not floorEmpty):
     drawWall(
-      cellX(screenCol+1, dp),
-      cellY(screenRow, dp),
-      screenBuf.getWall(screenCol, screenRow, East), Vert, ctx
+      cellX(viewCol+1, dp),
+      cellY(viewRow, dp),
+      viewBuf.getWall(viewCol, viewRow, East), Vert, ctx
     )
 
-  let endRow = dp.numRows-1
-  if screenRow < endRow or (screenRow == endRow and not floorEmpty):
+  let viewEndRow = dp.viewRows-1
+  if viewRow < viewEndRow or (viewRow == viewEndRow and not floorEmpty):
     drawWall(
-      cellX(screenCol, dp),
-      cellY(screenRow+1, dp),
-      screenBuf.getWall(screenCol, screenRow, South), Horiz, ctx
+      cellX(viewCol, dp),
+      cellY(viewRow+1, dp),
+      viewBuf.getWall(viewCol, viewRow, South), Horiz, ctx
     )
+
+# }}}
+# {{{ drawCellHighlight()
+proc drawCellHighlight(x, y: float, color: Color, ctx) =
+  let vg = ctx.vg
+  let dp = ctx.dp
+
+  vg.beginPath()
+  vg.fillColor(color)
+  vg.rect(x, y, dp.gridSize, dp.gridSize)
+  vg.fill()
+
+# }}}
+# {{{ drawSelection()
+proc drawSelection(ctx) =
+  let dp = ctx.dp
+
+  let
+    sel = dp.selection.get
+    color = ctx.ms.selectionColor
+    viewEndCol = dp.viewStartCol + dp.viewCols - 1
+    viewEndRow = dp.viewStartRow + dp.viewRows - 1
+
+  for c in dp.viewStartCol..viewEndCol:
+    for r in dp.viewStartRow..viewEndRow:
+      let draw = if dp.selRect.isSome:
+                   let sr = dp.selRect.get
+                   if sr.fillValue:
+                     sel[c,r] or sr.rect.contains(c,r)
+                   else:
+                     not sr.rect.contains(c,r) and sel[c,r]
+                 else: sel[c,r]
+      if draw:
+        let x = cellX(c - dp.viewStartCol, dp)
+        let y = cellY(r - dp.viewStartRow, dp)
+
+        drawCellHighlight(x, y, color, ctx)
+
+# }}}
+# {{{ drawPastePreviewHighlight()
+proc drawPastePreviewHighlight(ctx) =
+  let dp = ctx.dp
+  let ms = ctx.ms
+
+  echo "*"
+
+  let
+    sel = dp.pastePreview.get.selection
+    viewCursorCol = dp.cursorCol - dp.viewStartCol
+    viewCursorRow = dp.cursorRow - dp.viewStartRow
+    cols = min(sel.cols, dp.viewCols - viewCursorCol)
+    rows = min(sel.rows, dp.viewRows - viewCursorRow)
+
+  for c in 0..<cols:
+    for r in 0..<rows:
+      if sel[c,r]:
+        let x = cellX(viewCursorCol + c, dp)
+        let y = cellY(viewCursorRow + r, dp)
+
+        drawCellHighlight(x, y, ms.pastePreviewColor, ctx)
 
 # }}}
 
@@ -770,8 +793,8 @@ proc drawWalls(screenBuf: Map, screenCol, screenRow: Natural, ctx) =
 proc drawMap*(m: Map, ctx) =
   let dp = ctx.dp
 
-  assert dp.startCol + dp.numCols <= m.cols
-  assert dp.startRow + dp.numRows <= m.rows
+  assert dp.viewStartCol + dp.viewCols <= m.cols
+  assert dp.viewStartRow + dp.viewRows <= m.rows
 
   drawCellCoords(ctx)
   drawMapBackground(ctx)
@@ -780,24 +803,27 @@ proc drawMap*(m: Map, ctx) =
   if dp.drawOutline:
     drawOutline(m, ctx)
 
-  let screenBuf = newMapFrom(
-    m, rectN(
-      dp.startCol,
-      dp.startRow,
-      dp.startCol + dp.numCols,
-      dp.startRow + dp.numRows)
+  let viewBuf = newMapFrom(m,
+    rectN(
+      dp.viewStartCol,
+      dp.viewStartRow,
+      dp.viewStartCol + dp.viewCols,
+      dp.viewStartRow + dp.viewRows
+    )
   )
 
   if dp.pastePreview.isSome:
-    screenBuf.paste(dp.cursorCol, dp.cursorRow,
-              dp.pastePreview.get.map, dp.pastePreview.get.selection)
+    viewBuf.paste(dp.cursorCol - dp.viewStartCol,
+                  dp.cursorRow - dp.viewStartRow,
+                  dp.pastePreview.get.map,
+                  dp.pastePreview.get.selection)
 
-  for r in 0..<dp.numRows:
-    for c in 0..<dp.numCols:
-      let cursorActive = dp.startCol+c == dp.cursorCol and
-                         dp.startRow+r == dp.cursorRow
-      drawFloor(screenBuf, c, r, cursorActive, ctx)
-      drawWalls(screenBuf, c, r, ctx)
+  for r in 0..<dp.viewRows:
+    for c in 0..<dp.viewCols:
+      let cursorActive = dp.viewStartCol+c == dp.cursorCol and
+                         dp.viewStartRow+r == dp.cursorRow
+      drawFloor(viewBuf, c, r, cursorActive, ctx)
+      drawWalls(viewBuf, c, r, ctx)
 
   if dp.drawCursorGuides:
     drawCursorGuides(m, ctx)
@@ -805,11 +831,8 @@ proc drawMap*(m: Map, ctx) =
   if dp.selection.isSome:
     drawSelection(ctx)
 
-  # TODO
-#  if pastePreview.isSome:
-#    drawPastePreviewHighlight(pastePreview.get.selection,
-#                              cursorCol - startCol, cursorRow - startRow,
-#                              numCols, numRows, dp, vg)
+  if dp.pastePreview.isSome:
+    drawPastePreviewHighlight(ctx)
 
 # }}}
 
