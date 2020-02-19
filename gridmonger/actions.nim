@@ -47,8 +47,8 @@ proc eraseCellAction*(currMap; c, r: Natural, um) =
 # {{{ eraseSelectionAction*()
 proc eraseSelectionAction*(currMap; sel: Selection, bbox: Rect[Natural], um) =
   cellAreaAction(currMap, bbox, um, m):
-    for r in 0..<sel.height:
-      for c in 0..<sel.width:
+    for r in 0..<sel.rows:
+      for c in 0..<sel.cols:
         if sel[c,r]:
           m.eraseCell(bbox.x1 + c, bbox.y1 + r)
 
@@ -58,10 +58,10 @@ proc pasteAction*(currMap; destCol, destRow: Natural, cb: CopyBuffer, um) =
   let rect = rectN(
     destCol,
     destRow,
-    destCol + cb.map.width,
-    destRow + cb.map.height
+    destCol + cb.map.cols,
+    destRow + cb.map.rows
   ).intersect(
-    rectN(0, 0, currMap.width, currMap.height)
+    rectN(0, 0, currMap.cols, currMap.rows)
   )
   if rect.isSome:
     cellAreaAction(currMap, rect.get, um, m):
@@ -96,12 +96,12 @@ proc excavateAction*(currMap; c, r: Natural, um) =
     else:
       m.setWall(c,r, West, wNone)
 
-    if r == m.height-1 or m.getFloor(c,r+1) == fNone:
+    if r == m.rows-1 or m.getFloor(c,r+1) == fNone:
       m.setWall(c,r, South, wWall)
     else:
       m.setWall(c,r, South, wNone)
 
-    if c == m.width-1 or m.getFloor(c+1,r) == fNone:
+    if c == m.cols-1 or m.getFloor(c+1,r) == fNone:
       m.setWall(c,r, East, wWall)
     else:
       m.setWall(c,r, East, wNone)

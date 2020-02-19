@@ -49,6 +49,7 @@ func contains*[T: SomeNumber | Natural](r: Rect[T], x, y: T): bool =
 
 
 type
+  # TODO rename go ground?
   Floor* = enum
     fNone                = (  0, "blank"),
     fEmptyFloor          = ( 10, "empty"),
@@ -88,17 +89,17 @@ type
 
   # (0,0) is the top-left cell of the map
   Map* = ref object
-    width*:  Natural
-    height*: Natural
-    cells*:  seq[Cell]
+    cols*:  Natural
+    rows*:  Natural
+    cells*: seq[Cell]
 
 
 type
   # (0,0) is the top-left cell of the selection
   Selection* = ref object
-    width*:  Natural
-    height*: Natural
-    cells*:  seq[bool]
+    cols*:  Natural
+    rows*:  Natural
+    cells*: seq[bool]
 
 
 type

@@ -35,24 +35,21 @@ type
     emPastePreview
 
   AppContext = ref object
-    vg:          NVGContext
-    win:         Window
+    win:            Window
+    vg:             NVGContext
 
-    map:         Map
-    mapStyle:    MapStyle
-    cursorCol:   Natural
-    cursorRow:   Natural
+    map:            Map
+    mapStyle:       MapStyle
+    drawMapParams:  DrawMapParams
 
-    editMode:    EditMode
-    selection:   Option[Selection]
-    selRect:     Option[SelectionRect]
-    copyBuf:     Option[CopyBuffer]
+    editMode:       EditMode
+    cursorCol:      Natural
+    cursorRow:      Natural
+    selection:      Option[Selection]
+    selRect:        Option[SelectionRect]
+    copyBuf:        Option[CopyBuffer]
 
-    startCol, startRow: Natural
-    numCols, numRows:   Natural
-    drawMapParams:      DrawMapParams
-
-    undoManager: UndoManager[Map]
+    undoManager:    UndoManager[Map]
 
 
 var g_app: AppContext
@@ -68,8 +65,8 @@ const NewMapDialogTitle = "New map"
 
 var
   g_newMapDialog_name: string
-  g_newMapDialog_width: string
-  g_newMapDialog_height: string
+  g_newMapDialog_numCols: string
+  g_newMapDialog_numRows: string
 
 proc newMapDialog() =
   koi.dialog(350, 220, NewMapDialogTitle):
@@ -91,15 +88,15 @@ proc newMapDialog() =
     )
 
     y = y + 50
-    koi.label(x, y, labelWidth, h, "Width", gray(0.70), fontSize=19.0)
-    g_newMapDialog_width = koi.textField(
-      x + labelWidth, y, 60.0, h, tooltip = "", g_newMapDialog_width
+    koi.label(x, y, labelWidth, h, "Columns", gray(0.70), fontSize=19.0)
+    g_newMapDialog_numCols = koi.textField(
+      x + labelWidth, y, 60.0, h, tooltip = "", g_newMapDialog_numCols
     )
 
     y = y + 30
-    koi.label(x, y, labelWidth, h, "Height", gray(0.70), fontSize=19.0)
-    g_newMapDialog_height = koi.textField(
-      x + labelWidth, y, 60.0, h, tooltip = "", g_newMapDialog_height
+    koi.label(x, y, labelWidth, h, "Rows", gray(0.70), fontSize=19.0)
+    g_newMapDialog_numRows = koi.textField(
+      x + labelWidth, y, 60.0, h, tooltip = "", g_newMapDialog_numRows
     )
 
     x = dialogWidth - 2 * buttonWidth - buttonPad - 10
@@ -108,13 +105,13 @@ proc newMapDialog() =
     # TODO make it undoable
     let okAction = proc () =
       g_app.map = newMap(
-        parseInt(g_newMapDialog_width),
-        parseInt(g_newMapDialog_height)
+        parseInt(g_newMapDialog_numCols),
+        parseInt(g_newMapDialog_numRows)
       )
       g_app.cursorCol = 0
       g_app.cursorRow = 0
-      g_app.startCol = 0
-      g_app.startRow = 0
+      g_app.drawMapParams.startCol = 0
+      g_app.drawMapParams.startRow = 0
       closeDialog()
 
     let cancelAction = proc () =
@@ -142,35 +139,39 @@ template defineDialogs() =
 
 # {{{ updateMapAndCursorPosition()
 proc updateMapAndCursorPosition(a) =
+  alias(dp, a.drawMapParams)
+
   let (winWidth, winHeight) = a.win.size
 
   # TODO -100
-  a.numCols = min(a.drawMapParams.numDisplayableCols(winWidth - 100.0), a.map.width)
-  a.numRows = min(a.drawMapParams.numDisplayableRows(winHeight - 100.0), a.map.height)
+  dp.numCols = min(dp.numDisplayableCols(winWidth - 100.0), a.map.cols)
+  dp.numRows = min(dp.numDisplayableRows(winHeight - 100.0), a.map.rows)
 
-  a.startCol = min(max(a.map.width - a.numCols, 0), a.startCol)
-  a.startRow = min(max(a.map.height - a.numRows, 0), a.startRow)
+  dp.startCol = min(max(a.map.cols - dp.numCols, 0), dp.startCol)
+  dp.startRow = min(max(a.map.rows - dp.numRows, 0), dp.startRow)
 
-  a.cursorCol = min(max(a.startCol + a.numCols - 1, a.startCol), a.cursorCol)
-  a.cursorRow = min(max(a.startRow + a.numRows - 1, a.startRow), a.cursorRow)
+  a.cursorCol = min(max(dp.startCol + dp.numCols - 1, dp.startCol), a.cursorCol)
+  a.cursorRow = min(max(dp.startRow + dp.numRows - 1, dp.startRow), a.cursorRow)
 
 # }}}
 # {{{ moveCursor()
 proc moveCursor(dir: Direction, a) =
+  alias(dp, a.drawMapParams)
+
   var
     cx = a.cursorCol
     cy = a.cursorRow
-    sx = a.startCol
-    sy = a.startRow
+    sx = dp.startCol
+    sy = dp.startRow
 
   case dir:
   of East:
-    cx = min(cx+1, a.map.width-1)
-    if cx - sx > a.numCols-1: inc(sx)
+    cx = min(cx+1, a.map.cols-1)
+    if cx - sx > dp.numCols-1: inc(sx)
 
   of South:
-    cy = min(cy+1, a.map.height-1)
-    if cy - sy > a.numRows-1: inc(sy)
+    cy = min(cy+1, a.map.rows-1)
+    if cy - sy > dp.numRows-1: inc(sy)
 
   of West:
     cx = max(cx-1, 0)
@@ -182,32 +183,31 @@ proc moveCursor(dir: Direction, a) =
 
   a.cursorCol = cx
   a.cursorRow = cy
-  a.startCol = sx
-  a.startRow = sy
+  dp.startCol = sx
+  dp.startRow = sy
 
 # }}}
 # {{{ enterSelectMode()
 proc enterSelectMode(a) =
   a.editMode = emSelectDraw
-  a.selection = some(newSelection(a.map.width, a.map.height))
+  a.selection = some(newSelection(a.map.cols, a.map.rows))
   a.drawMapParams.drawCursorGuides = true
 
 # }}}
 # {{{ exitSelectMode()
 proc exitSelectMode(a) =
   a.editMode = emNormal
-  a.drawMapParams.drawCursorGuides = false
   a.selection = none(Selection)
+  a.drawMapParams.drawCursorGuides = false
 
 # }}}
 # {{{ copySelection()
 proc copySelection(a): Option[Rect[Natural]] =
 
   proc eraseOrphanedWalls(cb: CopyBuffer) =
-    let sel = cb.selection
     var m = cb.map
-    for c in 0..<m.width:
-      for r in 0..<m.height:
+    for c in 0..<m.cols:
+      for r in 0..<m.rows:
         m.eraseOrphanedWalls(c,r)
 
   let sel = a.selection.get
@@ -336,8 +336,8 @@ proc handleEvents(a) =
 
       elif ke.isKeyDown(keyN, {mkCtrl}):
         g_newMapDialog_name = "Level 1"
-        g_newMapDialog_width = $g_app.map.width
-        g_newMapDialog_height = $g_app.map.height
+        g_newMapDialog_numCols = $g_app.map.cols
+        g_newMapDialog_numRows = $g_app.map.rows
         openDialog(NewMapDialogTitle)
 
     of emExcavate, emEraseCell, emClearFloor:
@@ -476,20 +476,22 @@ var g_textFieldVal1 = "Level 1"
 
 proc renderUI() =
   alias(a, g_app)
+  alias(dp, a.drawMapParams)
 
   let (winWidth, winHeight) = a.win.size
 
-  # TODO move all these into drawparams?
-  if a.numCols > 0 and a.numRows > 0:
+  if dp.numCols > 0 and dp.numRows > 0:
+    dp.cursorCol = a.cursorCol
+    dp.cursorRow = a.cursorRow
+
+    dp.selection = a.selection
+    dp.selRect = a.selRect
+    dp.pastePreview = if a.editMode == emPastePreview: a.copyBuf
+                      else: none(CopyBuffer)
+
     drawMap(
       a.map,
-      startCol = a.startCol, startRow = a.startRow,
-      numCols = a.numCols, numRows = a.numRows,
-      a.cursorCol, a.cursorRow,
-      a.selection,
-      a.selRect,
-      if a.editMode == emPastePreview: a.copyBuf else: none(CopyBuffer),
-      DrawMapContext(ms: a.mapStyle, dp: a.drawMapParams, vg: a.vg)
+      DrawMapContext(ms: a.mapStyle, dp: dp, vg: a.vg)
     )
 
   g_textFieldVal1 = koi.textField(

@@ -21,14 +21,18 @@ const
 # The names `col`, `row` (or `c`, `r`) refer to the zero-based coordinates of
 # a cell in a map. The cell in the top-left corner is the origin.
 #
-# Anything with `x` or `y` in the name refers to pixel-coordinates on the
-# screen.
+# `screenCol` and `screenRow` refer to the cell coodinates of a screen buffer
+# that contains a rectangular area of a map (just the area that's visible on
+# the screen).
+#
+# Anything with `x` or `y` in the name refers to pixel-coordinates within the
+# window's drawing area (top-left corner is the origin).
 #
 # All drawing procs interpret the passed in `(x,y)` coordinates as the
 # upper-left corner of the object (e.g. a cell).
 #
 
-# {{{ DrawParams*
+# {{{ Types
 type
   MapStyle* = ref object
     cellCoordsColor*:     Color
@@ -45,20 +49,33 @@ type
     pastePreviewColor*:   Color
     selectionColor*:      Color
 
-  DrawMapParams* = ref object
-    # DrawMapParams
-    startX*:   float
-    startY*:   float
 
-    drawOutline*:         bool
-    drawCursorGuides*:    bool
+  DrawMapParams* = ref object
+    startX*:       float
+    startY*:       float
+
+    cursorCol*:    Natural
+    cursorRow*:    Natural
+
+    startCol*:     Natural
+    startRow*:     Natural
+    numCols*:      Natural
+    numRows*:      Natural
+
+    selection*:    Option[Selection]
+    selRect*:      Option[SelectionRect]
+    pastePreview*: Option[CopyBuffer]
+
+    drawOutline*:      bool
+    drawCursorGuides*: bool
 
     # internal
-    zoomLevel:            Natural
-    gridSize:             float
-    normalStrokeWidth:    float
+    zoomLevel:         Natural
+    gridSize:          float
+    normalStrokeWidth: float
 
     vertTransformYFudgeFactor: float
+
 
   DrawMapContext* = object
     ms*: MapStyle
@@ -70,6 +87,51 @@ type
 using
   dp: DrawMapParams
   ctx: DrawMapContext
+
+# {{{ zoomLevel*()
+proc getZoomLevel*(dp): Natural = dp.zoomLevel
+
+# }}}
+# {{{ setZoomLevel*()
+proc setZoomLevel*(dp; zl: Natural) =
+  assert zl <= MaxZoomLevel
+  let
+    MinGridSize = 18.0
+    ZoomFactor = 1.08
+
+  dp.zoomLevel = zl
+  dp.gridSize = floor(MinGridSize * pow(ZoomFactor, zl.float))
+
+  if zl <= 10:
+    dp.normalStrokeWidth = 3.0
+    dp.vertTransformYFudgeFactor = -1.0
+  else:
+    dp.normalStrokeWidth = 4.0
+    dp.vertTransformYFudgeFactor = 0.0
+
+# }}}
+# {{{ incZoomLevel*()
+proc incZoomLevel*(dp) =
+  if dp.zoomLevel < MaxZoomLevel:
+    setZoomLevel(dp, dp.zoomLevel+1)
+
+# }}}
+# {{{ decZoomLevel*()
+proc decZoomLevel*(dp) =
+  if dp.zoomLevel > 0:
+    setZoomLevel(dp, dp.zoomLevel-1)
+
+# }}}
+# {{{ numDisplayableRows*()
+proc numDisplayableRows*(dp; height: float): Natural =
+  max(height / dp.gridSize, 0).int
+
+# }}}
+# {{{ numDisplayableCols*()
+proc numDisplayableCols*(dp; width: float): Natural =
+  max(width / dp.gridSize, 0).int
+
+# }}}
 
 # {{{ utils
 
@@ -88,7 +150,7 @@ proc cellY(y: Natural, dp): float =
 # }}}
 
 # {{{ drawBackgroundGrid
-proc drawBackgroundGrid(numCols, numRows: Natural, ctx) =
+proc drawBackgroundGrid(ctx) =
   let ms = ctx.ms
   let dp = ctx.dp
   let vg = ctx.vg
@@ -99,10 +161,10 @@ proc drawBackgroundGrid(numCols, numRows: Natural, ctx) =
   vg.strokeColor(ms.gridColorBackground)
   vg.strokeWidth(strokeWidth)
 
-  let endX = snap(cellX(numCols, dp), strokeWidth)
-  let endY = snap(cellY(numRows, dp), strokeWidth)
+  let endX = snap(cellX(dp.numCols, dp), strokeWidth)
+  let endY = snap(cellY(dp.numRows, dp), strokeWidth)
 
-  for x in 0..numCols:
+  for x in 0..dp.numCols:
     let x = snap(cellX(x, dp), strokeWidth)
     let y = snap(dp.startY, strokeWidth)
     vg.beginPath()
@@ -110,7 +172,7 @@ proc drawBackgroundGrid(numCols, numRows: Natural, ctx) =
     vg.lineTo(x, endY)
     vg.stroke()
 
-  for y in 0..numRows:
+  for y in 0..dp.numRows:
     let x = snap(dp.startX, strokeWidth)
     let y = snap(cellY(y, dp), strokeWidth)
     vg.beginPath()
@@ -120,8 +182,7 @@ proc drawBackgroundGrid(numCols, numRows: Natural, ctx) =
 
 # }}}
 # {{{ drawCellCoords()
-proc drawCellCoords(startCol, startRow, numCols, numRows: Natural,
-                    cursorCol, cursorRow: Natural, ctx) =
+proc drawCellCoords(ctx) =
   let ms = ctx.ms
   let dp = ctx.dp
   let vg = ctx.vg
@@ -137,25 +198,25 @@ proc drawCellCoords(startCol, startRow, numCols, numRows: Natural,
       vg.fillColor(ms.cellCoordsColor)
       vg.fontFace("sans")
 
-  let endX = dp.startX + dp.gridSize * numCols
-  let endY = dp.startY + dp.gridSize * numRows
+  let endX = dp.startX + dp.gridSize * dp.numCols
+  let endY = dp.startY + dp.gridSize * dp.numRows
 
-  for x in 0..<numCols:
+  for x in 0..<dp.numCols:
     let
       xPos = cellX(x, dp) + dp.gridSize/2
-      coord = $(startCol + x)
+      coord = $(dp.startCol + x)
 
-    setTextHighlight(x == cursorCol)
+    setTextHighlight(x == dp.cursorCol)
 
     discard vg.text(xPos, dp.startY - 12, coord)
     discard vg.text(xPos, endY + 12, coord)
 
-  for y in 0..<numRows:
+  for y in 0..<dp.numRows:
     let
       yPos = cellY(y, dp) + dp.gridSize/2
-      coord = $(startRow + y)
+      coord = $(dp.startRow + y)
 
-    setTextHighlight(y == cursorRow)
+    setTextHighlight(y == dp.cursorRow)
 
     discard vg.text(dp.startX - 12, yPos, coord)
     discard vg.text(endX + 12, yPos, coord)
@@ -163,7 +224,7 @@ proc drawCellCoords(startCol, startRow, numCols, numRows: Natural,
 
 # }}}
 # {{{ drawMapBackground()
-proc drawMapBackground(numCols, numRows: Natural, ctx) =
+proc drawMapBackground(ctx) =
   let ms = ctx.ms
   let dp = ctx.dp
   let vg = ctx.vg
@@ -174,8 +235,8 @@ proc drawMapBackground(numCols, numRows: Natural, ctx) =
   vg.strokeWidth(strokeWidth)
 
   let
-    w = dp.gridSize * numCols
-    h = dp.gridSize * numRows
+    w = dp.gridSize * dp.numCols
+    h = dp.gridSize * dp.numRows
     offs = max(w, h)
     lineSpacing = strokeWidth * 2
 
@@ -217,17 +278,16 @@ proc drawCursor(x, y: float, ctx) =
 
 # }}}
 # {{{ drawCursorGuides()
-proc drawCursorGuides(m: Map, cursorCol, cursorRow: Natural,
-                      startCol, startRow, numCols, numRows: Natural, ctx) =
+proc drawCursorGuides(m: Map, ctx) =
   let ms = ctx.ms
   let dp = ctx.dp
   let vg = ctx.vg
 
   let
-    x = cellX(cursorCol - startCol, dp)
-    y = cellY(cursorRow - startRow, dp)
-    w = dp.gridSize * numCols
-    h = dp.gridSize * numRows
+    x = cellX(dp.cursorCol - dp.startCol, dp)
+    y = cellY(dp.cursorRow - dp.startRow, dp)
+    w = dp.gridSize * dp.numCols
+    h = dp.gridSize * dp.numRows
 
   vg.fillColor(ms.cursorGuideColor)
   vg.strokeColor(ms.cursorGuideColor)
@@ -252,8 +312,8 @@ proc drawOutline(m: Map, ctx) =
   let vg = ctx.vg
 
   func check(col, row: int): bool =
-    let c = max(min(col, m.width-1), 0)
-    let r = max(min(row, m.height-1), 0)
+    let c = max(min(col, m.cols-1), 0)
+    let r = max(min(row, m.rows-1), 0)
     m.getFloor(c,r) != fNone
 
   func isOutline(c, r: Natural): bool =
@@ -266,8 +326,8 @@ proc drawOutline(m: Map, ctx) =
     check(c-1, r  ) or
     check(c-1, r+1)
 
-  for r in 0..<m.height:
-    for c in 0..<m.width:
+  for r in 0..<m.rows:
+    for c in 0..<m.cols:
       if isOutline(c, r):
         let
           sw = UltrathinStrokeWidth
@@ -543,7 +603,6 @@ proc drawClosedDoorHoriz(x, y: float, ctx) =
 
 # {{{ setVertTransform()
 proc setVertTransform(x, y: float, ctx) =
-  let ms = ctx.ms
   let dp = ctx.dp
   let vg = ctx.vg
 
@@ -555,13 +614,13 @@ proc setVertTransform(x, y: float, ctx) =
 
 # }}}
 # {{{ drawSelectionCell()
-proc drawSelectionCell(col, row, startCol, startRow: Natural, ctx) =
+proc drawSelectionCell(col, row: Natural, ctx) =
   let ms = ctx.ms
   let dp = ctx.dp
   let vg = ctx.vg
 
-  let x = cellX(col - startCol, dp)
-  let y = cellY(row - startRow, dp)
+  let x = cellX(col - dp.startCol, dp)
+  let y = cellY(row - dp.startRow, dp)
 
   vg.beginPath()
   vg.fillColor(ms.selectionColor)
@@ -570,40 +629,42 @@ proc drawSelectionCell(col, row, startCol, startRow: Natural, ctx) =
 
 # }}}
 # {{{ drawSelection()
-proc drawSelection(sel: Selection, selRect: Option[SelectionRect],
-                   startCol, startRow, numCols, numRows: Natural,
-                   ctx) =
-  let ms = ctx.ms
+proc drawSelection(ctx) =
   let dp = ctx.dp
-  let vg = ctx.vg
 
-  for c in startCol..<(startCol + numCols):
-    for r in startRow..<(startRow + numRows):
-      if selRect.isSome:
-        let sr = selRect.get
-        if sr.fillValue == true:
-          if sel[c,r] or sr.rect.contains(c,r):
-            drawSelectionCell(c, r, startCol, startRow, ctx)
+  if dp.selection.isSome:
+    let sel = dp.selection.get
+
+    for c in dp.startCol..<(dp.startCol + dp.numCols):
+      for r in dp.startRow..<(dp.startRow + dp.numRows):
+
+        if dp.selRect.isSome:
+          let sr = dp.selRect.get
+          if sr.fillValue == true:
+            if sel[c,r] or sr.rect.contains(c,r):
+              drawSelectionCell(c, r, ctx)
+          else:
+            if not sr.rect.contains(c,r) and sel[c,r]:
+              drawSelectionCell(c, r, ctx)
         else:
-          if not sr.rect.contains(c,r) and sel[c,r]:
-            drawSelectionCell(c, r, startCol, startRow, ctx)
-      else:
-        if sel[c,r]:
-          drawSelectionCell(c, r, startCol, startRow, ctx)
+          if sel[c,r]:
+            drawSelectionCell(c, r, ctx)
 
 # }}}
 # {{{ drawFloor()
-proc drawFloor(m: Map, col, row: Natural, cursorActive: bool, ctx) =
+proc drawFloor(screenBuf: Map, screenCol, screenRow: Natural,
+               cursorActive: bool, ctx) =
+
   let ms = ctx.ms
   let dp = ctx.dp
   let vg = ctx.vg
 
-  let x = cellX(col, dp)
-  let y = cellY(row, dp)
+  let x = cellX(screenCol, dp)
+  let y = cellY(screenRow, dp)
 
   template drawOriented(drawProc: untyped) =
     drawBg()
-    case m.getFloorOrientation(col, row):
+    case screenBuf.getFloorOrientation(screenCol, screenRow):
     of Horiz:
       drawProc(x, y + dp.gridSize/2, ctx)
     of Vert:
@@ -620,7 +681,7 @@ proc drawFloor(m: Map, col, row: Natural, cursorActive: bool, ctx) =
     if cursorActive:
       drawCursor(x, y, ctx)
 
-  case m.getFloor(col, row)
+  case screenBuf.getFloor(screenCol, screenRow)
   of fNone:
     if cursorActive:
       drawCursor(x, y, ctx)
@@ -643,8 +704,6 @@ proc drawFloor(m: Map, col, row: Natural, cursorActive: bool, ctx) =
 # }}}
 # {{{ drawWall()
 proc drawWall(x, y: float, wall: Wall, ot: Orientation, ctx) =
-  let ms = ctx.ms
-  let dp = ctx.dp
   let vg = ctx.vg
 
   template drawOriented(drawProc: untyped) =
@@ -670,133 +729,83 @@ proc drawWall(x, y: float, wall: Wall, ot: Orientation, ctx) =
 
 # }}}
 # {{{ drawWalls()
-proc drawWalls(m: Map, col, row, numCols, numRows: Natural, ctx) =
-  let ms = ctx.ms
+proc drawWalls(screenBuf: Map, screenCol, screenRow: Natural, ctx) =
   let dp = ctx.dp
-  let vg = ctx.vg
 
-  let floorEmpty = m.getFloor(col, row) == fNone
+  let floorEmpty = screenBuf.getFloor(screenCol, screenRow) == fNone
 
-  if row > 0 or (row == 0 and not floorEmpty):
+  if screenRow > 0 or (screenRow == 0 and not floorEmpty):
     drawWall(
-      cellX(col, dp),
-      cellY(row, dp),
-      m.getWall(col, row, North), Horiz, ctx
+      cellX(screenCol, dp),
+      cellY(screenRow, dp),
+      screenBuf.getWall(screenCol, screenRow, North), Horiz, ctx
     )
 
-  if col > 0 or (col == 0 and not floorEmpty):
+  if screenCol > 0 or (screenCol == 0 and not floorEmpty):
     drawWall(
-      cellX(col, dp),
-      cellY(row, dp),
-      m.getWall(col, row, West), Vert, ctx
+      cellX(screenCol, dp),
+      cellY(screenRow, dp),
+      screenBuf.getWall(screenCol, screenRow, West), Vert, ctx
     )
 
-  let endCol = numCols-1
-  if col < endCol or (col == endCol and not floorEmpty):
+  let endCol = dp.numCols-1
+  if screenCol < endCol or (screenCol == endCol and not floorEmpty):
     drawWall(
-      cellX(col+1, dp),
-      cellY(row, dp),
-      m.getWall(col, row, East), Vert, ctx
+      cellX(screenCol+1, dp),
+      cellY(screenRow, dp),
+      screenBuf.getWall(screenCol, screenRow, East), Vert, ctx
     )
 
-  let endRow = numRows-1
-  if row < endRow or (row == endRow and not floorEmpty):
+  let endRow = dp.numRows-1
+  if screenRow < endRow or (screenRow == endRow and not floorEmpty):
     drawWall(
-      cellX(col, dp),
-      cellY(row+1, dp),
-      m.getWall(col, row, South), Horiz, ctx
+      cellX(screenCol, dp),
+      cellY(screenRow+1, dp),
+      screenBuf.getWall(screenCol, screenRow, South), Horiz, ctx
     )
 
 # }}}
 
-# {{{ zoomLevel*()
-proc getZoomLevel*(dp): Natural = dp.zoomLevel
-
-# }}}
-# {{{ setZoomLevel*()
-proc setZoomLevel*(dp; zl: Natural) =
-  assert zl <= MaxZoomLevel
-  let
-    MinGridSize = 18.0
-    ZoomFactor = 1.08
-
-  dp.zoomLevel = zl
-  dp.gridSize = floor(MinGridSize * pow(ZoomFactor, zl.float))
-
-  if zl <= 10:
-    dp.normalStrokeWidth = 3.0
-    dp.vertTransformYFudgeFactor = -1.0
-  else:
-    dp.normalStrokeWidth = 4.0
-    dp.vertTransformYFudgeFactor = 0.0
-
-# }}}
-# {{{ incZoomLevel*()
-proc incZoomLevel*(dp) =
-  if dp.zoomLevel < MaxZoomLevel:
-    setZoomLevel(dp, dp.zoomLevel+1)
-
-# }}}
-# {{{ decZoomLevel*()
-proc decZoomLevel*(dp) =
-  if dp.zoomLevel > 0:
-    setZoomLevel(dp, dp.zoomLevel-1)
-
-# }}}
-# {{{ numDisplayableRows*()
-proc numDisplayableRows*(dp; height: float): Natural =
-  max(height / dp.gridSize, 0).int
-
-# }}}
-# {{{ numDisplayableCols*()
-proc numDisplayableCols*(dp; width: float): Natural =
-  max(width / dp.gridSize, 0).int
-
-# }}}
 # {{{ drawMap*()
-proc drawMap*(m: Map,
-              startCol, startRow, numCols, numRows: Natural,
-              cursorCol, cursorRow: Natural,
-              selection: Option[Selection], selRect: Option[SelectionRect],
-              pastePreview: Option[CopyBuffer],
-              ctx) =
-
-  assert startCol + numCols <= m.width
-  assert startRow + numRows <= m.height
-
-  let ms = ctx.ms
+proc drawMap*(m: Map, ctx) =
   let dp = ctx.dp
-  let vg = ctx.vg
 
-  drawCellCoords(startCol, startRow, numCols, numRows, cursorCol, cursorRow, ctx)
-  drawMapBackground(numCols, numRows, ctx)
-  drawBackgroundGrid(numCols,numRows, ctx)
+  assert dp.startCol + dp.numCols <= m.cols
+  assert dp.startRow + dp.numRows <= m.rows
+
+  drawCellCoords(ctx)
+  drawMapBackground(ctx)
+  drawBackgroundGrid(ctx)
 
   if dp.drawOutline:
     drawOutline(m, ctx)
 
-  let buf = newMapFrom(
-    m, rectN(startCol, startRow, startCol + numCols, startRow + numRows)
+  let screenBuf = newMapFrom(
+    m, rectN(
+      dp.startCol,
+      dp.startRow,
+      dp.startCol + dp.numCols,
+      dp.startRow + dp.numRows)
   )
 
-  if pastePreview.isSome:
-    buf.paste(cursorCol, cursorRow,
-              pastePreview.get.map, pastePreview.get.selection)
+  if dp.pastePreview.isSome:
+    screenBuf.paste(dp.cursorCol, dp.cursorRow,
+              dp.pastePreview.get.map, dp.pastePreview.get.selection)
 
-  for r in 0..<numRows:
-    for c in 0..<numCols:
-      let cursorActive = startCol+c == cursorCol and startRow+r == cursorRow
-      drawFloor(buf, c, r, cursorActive, ctx)
-      drawWalls(buf, c, r, numCols, numRows, ctx)
+  for r in 0..<dp.numRows:
+    for c in 0..<dp.numCols:
+      let cursorActive = dp.startCol+c == dp.cursorCol and
+                         dp.startRow+r == dp.cursorRow
+      drawFloor(screenBuf, c, r, cursorActive, ctx)
+      drawWalls(screenBuf, c, r, ctx)
 
   if dp.drawCursorGuides:
-    drawCursorGuides(m, cursorCol, cursorRow, startCol, startRow,
-                     numCols, numRows, ctx)
+    drawCursorGuides(m, ctx)
 
-  if selection.isSome:
-    drawSelection(selection.get, selRect, startCol, startRow, numCols, numRows,
-                  ctx)
+  if dp.selection.isSome:
+    drawSelection(ctx)
 
+  # TODO
 #  if pastePreview.isSome:
 #    drawPastePreviewHighlight(pastePreview.get.selection,
 #                              cursorCol - startCol, cursorRow - startRow,
