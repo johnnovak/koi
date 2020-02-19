@@ -560,8 +560,8 @@ proc createDefaultMapStyle(): MapStyle =
   ms.gridColorFloor      = gray(0.0, 0.2)
   ms.mapBackgroundColor  = gray(0.0, 0.7)
   ms.mapOutlineColor     = gray(0.23)
-  ms.selectionColor      = rgba(1.0, 0.5, 0.5, 0.5)
-  ms.pastePreviewColor   = rgba(0.5, 0.5, 1.0, 0.5)
+  ms.selectionColor      = rgba(1.0, 0.5, 0.5, 0.4)
+  ms.pastePreviewColor   = rgba(0.2, 0.6, 1.0, 0.4)
   result = ms
 
 proc initDrawMapParams(a) =
