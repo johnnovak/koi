@@ -1,0 +1,30 @@
+# OPERATIONS
+  - select -> shift
+  - remaining ground & wall types
+  - custom ground
+  - notes
+
+# SAVE/LOAD
+  - binstreams
+  - de/serialize map
+  - chunk load/save handler
+  - osdialog port
+
+# RENDERING
+  - nanovg fbo
+  - dyson theme
+    - tiled blue noise
+    - overscan rendering
+    - wall tracing w/ rounded corners
+
+# UI
+  - status bar
+  - mouse handling
+    - koi: mouse handling in widgets (textfield)
+    - koi: textarea
+    - map mouse events
+    - separators
+    - layouts
+  - fullscreen
+  - menu bar
+
