@@ -144,8 +144,8 @@ template defineDialogs() =
 
 # }}}
 
-# {{{ updateMapAndCursorPosition()
-proc updateMapAndCursorPosition(a) =
+# {{{ updateViewStartAndCursorPosition()
+proc updateViewStartAndCursorPosition(a) =
   alias(dp, a.drawMapParams)
 
   let (winWidth, winHeight) = a.win.size
@@ -157,12 +157,15 @@ proc updateMapAndCursorPosition(a) =
   dp.viewStartCol = min(max(a.map.cols - dp.viewCols, 0), dp.viewStartCol)
   dp.viewStartRow = min(max(a.map.rows - dp.viewRows, 0), dp.viewStartRow)
 
+  let viewEndCol = dp.viewStartCol + dp.viewCols - 1
+  let viewEndRow = dp.viewStartRow + dp.viewRows - 1
+
   a.cursorCol = min(
-    max(dp.viewStartCol + dp.viewCols - 1, dp.viewStartCol),
+    max(viewEndCol, dp.viewStartCol),
     a.cursorCol
   )
   a.cursorRow = min(
-    max(dp.viewStartRow + dp.viewRows - 1, dp.viewStartRow),
+    max(viewEndRow, dp.viewStartRow),
     a.cursorRow
   )
 
@@ -345,11 +348,11 @@ proc handleEvents(a) =
 
       elif ke.isKeyDown(keyEqual, repeat=true):
         a.drawMapParams.incZoomLevel()
-        updateMapAndCursorPosition(a)
+        updateViewStartAndCursorPosition(a)
 
       elif ke.isKeyDown(keyMinus, repeat=true):
         a.drawMapParams.decZoomLevel()
-        updateMapAndCursorPosition(a)
+        updateViewStartAndCursorPosition(a)
 
       elif ke.isKeyDown(keyN, {mkCtrl}):
         g_newMapDialog_name = "Level 1"
@@ -428,11 +431,11 @@ proc handleEvents(a) =
 
       elif ke.isKeyDown(keyEqual, repeat=true):
         a.drawMapParams.incZoomLevel()
-        updateMapAndCursorPosition(a)
+        updateViewStartAndCursorPosition(a)
 
       elif ke.isKeyDown(keyMinus, repeat=true):
         a.drawMapParams.decZoomLevel()
-        updateMapAndCursorPosition(a)
+        updateViewStartAndCursorPosition(a)
 
       elif ke.isKeyDown(keyEscape):
         exitSelectMode(a)
@@ -477,11 +480,11 @@ proc handleEvents(a) =
 
       elif ke.isKeyDown(keyEqual, repeat=true):
         a.drawMapParams.incZoomLevel()
-        updateMapAndCursorPosition(a)
+        updateViewStartAndCursorPosition(a)
 
       elif ke.isKeyDown(keyMinus, repeat=true):
         a.drawMapParams.decZoomLevel()
-        updateMapAndCursorPosition(a)
+        updateViewStartAndCursorPosition(a)
 
       elif ke.isKeyDown(keyEscape):
         a.editMode = emNormal
@@ -537,7 +540,7 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
 
   ######################################################
 
-  updateMapAndCursorPosition(a)
+  updateViewStartAndCursorPosition(a)
   defineDialogs()
   handleEvents(a)
   renderUI()
