@@ -6,7 +6,6 @@ import utils
 import glfw
 from glfw/wrapper import setCursor, createStandardCursor, CursorShape
 import nanovg
-import xxhash
 
 
 # {{{ Types
@@ -325,9 +324,11 @@ proc draw(dl: DrawLayers, vg: NVGContext) =
 const KoiInternalIdPrefix = "~-=[//.K0i:iN73Rn4L:!D.//]=-~"  # unique enough?!
 
 template generateId(id: string): ItemId =
-  let hash32 = XXH32(id)
+  let hash32 = hash(id).uint32
   # Make sure the IDs are always positive integers
-  int64(hash32) - int32.low + 1
+  let h = int64(hash32) - int32.low + 1
+  assert h > 0
+  h
 
 template generateId(filename: string, line: int, id: string): ItemId =
   generateId(filename & ":" & $line & ":" & id)
