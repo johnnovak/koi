@@ -89,19 +89,19 @@ proc newMapDialog() =
       x = 30.0
       y = 60.0
 
-    koi.label(x, y, labelWidth, h, "Name", gray(0.70), fontSize=19.0)
+    koi.label(x, y, labelWidth, h, "Name", gray(0.70), fontSize=14.0)
     g_newMapDialog_name = koi.textField(
       x + labelWidth, y, 220.0, h, tooltip = "", g_newMapDialog_name
     )
 
     y = y + 50
-    koi.label(x, y, labelWidth, h, "Columns", gray(0.70), fontSize=19.0)
+    koi.label(x, y, labelWidth, h, "Columns", gray(0.70), fontSize=14.0)
     g_newMapDialog_cols = koi.textField(
       x + labelWidth, y, 60.0, h, tooltip = "", g_newMapDialog_cols
     )
 
     y = y + 30
-    koi.label(x, y, labelWidth, h, "Rows", gray(0.70), fontSize=19.0)
+    koi.label(x, y, labelWidth, h, "Rows", gray(0.70), fontSize=14.0)
     g_newMapDialog_rows = koi.textField(
       x + labelWidth, y, 60.0, h, tooltip = "", g_newMapDialog_rows
     )
@@ -565,7 +565,7 @@ proc createDefaultMapStyle(): MapStyle =
   var ms = new MapStyle
   ms.cellCoordsColor     = gray(0.9)
   ms.cellCoordsColorHi   = rgb(1.0, 0.75, 0.0)
-  ms.cellCoordsFontSize  = 15.0
+  ms.cellCoordsFontSize  = 12.0
   ms.cursorColor         = rgb(1.0, 0.65, 0.0)
   ms.cursorGuideColor    = rgba(1.0, 0.65, 0.0, 0.2)
   ms.defaultFgColor      = gray(0.1)

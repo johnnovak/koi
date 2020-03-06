@@ -102,7 +102,7 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
     y = 70.0
 
   koi.label(x, y, w, h, "Koi widget tests", color = gray(0.90),
-            fontSize = 22.0)
+            fontSize = 15.0)
 
   # Buttons
   y += pad
@@ -215,7 +215,7 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
     sliderVal3)
 
   koi.label(300, 590, w, h, fmt"{sliderVal3:.3f}",
-            color = gray(0.90), fontSize = 19.0)
+            color = gray(0.90), fontSize = 14.0)
 
   sliderVal4 = koi.vertSlider(
     400, 460, h, 120,
@@ -223,7 +223,7 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
     sliderVal4)
 
   koi.label(380, 590, w, h, fmt"{sliderVal4:.3f}",
-            color = gray(0.90), fontSize = 19.0)
+            color = gray(0.90), fontSize = 14.0)
 
   # Dropdowns
   y += pad * 2

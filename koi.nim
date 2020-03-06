@@ -608,7 +608,7 @@ proc drawTooltip(x, y: float, text: string, alpha: float = 1.0) =
     vg.fillColor(gray(0.1, 0.88 * alpha))
     vg.fill()
 
-    vg.setFont(17.0)
+    vg.setFont(12.0)
     vg.fillColor(white(0.9 * alpha))
     discard vg.text(x + 10, y + 10, text)
 
@@ -668,7 +668,7 @@ proc textLabel(id:         ItemId,
                x, y, w, h: float,
                label:      string,
                color:      Color,
-               fontSize:   float = 19.0,
+               fontSize:   float = 14.0,
                fontFace:   string = "sans-bold") =
 
   alias(ui, g_uiState)
@@ -690,7 +690,7 @@ proc textLabel(id:         ItemId,
 template label*(x, y, w, h: float,
                 label:      string,
                 color:      Color,
-                fontSize:   float = 19.0,
+                fontSize:   float = 14.0,
                 fontFace:   string = "sans-bold") =
 
   let i = instantiationInfo(fullPaths = true)
@@ -748,7 +748,7 @@ proc button(id:         ItemId,
 
     vg.scissor(textBoxX, textBoxY, textBoxW, textBoxH)
 
-    vg.setFont(19.0)
+    vg.setFont(14.0)
     vg.fillColor(GRAY_LO)
     let tw = vg.horizontalAdvance(0,0, label)
     discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, label)
@@ -888,7 +888,7 @@ proc radioButtons(id:           ItemId,
   const PadX = 2
 
   addDrawLayer(ui.currentLayer, vg):
-    vg.setFont(19.0)
+    vg.setFont(14.0)
 
     for i, label in labels:
       let fillColor = if   drawState == dsHover  and hotButton == i: GRAY_HI
@@ -1003,7 +1003,7 @@ proc dropdown(id:           ItemId,
     var maxItemWidth = 0.0
 
     # TODO to be kept up to date with the draw proc
-    g_nvgContext.setFont(19.0)
+    g_nvgContext.setFont(14.0)
 
     for i in items:
       let tw = g_nvgContext.horizontalAdvance(0, 0, i)
@@ -1077,7 +1077,7 @@ proc dropdown(id:           ItemId,
 
     vg.scissor(textBoxX, textBoxY, textBoxW, textBoxH)
 
-    vg.setFont(19.0)
+    vg.setFont(14.0)
     vg.fillColor(textColor)
     discard vg.text(x + ItemXPad, y+h*0.5, itemText)
 
@@ -1093,7 +1093,7 @@ proc dropdown(id:           ItemId,
       vg.fill()
 
       # Draw items
-      vg.setFont(19.0)
+      vg.setFont(14.0)
       vg.fillColor(GRAY_HI)
 
       var
@@ -1186,7 +1186,7 @@ proc textField(id:         ItemId,
 
   proc calcGlyphPos() =
     # TODO to be kept up to date with the draw proc
-    g_nvgContext.setFont(19.0)
+    g_nvgContext.setFont(14.0)
     discard g_nvgContext.textGlyphPositions(0, 0, text, glyphs)
 
   proc hasSelection(): bool =
@@ -1553,7 +1553,7 @@ proc textField(id:         ItemId,
     # Draw text
     let textColor = if editing: GRAY_HI else: GRAY_LO
 
-    vg.setFont(19.0)
+    vg.setFont(14.0)
     vg.fillColor(textColor)
 
     discard vg.text(textX, textY, text)
@@ -1772,7 +1772,7 @@ proc horizScrollBar(id:         ItemId,
     vg.fillColor(thumbColor)
     vg.fill()
 
-    vg.setFont(19.0)
+    vg.setFont(14.0)
     vg.fillColor(white())
     let valueString = fmt"{newValue:.3f}"
     let tw = vg.horizontalAdvance(0,0, valueString)
@@ -2180,7 +2180,7 @@ proc horizSlider(id:         ItemId,
       vg.fill()
 
       # Draw slider text
-      vg.setFont(19.0)
+      vg.setFont(14.0)
       vg.fillColor(white())
       let valueString = fmt"{value:.3f}"
       let tw = vg.horizontalAdvance(0,0, valueString)
@@ -2376,7 +2376,7 @@ template dialog*(w, h: float, title: string, body: untyped) =
       vg.fill()
 
       vg.fontFace("sans-bold")
-      vg.fontSize(19.0)
+      vg.fontSize(16.0)
       vg.textAlign(haLeft, vaMiddle)
       vg.fillColor(gray(0.45))
       discard vg.text(x+10.0, y+15.0, title)
@@ -2458,7 +2458,7 @@ proc menuBar(id:         ItemId,
 
     vg.scissor(x, y, w, h)
 
-    vg.setFont(19.0)
+    vg.setFont(14.0)
     vg.fillColor(GRAY_LO)
 
     for i in 0..names.high:
