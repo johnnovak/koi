@@ -238,8 +238,8 @@ const
 
 # {{{ Utils
 
-proc setFont(vg: NVGContext, size: float, face: string = "sans-bold",
-             ha: HorizontalAlign = haLeft, va: VerticalAlign = vaMiddle) =
+proc setFont*(vg: NVGContext, size: float, face: string = "sans-bold",
+              ha: HorizontalAlign = haLeft, va: VerticalAlign = vaMiddle) =
   vg.fontFace(face)
   vg.fontSize(size)
   vg.textAlign(ha, va)
