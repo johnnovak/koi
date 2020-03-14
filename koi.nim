@@ -234,6 +234,8 @@ const
   SliderFineDragDivisor      = 10.0
   SliderUltraFineDragDivisor = 100.0
 
+  TextVertAlignFactor = 0.55
+
 # }}}
 
 # {{{ Utils
@@ -683,7 +685,7 @@ proc textLabel(id:         ItemId,
 
     vg.setFont(fontSize, fontFace)
     vg.fillColor(color)
-    discard vg.text(x, y+h*0.5, label)
+    discard vg.text(x, y + h*TextVertAlignFactor, label)
 
     vg.resetScissor()
 
@@ -751,8 +753,8 @@ proc button(id:         ItemId,
 
     vg.setFont(14.0)
     vg.fillColor(GRAY_LO)
-    let tw = vg.horizontalAdvance(0,0, label)
-    discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, label)
+    let tw = vg.horizontalAdvance(label)
+    discard vg.text(x + w*0.5 - tw*0.5, y + h*TextVertAlignFactor, label)
 
     vg.resetScissor()
 
@@ -921,8 +923,8 @@ proc radioButtons(id:           ItemId,
       vg.scissor(textBoxX, textBoxY, textBoxW, textBoxH)
 
       vg.fillColor(textColor)
-      let tw = vg.horizontalAdvance(0,0, label)
-      discard vg.text(x + buttonW*0.5 - tw*0.5, y+h*0.5, label)
+      let tw = vg.horizontalAdvance(label)
+      discard vg.text(x + buttonW*0.5 - tw*0.5, y + h*TextVertAlignFactor, label)
 
       vg.resetScissor()
 
@@ -1007,7 +1009,7 @@ proc dropdown(id:           ItemId,
     g_nvgContext.setFont(14.0)
 
     for i in items:
-      let tw = g_nvgContext.horizontalAdvance(0, 0, i)
+      let tw = g_nvgContext.horizontalAdvance(i)
       maxItemWidth = max(tw, maxItemWidth)
 
     selBoxW = max(maxItemWidth + SelBoxPadX*2, w)
@@ -1080,7 +1082,7 @@ proc dropdown(id:           ItemId,
 
     vg.setFont(14.0)
     vg.fillColor(textColor)
-    discard vg.text(x + ItemXPad, y+h*0.5, itemText)
+    discard vg.text(x + ItemXPad, y + h*TextVertAlignFactor, itemText)
 
     vg.resetScissor()
 
@@ -1111,7 +1113,7 @@ proc dropdown(id:           ItemId,
           textColor = GRAY_LO
 
         vg.fillColor(textColor)
-        discard vg.text(ix, iy + h*0.5, item)
+        discard vg.text(ix, iy + h*TextVertAlignFactor, item)
         iy += itemHeight
 
   if isHot(id):
@@ -1431,7 +1433,7 @@ proc textField(id:         ItemId,
 
   var
     textX = textBoxX
-    textY = y + h*0.5
+    textY = y + h*TextVertAlignFactor
 
   let fillColor = case drawState
     of dsHover:  GRAY_HI
@@ -1776,8 +1778,8 @@ proc horizScrollBar(id:         ItemId,
     vg.setFont(14.0)
     vg.fillColor(white())
     let valueString = fmt"{newValue:.3f}"
-    let tw = vg.horizontalAdvance(0,0, valueString)
-    discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, valueString)
+    let tw = vg.horizontalAdvance(valueString)
+    discard vg.text(x + w*0.5 - tw*0.5, y + h*TextVertAlignFactor, valueString)
 
   if isHot(id):
     handleTooltip(id, tooltip)
@@ -2184,8 +2186,8 @@ proc horizSlider(id:         ItemId,
       vg.setFont(14.0)
       vg.fillColor(white())
       let valueString = fmt"{value:.3f}"
-      let tw = vg.horizontalAdvance(0,0, valueString)
-      discard vg.text(x + w*0.5 - tw*0.5, y+h*0.5, valueString)
+      let tw = vg.horizontalAdvance(valueString)
+      discard vg.text(x + w*0.5 - tw*0.5, y + h*TextVertAlignFactor, valueString)
 
   if isHot(id):
     handleTooltip(id, tooltip)
@@ -2366,21 +2368,28 @@ template dialog*(w, h: float, title: string, body: untyped) =
     ui.currentLayer = oldCurrLayer + 2
 
     addDrawLayer(ui.currentLayer, vg):
+      const TitleBarHeight = 30.0
+
       vg.beginPath()
-      vg.fillColor(gray(0.17))
+      vg.fillColor(gray(0.1, 0.55))
+      vg.rect(0, 0, ui.winWidth, ui.winHeight)
+      vg.fill()
+
+      vg.beginPath()
+      vg.fillColor(gray(0.37))
       vg.rect(x, y, w, h)
       vg.fill()
 
       vg.beginPath()
-      vg.fillColor(gray(0.06))
-      vg.rect(x, y, w, 30.0)
+      vg.fillColor(gray(0.1))
+      vg.rect(x, y, w, TitleBarHeight)
       vg.fill()
 
       vg.fontFace("sans-bold")
-      vg.fontSize(16.0)
+      vg.fontSize(15.0)
       vg.textAlign(haLeft, vaMiddle)
-      vg.fillColor(gray(0.45))
-      discard vg.text(x+10.0, y+15.0, title)
+      vg.fillColor(gray(0.5))
+      discard vg.text(x+10.0, y + TitleBarHeight * TextVertAlignFactor, title)
 
     ui.ox = x
     ui.oy = y
@@ -2422,7 +2431,7 @@ proc menuBar(id:         ItemId,
   for name in names:
     posX += PadX
     menuPosX.add(posX)
-    let tw = g_nvgContext.horizontalAdvance(0,0, name)
+    let tw = g_nvgContext.horizontalAdvance(name)
     posX += tw + PadX
 
   menuPosX.add(posX)
@@ -2463,7 +2472,7 @@ proc menuBar(id:         ItemId,
     vg.fillColor(GRAY_LO)
 
     for i in 0..names.high:
-      discard vg.text(menuPosX[i], y+h*0.5, names[i])
+      discard vg.text(menuPosX[i], y + h*TextVertAlignFactor, names[i])
 
     vg.resetScissor()
 
@@ -2514,7 +2523,7 @@ proc menuItemSeparator*() =
 # }}}
 # }}}
 
-# {{{ init()
+# {{{ init*()
 
 proc init*(nvg: NVGContext) =
   RED       = rgb(1.0, 0.4, 0.4)
@@ -2536,7 +2545,7 @@ proc init*(nvg: NVGContext) =
   win.stickyMouseButtons = true
 
 # }}}
-# {{{ deinit()
+# {{{ deinit*()
 
 proc deinit*() =
   wrapper.destroyCursor(g_cursorArrow)
@@ -2544,7 +2553,7 @@ proc deinit*() =
   wrapper.destroyCursor(g_cursorHorizResize)
 
 # }}}
-# {{{ beginFrame()
+# {{{ beginFrame*()
 
 proc beginFrame*(winWidth, winHeight: float) =
   let win = glfw.currentContext()
@@ -2570,16 +2579,16 @@ proc beginFrame*(winWidth, winHeight: float) =
 
   # Store modifier key state (just for convenience for the GUI functions)
   ui.shiftDown = win.isKeyDown(keyLeftShift) or
-                  win.isKeyDown(keyRightShift)
+                 win.isKeyDown(keyRightShift)
 
   ui.ctrlDown  = win.isKeyDown(keyLeftControl) or
-                  win.isKeyDown(keyRightControl)
+                 win.isKeyDown(keyRightControl)
 
   ui.altDown   = win.isKeyDown(keyLeftAlt) or
-                  win.isKeyDown(keyRightAlt)
+                 win.isKeyDown(keyRightAlt)
 
   ui.superDown = win.isKeyDown(keyLeftSuper) or
-                  win.isKeyDown(keyRightSuper)
+                 win.isKeyDown(keyRightSuper)
 
   # Reset hot item
   ui.hotItem = 0
@@ -2587,7 +2596,7 @@ proc beginFrame*(winWidth, winHeight: float) =
   g_drawLayers.init()
 
 # }}}
-# {{{ endFrame
+# {{{ endFrame*()
 
 proc endFrame*() =
   alias(ui, g_uiState)
@@ -2630,8 +2639,26 @@ proc endFrame*() =
 
 # }}}
 
-# TODO hack
-proc focusCaptured*(): bool=
-  g_uiState.focusCaptured
+# {{{ Read-only UI state properties
+
+proc winWidth*():  float = g_uiState.winWidth
+proc winHeight*(): float = g_uiState.winHeight
+
+proc mx*(): float = g_uiState.mx
+proc my*(): float = g_uiState.my
+
+proc lastmx*(): float = g_uiState.lastmx
+proc lastmy*(): float = g_uiState.lastmy
+
+proc mbLeftDown*():   bool = g_uiState.mbLeftDown
+proc mbRightDown*():  bool = g_uiState.mbRightDown
+proc mbMiddleDown*(): bool = g_uiState.mbMiddleDown
+
+proc shiftDown*(): bool = g_uiState.shiftDown
+proc altDown*():   bool = g_uiState.altDown
+proc ctrlDown*():  bool = g_uiState.ctrlDown
+proc superDown*(): bool = g_uiState.superDown
+
+# }}}
 
 # vim: et:ts=2:sw=2:fdm=marker
