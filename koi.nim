@@ -705,24 +705,24 @@ template label*(x, y, w, h: float,
 # }}}
 # {{{ Button
 
-type ButtonStyle = ref object
-  buttonCornerRadius:       float
-  buttonPadX:               float
-  buttonStrokeColor:        Color
-  buttonStrokeColorHover:   Color
-  buttonStrokeColorActive:  Color
-  buttonFillColor:          Color
-  buttonFillColorHover:     Color
-  buttonFillColorActive:    Color
-  labelFontSize:            float
-  labelFontFace:            string
-  labelOnly:                bool
-  labelAlign:               HorizontalAlign
-  labelColor:               Color
-  labelColorHover:          Color
-  labelColorActive:         Color
+type ButtonStyle* = ref object
+  buttonCornerRadius*:      float
+  buttonPadX*:              float
+  buttonStrokeColor*:       Color
+  buttonStrokeColorHover*:  Color
+  buttonStrokeColorActive*: Color
+  buttonFillColor*:         Color
+  buttonFillColorHover*:    Color
+  buttonFillColorActive*:   Color
+  labelFontSize*:           float
+  labelFontFace*:           string
+  labelOnly*:               bool
+  labelAlign*:              HorizontalAlign
+  labelColor*:              Color
+  labelColorHover*:         Color
+  labelColorActive*:        Color
 
-var DefaultButtonStyle = new ButtonStyle
+var DefaultButtonStyle* = new ButtonStyle
 
 DefaultButtonStyle.buttonCornerRadius      = 5
 DefaultButtonStyle.buttonPadX              = 8
