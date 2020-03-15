@@ -212,11 +212,12 @@ var
   g_cursorHorizResize: Cursor
 
   # TODO remove these once theming is implemented
-  RED*       : Color
-  GRAY_MID*  : Color
-  GRAY_HI*   : Color
-  GRAY_LO*   : Color
-  GRAY_LOHI* : Color
+  RED       = rgb(1.0, 0.4, 0.4)
+  GRAY_MID  = gray(0.6)
+  GRAY_HI   = gray(0.8)
+  GRAY_LO   = gray(0.25)
+  GRAY_LOHI = gray(0.35)
+
 
 # }}}
 # {{{ Configuration
@@ -240,9 +241,9 @@ const
 
 # {{{ Utils
 
-proc setFont*(vg: NVGContext, size: float, face: string = "sans-bold",
+proc setFont*(vg: NVGContext, size: float, name: string = "sans-bold",
               ha: HorizontalAlign = haLeft, va: VerticalAlign = vaMiddle) =
-  vg.fontFace(face)
+  vg.fontFace(name)
   vg.fontSize(size)
   vg.textAlign(ha, va)
 
@@ -704,22 +705,56 @@ template label*(x, y, w, h: float,
 # }}}
 # {{{ Button
 
+type ButtonStyle = ref object
+  buttonCornerRadius:       float
+  buttonPadX:               float
+  buttonStrokeColor:        Color
+  buttonStrokeColorHover:   Color
+  buttonStrokeColorActive:  Color
+  buttonFillColor:          Color
+  buttonFillColorHover:     Color
+  buttonFillColorActive:    Color
+  labelFontSize:            float
+  labelFontFace:            string
+  labelOnly:                bool
+  labelAlign:               HorizontalAlign
+  labelColor:               Color
+  labelColorHover:          Color
+  labelColorActive:         Color
+
+var DefaultButtonStyle = new ButtonStyle
+
+DefaultButtonStyle.buttonCornerRadius      = 5
+DefaultButtonStyle.buttonPadX              = 8
+DefaultButtonStyle.buttonStrokeColor       = black()
+DefaultButtonStyle.buttonStrokeColorHover  = black()
+DefaultButtonStyle.buttonStrokeColorActive = black()
+DefaultButtonStyle.buttonFillColor         = gray(0.6)
+DefaultButtonStyle.buttonFillColorHover    = GRAY_HI
+DefaultButtonStyle.buttonFillColorActive   = RED
+DefaultButtonStyle.labelFontSize           = 14.0
+DefaultButtonStyle.labelFontFace           = "sans-bold"
+DefaultButtonStyle.labelOnly               = false
+DefaultButtonStyle.labelAlign              = haCenter
+DefaultButtonStyle.labelColor              = GRAY_LO
+DefaultButtonStyle.labelColorHover         = GRAY_LO
+DefaultButtonStyle.labelColorActive        = GRAY_LO
+
+
 proc button(id:         ItemId,
             x, y, w, h: float,
             label:      string,
-            color:      Color,
-            tooltip:    string = ""): bool =
+            tooltip:    string,
+            style:      ButtonStyle): bool =
 
   alias(ui, g_uiState)
+  alias(s, style)
 
   let
     x = x + ui.ox
     y = y + ui.oy
-
-  const TextBoxPadX = 8
-  let
-    textBoxX = x + TextBoxPadX
-    textBoxW = w - TextBoxPadX*2
+    textBoxX = x + s.buttonPadX
+    textBoxW = w - s.buttonPadX*2
     textBoxY = y
     textBoxH = h
 
@@ -738,25 +773,40 @@ proc button(id:         ItemId,
     elif isHotAndActive(id): dsActive
     else: dsNormal
 
-  let fillColor = case drawState
-    of dsHover:  GRAY_HI
-    of dsActive: RED
-    else:        color
+  var buttonFillColor, labelColor: Color
+  case drawState
+  of dsHover:
+    buttonFillColor = s.buttonFillColorHover
+    labelColor = s.labelColorHover
+  of dsActive:
+    buttonFillColor = s.buttonFillColorActive
+    labelColor = s.labelColorActive
+  else:
+    buttonFillColor = s.buttonFillColor
+    labelColor = s.labelColor
 
   addDrawLayer(ui.currentLayer, vg):
-    vg.beginPath()
-    vg.roundedRect(x, y, w, h, 5)
-    vg.fillColor(fillColor)
-    vg.fill()
+    if not s.labelOnly:
+      vg.beginPath()
+      vg.roundedRect(x, y, w, h, s.buttonCornerRadius)
+      vg.fillColor(buttonFillColor)
+      vg.fill()
 
-    vg.scissor(textBoxX, textBoxY, textBoxW, textBoxH)
+      vg.scissor(textBoxX, textBoxY, textBoxW, textBoxH)
 
-    vg.setFont(14.0)
-    vg.fillColor(GRAY_LO)
-    let tw = vg.horizontalAdvance(label)
-    discard vg.text(x + w*0.5 - tw*0.5, y + h*TextVertAlignFactor, label)
+    let tx = case s.labelAlign:
+    of haLeft:   textBoxX
+    of haCenter: textBoxX + textBoxW*0.5
+    of haRight:  textBoxX + textBoxW
 
-    vg.resetScissor()
+    let ty = y + h*TextVertAlignFactor
+
+    vg.setFont(s.labelFontSize, s.labelFontFace, s.labelAlign)
+    vg.fillColor(labelColor)
+    discard vg.text(tx, ty, label)
+
+    if not s.labelOnly:
+      vg.resetScissor()
 
   if isHot(id):
     handleTooltip(id, tooltip)
@@ -764,13 +814,13 @@ proc button(id:         ItemId,
 
 template button*(x, y, w, h: float,
                  label:      string,
-                 color:      Color,
-                 tooltip:    string = ""): bool =
+                 tooltip:    string = "",
+                 style:      ButtonStyle = DefaultButtonStyle): bool =
 
   let i = instantiationInfo(fullPaths = true)
   let id = generateId(i.filename, i.line, "")
 
-  button(id, x, y, w, h, label, color, tooltip)
+  button(id, x, y, w, h, label, tooltip, style)
 
 # }}}
 # {{{ CheckBox
@@ -923,7 +973,7 @@ proc radioButtons(id:           ItemId,
       vg.scissor(textBoxX, textBoxY, textBoxW, textBoxH)
 
       vg.fillColor(textColor)
-      let tw = vg.horizontalAdvance(label)
+      let tw = vg.textWidth(label)
       discard vg.text(x + buttonW*0.5 - tw*0.5, y + h*TextVertAlignFactor, label)
 
       vg.resetScissor()
@@ -1009,7 +1059,7 @@ proc dropdown(id:           ItemId,
     g_nvgContext.setFont(14.0)
 
     for i in items:
-      let tw = g_nvgContext.horizontalAdvance(i)
+      let tw = g_nvgContext.textWidth(i)
       maxItemWidth = max(tw, maxItemWidth)
 
     selBoxW = max(maxItemWidth + SelBoxPadX*2, w)
@@ -1778,7 +1828,7 @@ proc horizScrollBar(id:         ItemId,
     vg.setFont(14.0)
     vg.fillColor(white())
     let valueString = fmt"{newValue:.3f}"
-    let tw = vg.horizontalAdvance(valueString)
+    let tw = vg.textWidth(valueString)
     discard vg.text(x + w*0.5 - tw*0.5, y + h*TextVertAlignFactor, valueString)
 
   if isHot(id):
@@ -2186,7 +2236,7 @@ proc horizSlider(id:         ItemId,
       vg.setFont(14.0)
       vg.fillColor(white())
       let valueString = fmt"{value:.3f}"
-      let tw = vg.horizontalAdvance(valueString)
+      let tw = vg.textWidth(valueString)
       discard vg.text(x + w*0.5 - tw*0.5, y + h*TextVertAlignFactor, valueString)
 
   if isHot(id):
@@ -2431,7 +2481,7 @@ proc menuBar(id:         ItemId,
   for name in names:
     posX += PadX
     menuPosX.add(posX)
-    let tw = g_nvgContext.horizontalAdvance(name)
+    let tw = g_nvgContext.textWidth(name)
     posX += tw + PadX
 
   menuPosX.add(posX)
@@ -2526,12 +2576,6 @@ proc menuItemSeparator*() =
 # {{{ init*()
 
 proc init*(nvg: NVGContext) =
-  RED       = rgb(1.0, 0.4, 0.4)
-  GRAY_MID  = gray(0.6)
-  GRAY_HI   = gray(0.8)
-  GRAY_LO   = gray(0.25)
-  GRAY_LOHI = gray(0.35)
-
   g_nvgContext = nvg
 
   g_cursorArrow       = wrapper.createStandardCursor(csArrow)
