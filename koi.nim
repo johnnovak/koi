@@ -119,6 +119,9 @@ type
     # General state
     # *************
 
+    # Frames left to render
+    framesLeft: Natural
+
     # Origin offset, used for relative coordinate handling in dialogs
     ox, oy: float
 
@@ -210,6 +213,8 @@ var
   g_cursorArrow:       Cursor
   g_cursorIBeam:       Cursor
   g_cursorHorizResize: Cursor
+  g_cursorVertResize:  Cursor
+  g_cursorHand:        Cursor
 
   # TODO remove these once theming is implemented
   RED       = rgb(1.0, 0.4, 0.4)
@@ -248,6 +253,9 @@ proc setFont*(vg: NVGContext, size: float, name: string = "sans-bold",
   vg.textAlign(ha, va)
 
 proc hideCursor*() =
+  glfw.currentContext().cursorMode = cmHidden
+
+proc disableCursor*() =
   glfw.currentContext().cursorMode = cmDisabled
 
 proc showCursor*() =
@@ -264,6 +272,14 @@ proc showIBeamCursor*() =
 proc showHorizResizeCursor*() =
   let win = glfw.currentContext()
   wrapper.setCursor(win.getHandle, g_cursorHorizResize)
+
+proc showVertResizeCursor*() =
+  let win = glfw.currentContext()
+  wrapper.setCursor(win.getHandle, g_cursorVertResize)
+
+proc showHandCursor*() =
+  let win = glfw.currentContext()
+  wrapper.setCursor(win.getHandle, g_cursorHand)
 
 proc setCursorPosX*(x: float) =
   let win = glfw.currentContext()
@@ -361,7 +377,7 @@ template isHotAndActive(id: ItemId): bool =
   alias(ui, g_uiState)
   isHot(id) and isActive(id)
 
-template noActiveItem(): bool =
+template noActiveItem*(): bool =
   alias(ui, g_uiState)
   ui.activeItem == 0
 
@@ -375,8 +391,18 @@ template isDialogActive(): bool =
 
 template isHit(x, y, w, h: float): bool =
   alias(ui, g_uiState)
-  not ui.focusCaptured and (ui.insideDialog or not isDialogActive()) and
-    mouseInside(x, y, w, h)
+  let hit = not ui.focusCaptured and
+            (ui.insideDialog or not isDialogActive()) and
+            mouseInside(x, y, w, h)
+
+  # Properly refreshing the UI can take up to 2-3 frames after some user
+  # interaction, depending on the widget and the interaction. It's just much
+  # easier to set the framesLeft counter to a resonable upper limit here
+  # globally.
+  if hit:
+    ui.framesLeft = 3
+
+  hit
 
 # }}}
 # {{{ Keyboard handling
@@ -612,7 +638,7 @@ proc drawTooltip(x, y: float, text: string, alpha: float = 1.0) =
     vg.fillColor(gray(0.1, 0.88 * alpha))
     vg.fill()
 
-    vg.setFont(12.0)
+    vg.setFont(13.0)
     vg.fillColor(white(0.9 * alpha))
     discard vg.text(x + 10, y + 10, text)
 
@@ -622,7 +648,6 @@ proc drawTooltip(x, y: float, text: string, alpha: float = 1.0) =
 proc tooltipPost() =
   alias(ui, g_uiState)
   alias(tt, ui.tooltipState)
-
 
   let
     ttx = ui.mx + 13
@@ -663,6 +688,10 @@ proc tooltipPost() =
   elif tt.state == tsShow:
     tt.state = tsFadeOutDelay
     tt.t0 = getTime()
+
+  # Make sure to keep drawing until the tooltip animation cycle is over
+  if tt.state > tsOff:
+    inc(ui.framesLeft)
 
 # }}}
 # }}}
@@ -722,7 +751,7 @@ type ButtonStyle* = ref object
   labelColorHover*:         Color
   labelColorActive*:        Color
 
-var DefaultButtonStyle* = new ButtonStyle
+var DefaultButtonStyle = new ButtonStyle
 
 DefaultButtonStyle.buttonCornerRadius      = 5
 DefaultButtonStyle.buttonPadX              = 8
@@ -740,6 +769,11 @@ DefaultButtonStyle.labelColor              = GRAY_LO
 DefaultButtonStyle.labelColorHover         = GRAY_LO
 DefaultButtonStyle.labelColorActive        = GRAY_LO
 
+proc getDefaultButtonStyle*(): ButtonStyle =
+  DefaultButtonStyle.deepCopy
+
+proc setDefaultButtonStyle*(buttonStyle: ButtonStyle) =
+  DefaultButtonStyle = buttonStyle.deepCopy
 
 proc button(id:         ItemId,
             x, y, w, h: float,
@@ -1716,7 +1750,7 @@ proc horizScrollBar(id:         ItemId,
       if insideThumb:
         ui.x0 = ui.mx
         if ui.shiftDown:
-          hideCursor()
+          disableCursor()
           sb.state = sbsDragHidden
         else:
           sb.state = sbsDragNormal
@@ -1729,7 +1763,7 @@ proc horizScrollBar(id:         ItemId,
 
     of sbsDragNormal:
       if ui.shiftDown:
-        hideCursor()
+        disableCursor()
         sb.state = sbsDragHidden
       else:
         let dx = ui.mx - ui.x0
@@ -1927,7 +1961,7 @@ proc vertScrollBar(id:         ItemId,
       if insideThumb:
         ui.y0 = ui.my
         if ui.shiftDown:
-          hideCursor()
+          disableCursor()
           sb.state = sbsDragHidden
         else:
           sb.state = sbsDragNormal
@@ -1940,7 +1974,7 @@ proc vertScrollBar(id:         ItemId,
 
     of sbsDragNormal:
       if ui.shiftDown:
-        hideCursor()
+        disableCursor()
         sb.state = sbsDragHidden
       else:
         let dy = ui.my - ui.y0
@@ -2132,7 +2166,7 @@ proc horizSlider(id:         ItemId,
       ui.dragY = -1.0
       ss.state = ssDragHidden
       ss.cursorMoved = false
-      hideCursor()
+      disableCursor()
 
     of ssDragHidden:
       if ui.dragX != ui.mx:
@@ -2306,7 +2340,7 @@ proc vertSlider(id:         ItemId,
       ui.y0 = ui.my
       ui.dragX = -1.0
       ui.dragY = ui.my
-      hideCursor()
+      disableCursor()
       ss.state = ssDragHidden
 
     of ssDragHidden:
@@ -2581,6 +2615,8 @@ proc init*(nvg: NVGContext) =
   g_cursorArrow       = wrapper.createStandardCursor(csArrow)
   g_cursorIBeam       = wrapper.createStandardCursor(csIBeam)
   g_cursorHorizResize = wrapper.createStandardCursor(csHorizResize)
+  g_cursorVertResize  = wrapper.createStandardCursor(csVertResize)
+  g_cursorHand        = wrapper.createStandardCursor(csHand)
 
   let win = currentContext()
   win.keyCb  = keyCb
@@ -2681,6 +2717,14 @@ proc endFrame*() =
       # widget but released outside of it.
       ui.activeItem = 0
 
+  if ui.framesLeft > 0:
+    dec(ui.framesLeft)
+
+# }}}
+# {{{ shouldRenderNextFrame*()
+proc shouldRenderNextFrame*(): bool =
+  alias(ui, g_uiState)
+  ui.framesLeft > 0
 # }}}
 
 # {{{ Read-only UI state properties
