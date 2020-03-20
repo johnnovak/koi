@@ -106,13 +106,11 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
 
   # Buttons
   y += pad
-  if koi.button(x, y, w, h, "Start", color = GRAY_MID,
-                tooltip = "I am the first!"):
+  if koi.button(x, y, w, h, "Start", tooltip = "I am the first!"):
     echo "button 1 pressed"
 
   y += pad
-  if koi.button(x, y, w, h, "Stop (very long text)", color = GRAY_MID,
-                tooltip = "Middle one..."):
+  if koi.button(x, y, w, h, "Stop (very long text)", tooltip = "Middle one..."):
     echo "button 2 pressed"
 
   # --- DIALOG --------------------------------------------------------------
@@ -140,11 +138,11 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
       echo "dialog Cancel"
       closeDialog()
 
-    if koi.button(x, y, bw, h, "OK", color = GRAY_MID, tooltip = "OK"):
+    if koi.button(x, y, bw, h, "OK", tooltip = "OK"):
       okAction()
 
     x += bw + 10
-    if koi.button(x, y, bw, h, "Cancel", color = GRAY_MID, tooltip = "Cancel"):
+    if koi.button(x, y, bw, h, "Cancel", tooltip = "Cancel"):
       cancelAction()
 
     for ke in koi.keyBuf():
@@ -156,8 +154,7 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
   # -------------------------------------------------------------------------
 
   y += pad
-  if koi.button(x, y, w, h, "Preferences", color = GRAY_MID,
-                tooltip = "Last button"):
+  if koi.button(x, y, w, h, "Preferences", tooltip = "Last button"):
     openDialog("Preferences dialog")
 
   # ScrollBars

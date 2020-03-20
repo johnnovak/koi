@@ -358,36 +358,31 @@ proc mouseInside(x, y, w, h: float): bool =
   ui.my >= y and ui.my <= y+h
 
 template isHot(id: ItemId): bool =
-  alias(ui, g_uiState)
-  ui.hotItem == id
+  g_uiState.hotItem == id
 
 template setHot(id: ItemId) =
-  alias(ui, g_uiState)
-  ui.hotItem = id
+  g_uiState.hotItem = id
 
 template isActive(id: ItemId): bool =
-  alias(ui, g_uiState)
-  ui.activeItem == id
+  g_uiState.activeItem == id
 
 template setActive(id: ItemId) =
-  alias(ui, g_uiState)
-  ui.activeItem = id
+  g_uiState.activeItem = id
 
 template isHotAndActive(id: ItemId): bool =
-  alias(ui, g_uiState)
   isHot(id) and isActive(id)
 
+template hasHotItem*(): bool =
+  g_uiState.hotItem > 0
+
 template noActiveItem*(): bool =
-  alias(ui, g_uiState)
-  ui.activeItem == 0
+  g_uiState.activeItem == 0
 
 template hasActiveItem(): bool =
-  alias(ui, g_uiState)
-  ui.activeItem > 0
+  g_uiState.activeItem > 0
 
 template isDialogActive(): bool =
-  alias(ui, g_uiState)
-  ui.activeDialogTitle.isSome
+  g_uiState.activeDialogTitle.isSome
 
 template isHit(x, y, w, h: float): bool =
   alias(ui, g_uiState)
@@ -1072,6 +1067,7 @@ proc dropdown(id:           ItemId,
     ds.state = dsClosed
     ds.activeItem = 0
     ui.focusCaptured = false
+    inc(ui.framesLeft, 2)
 
   if ds.state == dsClosed:
     if isHit(x, y, w, h):
