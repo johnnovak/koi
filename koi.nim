@@ -361,7 +361,9 @@ template isHot(id: ItemId): bool =
   g_uiState.hotItem == id
 
 template setHot(id: ItemId) =
-  g_uiState.hotItem = id
+  alias(ui, g_uiState)
+  ui.hotItem = id
+  ui.framesLeft = 2
 
 template isActive(id: ItemId): bool =
   g_uiState.activeItem == id
@@ -390,13 +392,9 @@ template isHit(x, y, w, h: float): bool =
             (ui.insideDialog or not isDialogActive()) and
             mouseInside(x, y, w, h)
 
-  # Properly refreshing the UI can take up to 2-3 frames after some user
-  # interaction, depending on the widget and the interaction. It's just much
-  # easier to set the framesLeft counter to a resonable upper limit here
-  # globally.
-  if hit:
-    ui.framesLeft = 3
-
+  # TODO
+  # Draw another frame after the current frame (some widgets need one extra
+  # frame to refresh properly after finishing the interaction with them).
   hit
 
 # }}}
@@ -1067,7 +1065,7 @@ proc dropdown(id:           ItemId,
     ds.state = dsClosed
     ds.activeItem = 0
     ui.focusCaptured = false
-    inc(ui.framesLeft, 2)
+    ui.framesLeft = 2
 
   if ds.state == dsClosed:
     if isHit(x, y, w, h):
@@ -1769,6 +1767,8 @@ proc horizScrollBar(id:         ItemId,
 
         ui.x0 = clamp(ui.mx, thumbMinX, thumbMaxX + thumbW)
 
+      ui.framesLeft = 2
+
     of sbsDragHidden:
       # Technically, the cursor can move outside the widget when it's disabled
       # in "drag hidden" mode, and then it will cease to be "hot". But in
@@ -1980,6 +1980,8 @@ proc vertScrollBar(id:         ItemId,
 
         ui.y0 = clamp(ui.my, thumbMinY, thumbMaxY + thumbH)
 
+      ui.framesLeft = 2
+
     of sbsDragHidden:
       # Technically, the cursor can move outside the widget when it's disabled
       # in "drag hidden" mode, and then it will cease to be "hot". But in
@@ -2104,7 +2106,8 @@ proc scrollBarPost() =
       else:
         setCursorPosY(ui.dragY)
 
-    else: sb.state = sbsDefault
+    else:
+      sb.state = sbsDefault
 
 # }}}
 # }}}

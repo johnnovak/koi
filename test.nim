@@ -74,7 +74,7 @@ proc loadData(vg: NVGContext) =
     quit "Could not add font italic.\n"
 
 
-proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
+proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
   let
     (winWidth, winHeight) = win.size
     (fbWidth, fbHeight) = win.framebufferSize
@@ -376,10 +376,10 @@ proc render(win: Window, res: tuple[w, h: int32] = (0,0)) =
 
 
 proc windowPosCb(win: Window, pos: tuple[x, y: int32]) =
-  render(win)
+  renderFrame(win)
 
 proc framebufSizeCb(win: Window, size: tuple[w, h: int32]) =
-  render(win)
+  renderFrame(win)
 
 proc init(): Window =
   glfw.initialize()
@@ -401,7 +401,7 @@ proc init(): Window =
   win.windowPositionCb = windowPosCb
   win.framebufferSizeCb = framebufSizeCb
 
-  glfw.swapInterval(1)
+  glfw.swapInterval(0)
 
   win.pos = (400, 150)  # TODO for development
   wrapper.showWindow(win.getHandle())
@@ -418,12 +418,12 @@ proc cleanup() =
 proc main() =
   let win = init()
 
-  while not win.shouldClose:
-#    if win.isKeyDown(keyEscape):  # TODO key buf, like char buf?
-#      win.shouldClose = true
-
-    render(win)
-    glfw.pollEvents()
+  while not win.shouldClose: # TODO key buf, like char buf?
+    if koi.shouldRenderNextFrame():
+      glfw.pollEvents()
+    else:
+      glfw.waitEvents()
+    renderFrame(win)
 
   cleanup()
 
