@@ -195,6 +195,7 @@ type
     # Only true when we're in a dialog (this is needed so widgets outside
     # of the dialog won't register any events).
     insideDialog:      bool
+    isDialogActive:    bool
 
 # }}}
 # {{{ DrawState
@@ -384,7 +385,7 @@ template hasActiveItem(): bool =
   g_uiState.activeItem > 0
 
 template isDialogActive(): bool =
-  g_uiState.activeDialogTitle.isSome
+  g_uiState.isDialogActive
 
 template isHit(x, y, w, h: float): bool =
   alias(ui, g_uiState)
@@ -685,6 +686,9 @@ proc tooltipPost() =
   # Make sure to keep drawing until the tooltip animation cycle is over
   if tt.state > tsOff:
     inc(ui.framesLeft)
+
+  if tt.state == tsShow:
+    ui.framesLeft = 0
 
 # }}}
 # }}}
@@ -1066,6 +1070,8 @@ proc dropdown(id:           ItemId,
     ds.activeItem = 0
     ui.focusCaptured = false
     ui.framesLeft = 2
+    clearCharBuf()
+    clearKeyBuf()
 
   if ds.state == dsClosed:
     if isHit(x, y, w, h):
@@ -2436,65 +2442,57 @@ proc sliderPost() =
 type
   DialogProc = proc ()
 
-var
-  g_dialogs = initTable[string, DialogProc]()
-
-template dialog*(w, h: float, title: string, body: untyped) =
+template beginDialog*(w, h: float, title: string) =
   alias(ui, g_uiState)
 
   let
     x = floor((ui.winWidth - w) / 2)
     y = floor((ui.winHeight - h) / 2)
 
-  g_dialogs[title] = proc() =
-    let oldCurrLayer = ui.currentLayer
-    ui.currentLayer = oldCurrLayer + 2
+  inc(ui.currentLayer, 2)   # TODO
 
-    addDrawLayer(ui.currentLayer, vg):
-      const TitleBarHeight = 30.0
+  addDrawLayer(ui.currentLayer, vg):
+    const TitleBarHeight = 30.0
 
-      vg.beginPath()
-      vg.fillColor(gray(0.1, 0.55))
-      vg.rect(0, 0, ui.winWidth, ui.winHeight)
-      vg.fill()
+#    vg.beginPath()
+#    vg.fillColor(gray(0.1, 0.55))
+#    vg.rect(0, 0, ui.winWidth, ui.winHeight)
+#    vg.fill()
 
-      vg.beginPath()
-      vg.fillColor(gray(0.37))
-      vg.rect(x, y, w, h)
-      vg.fill()
+    vg.beginPath()
+    vg.fillColor(gray(0.37))
+    vg.rect(x, y, w, h)
+    vg.fill()
 
-      vg.beginPath()
-      vg.fillColor(gray(0.1))
-      vg.rect(x, y, w, TitleBarHeight)
-      vg.fill()
+    vg.beginPath()
+    vg.fillColor(gray(0.1))
+    vg.rect(x, y, w, TitleBarHeight)
+    vg.fill()
 
-      vg.fontFace("sans-bold")
-      vg.fontSize(15.0)
-      vg.textAlign(haLeft, vaMiddle)
-      vg.fillColor(gray(0.5))
-      discard vg.text(x+10.0, y + TitleBarHeight * TextVertAlignFactor, title)
+    vg.fontFace("sans-bold")
+    vg.fontSize(15.0)
+    vg.textAlign(haLeft, vaMiddle)
+    vg.fillColor(gray(0.5))
+    discard vg.text(x+10.0, y + TitleBarHeight * TextVertAlignFactor, title)
 
-    ui.ox = x
-    ui.oy = y
-    ui.insideDialog = true
-
-    body
-
-    ui.ox = 0
-    ui.oy = 0
-    ui.insideDialog = false
-    ui.currentLayer = oldCurrLayer
+  ui.ox = x
+  ui.oy = y
+  ui.insideDialog = true
+  ui.isDialogActive = true
 
 
-proc openDialog*(title: string) =
-  alias(ui, g_uiState)
-  if ui.activeDialogTitle.isNone:
-    if g_dialogs.hasKey(title):
-      ui.activeDialogTitle = some(title)
+template endDialog*() =
+  ui.ox = 0
+  ui.oy = 0
+  ui.insideDialog = false
+  dec(ui.currentLayer, 2 )  # TODO
+  inc(ui.framesLeft, 2)
 
-proc closeDialog*() =
-  alias(ui, g_uiState)
-  ui.activeDialogTitle = none(string)
+
+template closeDialog*() =
+  ui.isDialogActive = false
+  inc(ui.framesLeft, 2)
+
 
 # }}}
 # {{{ Menus
@@ -2680,19 +2678,12 @@ proc beginFrame*(winWidth, winHeight: float) =
 proc endFrame*() =
   alias(ui, g_uiState)
 
-  # Dialogs need some special handling
-  if ui.activeDialogTitle.isSome:
-    let dialogProc = g_dialogs[ui.activeDialogTitle.get]
-    dialogProc()
-
   # Post-frame processing
   tooltipPost()
 
   g_drawLayers.draw(g_nvgContext)
 
   ui.lastHotItem = ui.hotItem
-
-  g_dialogs.clear()
 
   # Widget specific postprocessing
   #
