@@ -248,10 +248,11 @@ const
 # {{{ Utils
 
 proc setFont*(vg: NVGContext, size: float, name: string = "sans-bold",
-              ha: HorizontalAlign = haLeft, va: VerticalAlign = vaMiddle) =
+              horizAlign: HorizontalAlign = haLeft,
+              vertAlign: VerticalAlign = vaMiddle) =
   vg.fontFace(name)
   vg.fontSize(size)
-  vg.textAlign(ha, va)
+  vg.textAlign(horizAlign, vertAlign)
 
 proc hideCursor*() =
   glfw.currentContext().cursorMode = cmHidden
@@ -2460,19 +2461,20 @@ template beginDialog*(w, h: float, title: string) =
 #    vg.fill()
 
     vg.beginPath()
-    vg.fillColor(gray(0.37))
-    vg.rect(x, y, w, h)
+#    vg.fillColor(gray(0.37))
+    vg.fillColor(gray(0.2, 0.96))
+    vg.roundedRect(x, y, w, h, 7)
     vg.fill()
 
     vg.beginPath()
-    vg.fillColor(gray(0.1))
-    vg.rect(x, y, w, TitleBarHeight)
+    vg.fillColor(gray(0.05))
+    vg.roundedRectVarying(x, y, w, TitleBarHeight, 7, 7, 0, 0)
     vg.fill()
 
     vg.fontFace("sans-bold")
     vg.fontSize(15.0)
     vg.textAlign(haLeft, vaMiddle)
-    vg.fillColor(gray(0.5))
+    vg.fillColor(gray(0.85))
     discard vg.text(x+10.0, y + TitleBarHeight * TextVertAlignFactor, title)
 
   ui.ox = x
