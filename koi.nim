@@ -245,6 +245,12 @@ const
 
 # }}}
 
+# {{{ incFramesLeft*()
+proc incFramesLeft*(i: Natural = 2) =
+  alias(ui, g_uiState)
+  inc(ui.framesLeft, i)
+# }}}
+
 # {{{ Utils
 
 proc setFont*(vg: NVGContext, size: float, name: string = "sans-bold",
@@ -365,7 +371,7 @@ template isHot(id: ItemId): bool =
 template setHot(id: ItemId) =
   alias(ui, g_uiState)
   ui.hotItem = id
-  ui.framesLeft = 2
+  incFramesLeft()
 
 template isActive(id: ItemId): bool =
   g_uiState.activeItem == id
@@ -686,7 +692,7 @@ proc tooltipPost() =
 
   # Make sure to keep drawing until the tooltip animation cycle is over
   if tt.state > tsOff:
-    inc(ui.framesLeft)
+    incFramesLeft()
 
   if tt.state == tsShow:
     ui.framesLeft = 0
@@ -1070,7 +1076,7 @@ proc dropdown(id:           ItemId,
     ds.state = dsClosed
     ds.activeItem = 0
     ui.focusCaptured = false
-    ui.framesLeft = 2
+    incFramesLeft()
     clearCharBuf()
     clearKeyBuf()
 
@@ -1774,7 +1780,7 @@ proc horizScrollBar(id:         ItemId,
 
         ui.x0 = clamp(ui.mx, thumbMinX, thumbMaxX + thumbW)
 
-      ui.framesLeft = 2
+      incFramesLeft()
 
     of sbsDragHidden:
       # Technically, the cursor can move outside the widget when it's disabled
@@ -1987,7 +1993,7 @@ proc vertScrollBar(id:         ItemId,
 
         ui.y0 = clamp(ui.my, thumbMinY, thumbMaxY + thumbH)
 
-      ui.framesLeft = 2
+      incFramesLeft()
 
     of sbsDragHidden:
       # Technically, the cursor can move outside the widget when it's disabled
@@ -2488,12 +2494,12 @@ template endDialog*() =
   ui.oy = 0
   ui.insideDialog = false
   dec(ui.currentLayer, 2 )  # TODO
-  inc(ui.framesLeft, 2)
+  incFramesLeft()
 
 
 template closeDialog*() =
   ui.isDialogActive = false
-  inc(ui.framesLeft, 2)
+  incFramesLeft()
 
 
 # }}}
