@@ -2724,6 +2724,11 @@ proc shouldRenderNextFrame*(): bool =
   alias(ui, g_uiState)
   ui.framesLeft > 0
 # }}}
+# {{{ nvgContext*()
+proc nvgContext*(): NVGContext =
+  g_nvgContext
+
+# }}}
 
 # {{{ Read-only UI state properties
 
