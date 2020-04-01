@@ -2628,6 +2628,7 @@ proc init*(nvg: NVGContext) =
   win.charCb = charCb
 
   win.stickyMouseButtons = true
+  glfw.swapInterval(1)
 
 # }}}
 # {{{ deinit*()
