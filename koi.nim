@@ -1,11 +1,20 @@
-import hashes, math, options, sets, sequtils, strformat, strutils, tables,
-       unicode
-
-import utils
+import hashes
+import math
+import lenientops
+import options
+import sequtils
+import sets
+import sugar
+import strformat
+import strutils
+import tables
+import unicode
 
 import glfw
 from glfw/wrapper import setCursor, createStandardCursor, CursorShape
 import nanovg
+
+import utils
 
 
 # {{{ Types
@@ -200,7 +209,7 @@ type
 # }}}
 # {{{ DrawState
 
-type DrawState = enum
+type DrawState* = enum
   dsNormal, dsHover, dsActive
 
 # }}}
@@ -245,10 +254,10 @@ const
 
 # }}}
 
-# {{{ incFramesLeft*()
-proc incFramesLeft*(i: Natural = 2) =
+# {{{ setFramesLeft*()
+proc setFramesLeft*(i: Natural = 2) =
   alias(ui, g_uiState)
-  inc(ui.framesLeft, i)
+  ui.framesLeft = 2
 # }}}
 
 # {{{ Utils
@@ -371,7 +380,7 @@ template isHot(id: ItemId): bool =
 template setHot(id: ItemId) =
   alias(ui, g_uiState)
   ui.hotItem = id
-  incFramesLeft()
+  setFramesLeft()
 
 template isActive(id: ItemId): bool =
   g_uiState.activeItem == id
@@ -692,7 +701,7 @@ proc tooltipPost() =
 
   # Make sure to keep drawing until the tooltip animation cycle is over
   if tt.state > tsOff:
-    incFramesLeft()
+    setFramesLeft()
 
   if tt.state == tsShow:
     ui.framesLeft = 0
@@ -935,33 +944,73 @@ template checkBox*(x, y, w: float,
 # }}}
 # {{{ RadioButtons
 
-proc radioButtons(id:           ItemId,
-                  x, y, w, h:   float,
-                  labels:       seq[string],
-                  tooltips:     seq[string] = @[],
-                  activeButton: Natural): Natural =
+type
+  RadioButtonLayoutKind* = enum
+    rblHoriz, rblGridHoriz, rblGridVert
+
+  RadioButtonLayout* = object
+    case kind*: RadioButtonLayoutKind
+    of rblHoriz: discard
+    of rblGridHoriz: itemsPerRow*:    Natural
+    of rblGridVert:  itemsPerColumn*: Natural
+
+  RadioButtonDrawProc* = proc (vg: NVGContext, buttonIdx: Natural,
+                               label: string,
+                               hover: bool, active: bool, pressed: bool,
+                               x, y, w, h: float)
+
+proc radioButtons(
+  id:           ItemId,
+  x, y, w, h:   float,
+  labels:       seq[string],
+  tooltips:     seq[string] = @[],
+  activeButton: Natural,
+  layout:       RadioButtonLayout = RadioButtonLayout(kind: rblHoriz),
+  drawProc:     Option[RadioButtonDrawProc] = RadioButtonDrawProc.none
+): Natural =
 
   assert activeButton >= 0 and activeButton <= labels.high
   assert tooltips.len == 0 or tooltips.len == labels.len
 
   alias(ui, g_uiState)
 
-  let
-    numButtons = labels.len
-    buttonW = w / numButtons.float
+  let numButtons = labels.len
 
-  var
-    x = x + ui.ox
-    y = y + ui.oy
+  var x = x + ui.ox
+  var y = y + ui.oy
 
   # Hit testing
-  let hotButton = min(int(floor((ui.mx - x) / buttonW)), numButtons-1)
+  var hotButton = -1
 
-  if isHit(x, y, w, h):
+  proc setHot() =
     setHot(id)
     if ui.mbLeftDown and noActiveItem():
       setActive(id)
       ui.radioButtonsActiveItem = hotButton
+
+  case layout.kind
+  of rblHoriz:
+    let buttonW = w / numButtons.float
+    hotButton = min(((ui.mx - x) / buttonW).int, numButtons-1)
+
+    if isHit(x, y, w, h): setHot()
+
+  of rblGridHoriz:
+    let
+      rowWidth = layout.itemsPerRow * w
+      numRows = ceil(numButtons.float / layout.itemsPerRow).Natural
+      row = ((ui.my - y) / h).int
+      col = ((ui.mx - x) / w).int
+      button = row * layout.itemsPerRow + col
+
+    if row >= 0 and col >= 0 and button < numButtons:
+      hotButton = row * layout.itemsPerRow + col
+
+    if isHit(x, y, rowWidth, numRows * h) and hotButton > -1: setHot()
+
+  of rblGridVert:
+    # TODO
+    discard
 
   # LMB released over active widget means it was clicked
   if not ui.mbLeftDown and isHotAndActive(id) and
@@ -971,66 +1020,120 @@ proc radioButtons(id:           ItemId,
     result = activeButton
 
   # Draw radio buttons
-  let drawState = if isHot(id) and noActiveItem(): dsHover
-    elif isHotAndActive(id): dsActive
-    else: dsNormal
+  proc buttonDrawState(i: Natural): (bool, bool, bool) =
+    let drawState = if isHot(id) and noActiveItem(): dsHover
+      elif isHotAndActive(id): dsActive
+      else: dsNormal
 
-  # TODO this should be done properly, with rounded rectangles, etc.
-  const PadX = 2
+    let hover = drawState == dsHover and hotButton == i
+    let active = activeButton == i
+    let pressed = drawState == dsActive and hotButton == i and
+                  ui.radioButtonsActiveItem == i
+
+    (hover, active, pressed)
 
   addDrawLayer(ui.currentLayer, vg):
-    vg.setFont(14.0)
+    case layout.kind
+    of rblHoriz:
+      if drawProc.isSome:
+        let buttonW = w / numButtons.float
 
-    for i, label in labels:
-      let fillColor = if   drawState == dsHover  and hotButton == i: GRAY_HI
-                      elif drawState == dsActive and hotButton == i and
-                           ui.radioButtonsActiveItem == i: RED
-                      else:
-                        if activeButton == i: GRAY_LO else : GRAY_MID
+        for i, label in labels:
+          let
+            (hover, active, pressed) = buttonDrawState(i)
+            dp = drawProc.get
+            w = round(x + buttonW) - round(x)
+          dp(vg, i, label, hover, active, pressed, round(x), y, w, h)
+          x += buttonW
 
-      var w = buttonW - PadX
+      else:
+        for i, label in labels:
+          let
+            (hover, active, pressed) = buttonDrawState(i)
+            first = i == 0
+            last = i == labels.high
 
-      vg.beginPath()
-      vg.rect(x, y, w, h)
-      vg.fillColor(fillColor)
-      vg.fill()
+          let fillColor = if   hover:   GRAY_HI
+                          elif pressed: RED
+                          elif active:  GRAY_LO
+                          else:         GRAY_MID
 
-      let
-        textColor = if drawState == dsHover and hotButton == i: GRAY_LO
-                    else:
-                      if activeButton == i: GRAY_HI
-                      else: GRAY_LO
+          const ButtonPadX = 2
+          let
+            buttonW = (w - ButtonPadX * (labels.len-1)) / numButtons.float
+            bx = round(x)
+            bw = round(x + buttonW) - bx
 
-      const TextBoxPadX = 4
-      let
-        textBoxX = x + TextBoxPadX
-        textBoxW = w - TextBoxPadX*2
-        textBoxY = y
-        textBoxH = h
+          vg.setFont(14.0)
 
-      vg.scissor(textBoxX, textBoxY, textBoxW, textBoxH)
+          vg.beginPath()
+          if first:  vg.roundedRectVarying(bx, y, bw, h, 5, 0, 0, 5)
+          elif last: vg.roundedRectVarying(bx, y, bw, h, 0, 5, 5, 0)
+          else:      vg.rect(bx, y, bw, h)
+          vg.fillColor(fillColor)
+          vg.fill()
 
-      vg.fillColor(textColor)
-      let tw = vg.textWidth(label)
-      discard vg.text(x + buttonW*0.5 - tw*0.5, y + h*TextVertAlignFactor, label)
+          let textColor = if   hover:  GRAY_LO
+                          elif active: GRAY_HI
+                          else:        GRAY_LO
 
-      vg.resetScissor()
+          const TextBoxPadX = 4
+          let
+            textBoxX = bx + TextBoxPadX
+            textBoxW = bw - TextBoxPadX*2
+            textBoxY = y
+            textBoxH = h
 
-      x += buttonW
+          vg.scissor(textBoxX, textBoxY, textBoxW, textBoxH)
+
+          vg.fillColor(textColor)
+          let tw = vg.textWidth(label)
+          discard vg.text(bx + bw*0.5 - tw*0.5, y + h*TextVertAlignFactor,
+                          label)
+
+          vg.resetScissor()
+
+          x += buttonW + ButtonPadX
+
+    of rblGridHoriz:
+      if drawProc.isSome:
+        let startX = x
+        var itemsInRow = 0
+        for i, label in labels:
+          let (hover, active, pressed) = buttonDrawState(i)
+          let dp = drawProc.get
+          dp(vg, i, label, hover, active, pressed, x, y, w, h)
+
+          inc(itemsInRow)
+          if itemsInRow == layout.itemsPerRow:
+            y += h
+            x = startX
+          x += w
+
+      else:
+        discard # TODO
+
+    of rblGridVert:
+      discard # TODO
 
   if isHot(id):
     handleTooltip(id, tooltips[hotButton])
 
 
-template radioButtons*(x, y, w, h:   float,
-                       labels:       seq[string],
-                       tooltips:     seq[string] = @[],
-                       activeButton: Natural): Natural =
+template radioButtons*(
+  x, y, w, h:   float,
+  labels:       seq[string],
+  tooltips:     seq[string] = @[],
+  activeButton: Natural,
+  layout:       RadioButtonLayout = RadioButtonLayout(kind: rblHoriz),
+  drawProc:     Option[RadioButtonDrawProc] = RadioButtonDrawProc.none
+): Natural =
 
   let i = instantiationInfo(fullPaths = true)
   let id = generateId(i.filename, i.line, "")
 
-  radioButtons(id, x, y, w, h, labels, tooltips, activeButton)
+  radioButtons(id, x, y, w, h, labels, tooltips, activeButton,
+               layout, drawProc)
 
 # }}}
 # {{{ Dropdown
@@ -1076,7 +1179,7 @@ proc dropdown(id:           ItemId,
     ds.state = dsClosed
     ds.activeItem = 0
     ui.focusCaptured = false
-    incFramesLeft()
+    setFramesLeft()
     clearCharBuf()
     clearKeyBuf()
 
@@ -1124,7 +1227,7 @@ proc dropdown(id:           ItemId,
       closeDropdown()
 
     if insideBox:
-      hoverItem = min(int(floor((ui.my - selBoxY - SelBoxPadY) / itemHeight)),
+      hoverItem = min(((ui.my - selBoxY - SelBoxPadY) / itemHeight).int,
                       numItems-1)
 
     # LMB released inside the box selects the item under the cursor and closes
@@ -1780,7 +1883,7 @@ proc horizScrollBar(id:         ItemId,
 
         ui.x0 = clamp(ui.mx, thumbMinX, thumbMaxX + thumbW)
 
-      incFramesLeft()
+      setFramesLeft()
 
     of sbsDragHidden:
       # Technically, the cursor can move outside the widget when it's disabled
@@ -1993,7 +2096,7 @@ proc vertScrollBar(id:         ItemId,
 
         ui.y0 = clamp(ui.my, thumbMinY, thumbMaxY + thumbH)
 
-      incFramesLeft()
+      setFramesLeft()
 
     of sbsDragHidden:
       # Technically, the cursor can move outside the widget when it's disabled
@@ -2494,12 +2597,11 @@ template endDialog*() =
   ui.oy = 0
   ui.insideDialog = false
   dec(ui.currentLayer, 2 )  # TODO
-  incFramesLeft()
 
 
 template closeDialog*() =
   ui.isDialogActive = false
-  incFramesLeft()
+  setFramesLeft()
 
 
 # }}}

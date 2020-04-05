@@ -29,6 +29,10 @@ var
 
   radioButtonsVal1 = 1
   radioButtonsVal2 = 2
+  radioButtonsVal3 = 1
+  radioButtonsVal4 = 1
+  radioButtonsVal5 = 1
+  radioButtonsVal6 = 1
 
   dropdownVal1 = 0
   dropdownVal2 = 0
@@ -39,9 +43,6 @@ var
   textFieldVal1 = ""
   textFieldVal2 = "Nobody expects the Spanish Inquisition!"
   textFieldVal3 = "Raw text field"
-
-  dialogTextFieldVal1 = "Grid size"
-  dialogTextFieldVal2 = ""
 
 
 ############################################################
@@ -112,50 +113,6 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
   y += pad
   if koi.button(x, y, w, h, "Stop (very long text)", tooltip = "Middle one..."):
     echo "button 2 pressed"
-
-  # --- DIALOG --------------------------------------------------------------
-  koi.dialog(400, 300, "Preferences dialog"):
-    let
-      dialogWidth = 400.0
-      dialogHeight = 300.0
-      bw = 80.0
-
-    var
-      x = dialogWidth - 2*(bw+10)
-      y = dialogHeight - h - 10
-
-    dialogTextFieldVal1 = koi.textField(
-      10, 20, 200, 25, tooltip = "Dialog text field 1", dialogTextFieldVal1)
-
-    dialogTextFieldVal2 = koi.textField(
-      10, 50, 200, 25, tooltip = "Dialog text field 2", dialogTextFieldVal2)
-
-    let okAction = proc () =
-      echo "dialog OK"
-      closeDialog()
-
-    let cancelAction = proc () =
-      echo "dialog Cancel"
-      closeDialog()
-
-    if koi.button(x, y, bw, h, "OK", tooltip = "OK"):
-      okAction()
-
-    x += bw + 10
-    if koi.button(x, y, bw, h, "Cancel", tooltip = "Cancel"):
-      cancelAction()
-
-    for ke in koi.keyBuf():
-      if ke.action == kaDown and ke.key == keyEscape:
-        cancelAction()
-      elif ke.action == kaDown and ke.key == keyEnter:
-        okAction()
-
-  # -------------------------------------------------------------------------
-
-  y += pad
-  if koi.button(x, y, w, h, "Preferences", tooltip = "Last button"):
-    openDialog("Preferences dialog")
 
   # ScrollBars
 
@@ -290,6 +247,48 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
     tooltips = @["First (1)", "Second (2)", "Third (3)"],
     radioButtonsVal2)
 
+  # Custom drawn radio buttons
+  var customRadioButtonDrawProc1: RadioButtonDrawProc =
+    proc (vg: NVGContext, buttonIdx: Natural, label: string,
+          hover: bool, active: bool, pressed: bool,
+          x, y, w, h: float) =
+
+      var col: Color
+      if   buttonIdx == 0: col = rgb(0.8, 0.0, 0.0)
+      elif buttonIdx == 1: col = rgb(0.0, 0.8, 0.0)
+      elif buttonIdx == 2: col = rgb(0.0, 0.0, 0.8)
+      elif buttonIdx == 3: col = rgb(0.8, 0.0, 0.8)
+
+      if hover:
+        col = col.lerp(white(), 0.5)
+
+      vg.beginPath()
+      vg.fillColor(col)
+      vg.rect(x, y, w-4, h-4)
+      vg.fill()
+
+      if active or pressed:
+        vg.strokeColor(rgb(1.0, 0.5, 0.0))
+        vg.strokeWidth(2)
+        vg.stroke()
+
+  radioButtonsVal3 = koi.radioButtons(
+    500, 100, 150, 30,
+    labels = @["1", "2", "3", "4"],
+    tooltips = @["First (1)", "Second (2)", "Third (3)", "Fourth (4)"],
+    radioButtonsVal3,
+    drawProc=customRadioButtonDrawProc1.some
+  )
+
+  radioButtonsVal4 = koi.radioButtons(
+    500, 200, 30, 30,
+    labels = @["1", "2", "3", "4"],
+    tooltips = @["First (1)", "Second (2)", "Third (3)", "Fourth (4)"],
+    radioButtonsVal4,
+    layout=RadioButtonLayout(kind: rblGridHoriz, itemsPerRow: 4),
+    drawProc=customRadioButtonDrawProc1.some
+  )
+
   # Menu
 
   x = 70.0
@@ -401,7 +400,7 @@ proc init(): Window =
   win.windowPositionCb = windowPosCb
   win.framebufferSizeCb = framebufSizeCb
 
-  glfw.swapInterval(0)
+#  glfw.swapInterval(0)
 
   win.pos = (400, 150)  # TODO for development
   wrapper.showWindow(win.getHandle())
