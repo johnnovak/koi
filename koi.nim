@@ -945,19 +945,19 @@ template checkBox*(x, y, w: float,
 # {{{ RadioButtons
 
 type
-  RadioButtonLayoutKind* = enum
+  RadioButtonsLayoutKind* = enum
     rblHoriz, rblGridHoriz, rblGridVert
 
-  RadioButtonLayout* = object
-    case kind*: RadioButtonLayoutKind
+  RadioButtonsLayout* = object
+    case kind*: RadioButtonsLayoutKind
     of rblHoriz: discard
     of rblGridHoriz: itemsPerRow*:    Natural
     of rblGridVert:  itemsPerColumn*: Natural
 
-  RadioButtonDrawProc* = proc (vg: NVGContext, buttonIdx: Natural,
-                               label: string,
-                               hover: bool, active: bool, pressed: bool,
-                               x, y, w, h: float)
+  RadioButtonsDrawProc* = proc (vg: NVGContext, buttonIdx: Natural,
+                                label: string,
+                                hover: bool, active: bool, pressed: bool,
+                                x, y, w, h: float)
 
 proc radioButtons(
   id:           ItemId,
@@ -965,8 +965,8 @@ proc radioButtons(
   labels:       seq[string],
   tooltips:     seq[string] = @[],
   activeButton: Natural,
-  layout:       RadioButtonLayout = RadioButtonLayout(kind: rblHoriz),
-  drawProc:     Option[RadioButtonDrawProc] = RadioButtonDrawProc.none
+  layout:       RadioButtonsLayout = RadioButtonsLayout(kind: rblHoriz),
+  drawProc:     Option[RadioButtonsDrawProc] = RadioButtonsDrawProc.none
 ): Natural =
 
   assert activeButton >= 0 and activeButton <= labels.high
@@ -1129,8 +1129,8 @@ template radioButtons*(
   labels:       seq[string],
   tooltips:     seq[string] = @[],
   activeButton: Natural,
-  layout:       RadioButtonLayout = RadioButtonLayout(kind: rblHoriz),
-  drawProc:     Option[RadioButtonDrawProc] = RadioButtonDrawProc.none
+  layout:       RadioButtonsLayout = RadioButtonsLayout(kind: rblHoriz),
+  drawProc:     Option[RadioButtonsDrawProc] = RadioButtonsDrawProc.none
 ): Natural =
 
   let i = instantiationInfo(fullPaths = true)

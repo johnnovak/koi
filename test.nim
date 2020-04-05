@@ -249,7 +249,7 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
     radioButtonsVal2)
 
   # Custom drawn radio buttons
-  var customRadioButtonDrawProc1: RadioButtonDrawProc =
+  var customRadioButtonsDrawProc1: RadioButtonsDrawProc =
     proc (vg: NVGContext, buttonIdx: Natural, label: string,
           hover: bool, active: bool, pressed: bool,
           x, y, w, h: float) =
@@ -282,7 +282,7 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
     labels = @["1", "2", "3", "4"],
     tooltips = @["First (1)", "Second (2)", "Third (3)", "Fourth (4)"],
     radioButtonsVal3,
-    drawProc=customRadioButtonDrawProc1.some
+    drawProc=customRadioButtonsDrawProc1.some
   )
 
   radioButtonsVal4 = koi.radioButtons(
@@ -290,8 +290,8 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
     labels = @["1", "2", "3", "4"],
     tooltips = @["First (1)", "Second (2)", "Third (3)", "Fourth (4)"],
     radioButtonsVal4,
-    layout=RadioButtonLayout(kind: rblGridHoriz, itemsPerRow: 4),
-    drawProc=customRadioButtonDrawProc1.some
+    layout=RadioButtonsLayout(kind: rblGridHoriz, itemsPerRow: 4),
+    drawProc=customRadioButtonsDrawProc1.some
   )
 
   radioButtonsVal5 = koi.radioButtons(
@@ -299,8 +299,8 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
     labels = @["1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B",],
     tooltips = @[],
     radioButtonsVal5,
-    layout=RadioButtonLayout(kind: rblGridHoriz, itemsPerRow: 4),
-    drawProc=customRadioButtonDrawProc1.some
+    layout=RadioButtonsLayout(kind: rblGridHoriz, itemsPerRow: 4),
+    drawProc=customRadioButtonsDrawProc1.some
   )
 
   # Menu
