@@ -997,20 +997,31 @@ proc radioButtons(
 
   of rblGridHoriz:
     let
-      rowWidth = layout.itemsPerRow * w
+      bbWidth = layout.itemsPerRow * w
       numRows = ceil(numButtons.float / layout.itemsPerRow).Natural
+      bbHeight = numRows * h
       row = ((ui.my - y) / h).int
       col = ((ui.mx - x) / w).int
       button = row * layout.itemsPerRow + col
 
     if row >= 0 and col >= 0 and button < numButtons:
-      hotButton = row * layout.itemsPerRow + col
+      hotButton = button
 
-    if isHit(x, y, rowWidth, numRows * h) and hotButton > -1: setHot()
+    if isHit(x, y, bbWidth, bbHeight) and hotButton > -1: setHot()
 
   of rblGridVert:
-    # TODO
-    discard
+    let
+      bbHeight = layout.itemsPerColumn * h
+      numCols = ceil(numButtons.float / layout.itemsPerColumn).Natural
+      bbWidth = numCols * w
+      row = ((ui.my - y) / h).int
+      col = ((ui.mx - x) / w).int
+      button = col * layout.itemsPerColumn + row
+
+    if row >= 0 and col >= 0 and button < numButtons:
+      hotButton = button
+
+    if isHit(x, y, bbWidth, bbHeight) and hotButton > -1: setHot()
 
   # LMB released over active widget means it was clicked
   if not ui.mbLeftDown and isHotAndActive(id) and
@@ -1116,7 +1127,24 @@ proc radioButtons(
         discard # TODO
 
     of rblGridVert:
-      discard # TODO
+      if drawProc.isSome:
+        let startY = y
+        var itemsInColumn = 0
+        for i, label in labels:
+          let (hover, active, pressed) = buttonDrawState(i)
+          let dp = drawProc.get
+          dp(vg, i, label, hover, active, pressed, x, y, w, h)
+
+          inc(itemsInColumn)
+          if itemsInColumn == layout.itemsPerColumn:
+            x += w
+            y = startY
+            itemsInColumn = 0
+          else:
+            y += h
+
+      else:
+        discard # TODO
 
   if isHot(id):
     let tt = if hotButton <= tooltips.high: tooltips[hotButton]

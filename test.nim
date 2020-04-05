@@ -34,6 +34,7 @@ var
   radioButtonsVal4 = 1
   radioButtonsVal5 = 1
   radioButtonsVal6 = 1
+  radioButtonsVal7 = 1
 
   dropdownVal1 = 0
   dropdownVal2 = 0
@@ -233,7 +234,7 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
   checkBoxVal2 = koi.checkBox(
     x + 30, y, h, tooltip = "CheckBox 2", checkBoxVal2)
 
-  # Radio buttons
+  # Radio buttons (horiz)
   y += pad * 2
   radioButtonsVal1 = koi.radioButtons(
     x, y, 150, h,
@@ -249,7 +250,7 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
     radioButtonsVal2)
 
   # Custom drawn radio buttons
-  var customRadioButtonsDrawProc1: RadioButtonsDrawProc =
+  var radioButtonsDrawProc: RadioButtonsDrawProc =
     proc (vg: NVGContext, buttonIdx: Natural, label: string,
           hover: bool, active: bool, pressed: bool,
           x, y, w, h: float) =
@@ -282,25 +283,44 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
     labels = @["1", "2", "3", "4"],
     tooltips = @["First (1)", "Second (2)", "Third (3)", "Fourth (4)"],
     radioButtonsVal3,
-    drawProc=customRadioButtonsDrawProc1.some
+    drawProc=radioButtonsDrawProc.some
   )
 
   radioButtonsVal4 = koi.radioButtons(
-    500, 200, 30, 30,
+    500, 160, 30, 30,
     labels = @["1", "2", "3", "4"],
     tooltips = @["First (1)", "Second (2)", "Third (3)", "Fourth (4)"],
     radioButtonsVal4,
     layout=RadioButtonsLayout(kind: rblGridHoriz, itemsPerRow: 4),
-    drawProc=customRadioButtonsDrawProc1.some
+    drawProc=radioButtonsDrawProc.some
   )
 
   radioButtonsVal5 = koi.radioButtons(
-    500, 300, 30, 30,
-    labels = @["1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B",],
+    500, 220, 30, 30,
+    labels = @["1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B"],
     tooltips = @[],
     radioButtonsVal5,
     layout=RadioButtonsLayout(kind: rblGridHoriz, itemsPerRow: 4),
-    drawProc=customRadioButtonsDrawProc1.some
+    drawProc=radioButtonsDrawProc.some
+  )
+
+  # Radio buttons (vert)
+  radioButtonsVal6 = koi.radioButtons(
+    700, 100, 30, 30,
+    labels = @["1", "2", "3", "4"],
+    tooltips = @["First (1)", "Second (2)", "Third (3)", "Fourth (4)"],
+    radioButtonsVal6,
+    layout=RadioButtonsLayout(kind: rblGridVert, itemsPerColumn: 4),
+    drawProc=radioButtonsDrawProc.some
+  )
+
+  radioButtonsVal7 = koi.radioButtons(
+    770, 100, 30, 30,
+    labels = @["1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B",],
+    tooltips = @[],
+    radioButtonsVal7,
+    layout=RadioButtonsLayout(kind: rblGridVert, itemsPerColumn: 4),
+    drawProc=radioButtonsDrawProc.some
   )
 
   # Menu
