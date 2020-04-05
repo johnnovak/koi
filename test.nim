@@ -1,3 +1,4 @@
+import lenientops
 import strformat
 
 import glad/gl
@@ -253,22 +254,26 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
           hover: bool, active: bool, pressed: bool,
           x, y, w, h: float) =
 
-      var col: Color
-      if   buttonIdx == 0: col = rgb(0.8, 0.0, 0.0)
-      elif buttonIdx == 1: col = rgb(0.0, 0.8, 0.0)
-      elif buttonIdx == 2: col = rgb(0.0, 0.0, 0.8)
-      elif buttonIdx == 3: col = rgb(0.8, 0.0, 0.8)
+      var col = hsl(0.08 * buttonIdx, 0.6, 0.5)
 
       if hover:
-        col = col.lerp(white(), 0.5)
+        col = col.lerp(white(), 0.3)
+      if pressed:
+        col = col.lerp(black(), 0.3)
+
+      const Pad = 4
 
       vg.beginPath()
       vg.fillColor(col)
-      vg.rect(x, y, w-4, h-4)
+      vg.rect(x, y, w-Pad, h-Pad)
       vg.fill()
 
-      if active or pressed:
-        vg.strokeColor(rgb(1.0, 0.5, 0.0))
+      vg.fillColor(black(0.7))
+      vg.setFont(14.0, horizAlign=haCenter)
+      discard vg.text(x + (w-Pad)*0.5, y + h*0.5,
+                      label)
+      if active:
+        vg.strokeColor(rgb(1.0, 0.4, 0.4))
         vg.strokeWidth(2)
         vg.stroke()
 
@@ -285,6 +290,15 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
     labels = @["1", "2", "3", "4"],
     tooltips = @["First (1)", "Second (2)", "Third (3)", "Fourth (4)"],
     radioButtonsVal4,
+    layout=RadioButtonLayout(kind: rblGridHoriz, itemsPerRow: 4),
+    drawProc=customRadioButtonDrawProc1.some
+  )
+
+  radioButtonsVal5 = koi.radioButtons(
+    500, 300, 30, 30,
+    labels = @["1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B",],
+    tooltips = @[],
+    radioButtonsVal5,
     layout=RadioButtonLayout(kind: rblGridHoriz, itemsPerRow: 4),
     drawProc=customRadioButtonDrawProc1.some
   )

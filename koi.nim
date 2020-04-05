@@ -250,7 +250,7 @@ const
   SliderFineDragDivisor      = 10.0
   SliderUltraFineDragDivisor = 100.0
 
-  TextVertAlignFactor = 0.55
+  TextVertAlignFactor* = 0.55
 
 # }}}
 
@@ -1108,7 +1108,9 @@ proc radioButtons(
           if itemsInRow == layout.itemsPerRow:
             y += h
             x = startX
-          x += w
+            itemsInRow = 0
+          else:
+            x += w
 
       else:
         discard # TODO
@@ -1117,7 +1119,9 @@ proc radioButtons(
       discard # TODO
 
   if isHot(id):
-    handleTooltip(id, tooltips[hotButton])
+    let tt = if hotButton <= tooltips.high: tooltips[hotButton]
+             else: ""
+    handleTooltip(id, tt)
 
 
 template radioButtons*(
