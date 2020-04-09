@@ -104,8 +104,11 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
     x = 100.0
     y = 70.0
 
-  koi.label(x, y, w, h, "Koi widget tests", color = gray(0.90),
-            fontSize = 15.0)
+  var labelStyle = getDefaultLabelStyle()
+  labelStyle.fontSize = 15.0
+  labelStyle.color = gray(0.8)
+
+  koi.label(x, y, w, h, "Koi widget tests", labelStyle)
 
   # Buttons
   y += pad
@@ -170,16 +173,14 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
     startVal = 0, endVal = 100, tooltip = "Vertical Slider 1",
     sliderVal3)
 
-  koi.label(300, 590, w, h, fmt"{sliderVal3:.3f}",
-            color = gray(0.90), fontSize = 14.0)
+  koi.label(300, 590, w, h, fmt"{sliderVal3:.3f}", labelStyle)
 
   sliderVal4 = koi.vertSlider(
     400, 460, h, 120,
     startVal = 50, endVal = -30, tooltip = "Vertical Slider 2",
     sliderVal4)
 
-  koi.label(380, 590, w, h, fmt"{sliderVal4:.3f}",
-            color = gray(0.90), fontSize = 14.0)
+  koi.label(380, 590, w, h, fmt"{sliderVal4:.3f}", labelStyle)
 
   # Dropdowns
   y += pad * 2
@@ -252,8 +253,8 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
   # Custom drawn radio buttons
   var radioButtonsDrawProc: RadioButtonsDrawProc =
     proc (vg: NVGContext, buttonIdx: Natural, label: string,
-          hover: bool, active: bool, pressed: bool,
-          x, y, w, h: float) =
+          hover, active, pressed, first, last: bool,
+          x, y, w, h: float, style: RadioButtonsStyle) =
 
       var col = hsl(0.08 * buttonIdx, 0.6, 0.5)
 
