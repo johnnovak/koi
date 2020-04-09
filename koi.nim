@@ -279,6 +279,33 @@ proc setFont*(vg: NVGContext, size: float, name: string = "sans-bold",
   vg.fontSize(size)
   vg.textAlign(horizAlign, vertAlign)
 
+# {{{ drawLabel()
+proc drawLabel(vg: NVGContext, x, y, w, h, padHoriz: float,
+               label: string, color: Color,
+               fontSize: float, fontFace: string, align: HorizontalAlign) =
+  let
+    textBoxX = x + padHoriz
+    textBoxW = w - padHoriz*2
+    textBoxY = y
+    textBoxH = h
+
+  let tx = case align:
+  of haLeft:   textBoxX
+  of haCenter: textBoxX + textBoxW*0.5
+  of haRight:  textBoxX + textBoxW
+
+  let ty = y + h*TextVertAlignFactor
+
+  vg.scissor(textBoxX, textBoxY, textBoxW, textBoxH)
+
+  vg.setFont(fontSize, fontFace, align)
+  vg.fillColor(color)
+  discard vg.text(tx, ty, label)
+
+  vg.resetScissor()
+
+# }}}
+
 proc hideCursor*() =
   glfw.currentContext().cursorMode = cmHidden
 
@@ -720,30 +747,6 @@ proc tooltipPost() =
 # }}}
 
 
-proc drawLabel(vg: NVGContext, x, y, w, h, padHoriz: float,
-               label: string, color: Color,
-               fontSize: float, fontFace: string, align: HorizontalAlign) =
-  let
-    textBoxX = x + padHoriz
-    textBoxW = w - padHoriz*2
-    textBoxY = y
-    textBoxH = h
-
-  let tx = case align:
-  of haLeft:   textBoxX
-  of haCenter: textBoxX + textBoxW*0.5
-  of haRight:  textBoxX + textBoxW
-
-  let ty = y + h*TextVertAlignFactor
-
-  vg.scissor(textBoxX, textBoxY, textBoxW, textBoxH)
-
-  vg.setFont(fontSize, fontFace, align)
-  vg.fillColor(color)
-  discard vg.text(tx, ty, label)
-
-  vg.resetScissor()
-
 # {{{ Label
 
 type LabelStyle* = ref object
@@ -979,6 +982,7 @@ template checkBox*(x, y, w: float,
 
 type RadioButtonsStyle* = ref object
   buttonPadHoriz*:           float
+  buttonPadVert*:            float
   buttonCornerRadius*:       float
   buttonStrokeWidth*:        float
   buttonStrokeColor*:        Color
@@ -1001,6 +1005,7 @@ type RadioButtonsStyle* = ref object
 
 var DefaultRadioButtonsStyle = RadioButtonsStyle(
   buttonPadHoriz           : 3,
+  buttonPadVert            : 3,
   buttonCornerRadius       : 5,
   buttonStrokeWidth        : 0,
   buttonStrokeColor        : black(),
@@ -1069,6 +1074,8 @@ let DefaultRadioButtonDrawProc: RadioButtonsDrawProc =
       buttonW = w - s.buttonPadHoriz
       bx = round(x)
       bw = round(x + buttonW) - bx
+      bh = h - s.buttonPadVert
+
 
     vg.setFont(s.labelFontSize)
 
@@ -1078,9 +1085,9 @@ let DefaultRadioButtonDrawProc: RadioButtonsDrawProc =
     vg.beginPath()
 
     let cr = s.buttonCornerRadius
-    if   first: vg.roundedRectVarying(bx, y, bw, h, cr, 0, 0, cr)
-    elif last:  vg.roundedRectVarying(bx, y, bw, h, 0, cr, cr, 0)
-    else:       vg.rect(bx, y, bw, h)
+    if   first: vg.roundedRectVarying(bx, y, bw, bh, cr, 0, 0, cr)
+    elif last:  vg.roundedRectVarying(bx, y, bw, bh, 0, cr, cr, 0)
+    else:       vg.rect(bx, y, bw, bh)
 
     vg.fill()
     vg.stroke()
@@ -1089,13 +1096,13 @@ let DefaultRadioButtonDrawProc: RadioButtonsDrawProc =
       textBoxX = bx + s.labelPadHoriz
       textBoxW = bw - s.labelPadHoriz*2
       textBoxY = y
-      textBoxH = h
+      textBoxH = bh
 
     vg.scissor(textBoxX, textBoxY, textBoxW, textBoxH)
 
     vg.fillColor(labelColor)
     let tw = vg.textWidth(label)
-    discard vg.text(bx + bw*0.5 - tw*0.5, y + h*TextVertAlignFactor,
+    discard vg.text(bx + bw*0.5 - tw*0.5, y + bh*TextVertAlignFactor,
                     label)
 
     vg.resetScissor()
