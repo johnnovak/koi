@@ -210,7 +210,7 @@ type
 # {{{ DrawState
 
 type DrawState* = enum
-  dsNormal, dsHover, dsActive
+  dsNormal, dsHover, dsActive, dsDisabled
 
 # }}}
 # }}}
@@ -797,40 +797,46 @@ template label*(x, y, w, h: float,
 # {{{ Button
 
 type ButtonStyle* = ref object
-  buttonCornerRadius*:      float
-  buttonStrokeWidth*:       float
-  buttonStrokeColor*:       Color
-  buttonStrokeColorHover*:  Color
-  buttonStrokeColorDown*:   Color
-  buttonFillColor*:         Color
-  buttonFillColorHover*:    Color
-  buttonFillColorDown*:     Color
-  labelPadHoriz*:           float
-  labelFontSize*:           float
-  labelFontFace*:           string
-  labelOnly*:               bool
-  labelAlign*:              HorizontalAlign
-  labelColor*:              Color
-  labelColorHover*:         Color
-  labelColorDown*:          Color
+  buttonCornerRadius*:        float
+  buttonStrokeWidth*:         float
+  buttonStrokeColor*:         Color
+  buttonStrokeColorHover*:    Color
+  buttonStrokeColorDown*:     Color
+  buttonStrokeColorDisabled*: Color
+  buttonFillColor*:           Color
+  buttonFillColorHover*:      Color
+  buttonFillColorDown*:       Color
+  buttonFillColorDisabled*:   Color
+  labelPadHoriz*:             float
+  labelFontSize*:             float
+  labelFontFace*:             string
+  labelOnly*:                 bool
+  labelAlign*:                HorizontalAlign
+  labelColor*:                Color
+  labelColorHover*:           Color
+  labelColorDown*:            Color
+  labelColorDisabled*:        Color
 
 var DefaultButtonStyle = ButtonStyle(
-  buttonCornerRadius      : 5,
-  buttonStrokeWidth       : 0,
-  buttonStrokeColor       : black(),
-  buttonStrokeColorHover  : black(),
-  buttonStrokeColorDown   : black(),
-  buttonFillColor         : gray(0.6),
-  buttonFillColorHover    : GRAY_HI,
-  buttonFillColorDown     : HILITE,
-  labelPadHoriz           : 8,
-  labelFontSize           : 14.0,
-  labelFontFace           : "sans-bold",
-  labelOnly               : false,
-  labelAlign              : haCenter,
-  labelColor              : GRAY_LO,
-  labelColorHover         : GRAY_LO,
-  labelColorDown          : GRAY_LO
+  buttonCornerRadius        : 5,
+  buttonStrokeWidth         : 0,
+  buttonStrokeColor         : black(),
+  buttonStrokeColorHover    : black(),
+  buttonStrokeColorDown     : black(),
+  buttonStrokeColorDisabled : black(),
+  buttonFillColor           : gray(0.6),
+  buttonFillColorHover      : GRAY_HI,
+  buttonFillColorDown       : HILITE,
+  buttonFillColorDisabled   : GRAY_LO,
+  labelPadHoriz             : 8,
+  labelFontSize             : 14.0,
+  labelFontFace             : "sans-bold",
+  labelOnly                 : false,
+  labelAlign                : haCenter,
+  labelColor                : GRAY_LO,
+  labelColorHover           : GRAY_LO,
+  labelColorDown            : GRAY_LO,
+  labelColorDisabled        : GRAY_MID
 )
 
 proc getDefaultButtonStyle*(): ButtonStyle =
@@ -844,6 +850,7 @@ proc button(id:         ItemId,
             x, y, w, h: float,
             label:      string,
             tooltip:    string,
+            disabled:   bool,
             style:      ButtonStyle): bool =
 
   alias(ui, g_uiState)
@@ -855,7 +862,7 @@ proc button(id:         ItemId,
   # Hit testing
   if isHit(x, y, w, h):
     setHot(id)
-    if ui.mbLeftDown and noActiveItem():
+    if not disabled and ui.mbLeftDown and noActiveItem():
       setActive(id)
 
   # LMB released over active widget means it was clicked
@@ -866,18 +873,22 @@ proc button(id:         ItemId,
     let sw = s.buttonStrokeWidth
     let (x, y, w, h) = snapToGrid(x, y, w, h, sw)
 
-    let drawState = if isHot(id) and noActiveItem(): dsHover
+    let drawState = if disabled: dsDisabled
+      elif isHot(id) and noActiveItem(): dsHover
       elif isHotAndActive(id): dsActive
       else: dsNormal
 
     let (fillColor, strokeColor, labelColor) =
       case drawState
+      of dsNormal:
+        (s.buttonFillColor, s.buttonStrokeColor, s.labelColor)
       of dsHover:
         (s.buttonFillColorHover, s.buttonStrokeColorHover, s.labelColorHover)
       of dsActive:
         (s.buttonFillColorDown, s.buttonStrokeColorDown, s.labelColorDown)
-      else:
-        (s.buttonFillColor, s.buttonStrokeColor, s.labelColor)
+      of dsDisabled:
+        (s.buttonFillColorDisabled, s.buttonStrokeColorDisabled,
+         s.labelColorDisabled)
 
     if not s.labelOnly:
       vg.fillColor(fillColor)
@@ -898,12 +909,13 @@ proc button(id:         ItemId,
 template button*(x, y, w, h: float,
                  label:      string,
                  tooltip:    string = "",
+                 disabled:   bool = false,
                  style:      ButtonStyle = DefaultButtonStyle): bool =
 
   let i = instantiationInfo(fullPaths = true)
   let id = generateId(i.filename, i.line, "")
 
-  button(id, x, y, w, h, label, tooltip, style)
+  button(id, x, y, w, h, label, tooltip, disabled, style)
 
 # }}}
 # {{{ CheckBox

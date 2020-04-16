@@ -119,6 +119,11 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
   if koi.button(x, y, w, h, "Stop (very long text)", tooltip = "Middle one..."):
     echo "button 2 pressed"
 
+  y += pad
+  if koi.button(x, y, w, h, "Disabled", tooltip = "This is a disabled button",
+                disabled = true):
+    echo "button 3 pressed"
+
   # ScrollBars
 
   y += pad * 2
