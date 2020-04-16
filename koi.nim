@@ -1306,7 +1306,6 @@ type DropdownStyle* = ref object
   itemListStrokeWidth*:      float
   itemListStrokeColor*:      Color
   itemListFillColor*:        Color
-  itemPadHoriz*:             float
   itemFontSize*:             float
   itemFontFace*:             string
   itemAlign*:                HorizontalAlign
@@ -1339,7 +1338,6 @@ var DefaultDropdownStyle = DropdownStyle(
   itemListStrokeWidth       : 0,
   itemListStrokeColor       : black(),
   itemListFillColor         : GRAY_LO,
-  itemPadHoriz              : 7,
   itemFontSize              : 14.0,
   itemFontFace              : "sans-bold",
   itemAlign                 : haLeft,
