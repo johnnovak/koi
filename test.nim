@@ -38,6 +38,7 @@ var
 
   dropdownVal1 = 0
   dropdownVal2 = 0
+  dropdownVal3 = 3
   dropdownTopRight = 0
   dropdownBottomLeft = 0
   dropdownBottomRight = 0
@@ -107,6 +108,8 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
   var labelStyle = getDefaultLabelStyle()
   labelStyle.fontSize = 15.0
   labelStyle.color = gray(0.8)
+
+#  vg.scissor(0, 0, 630, 100)
 
   koi.label(x, y, w, h, "Koi widget tests", labelStyle)
 
@@ -192,68 +195,75 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
   dropdownVal1 = koi.dropdown(
     x, y, w, h,
     items = @["Orange", "Banana", "Blueberry", "Apricot", "Apple"],
-    tooltip = "Select a fruit",
-    dropdownVal1)
+    dropdownVal1,
+    tooltip = "Select a fruit")
 
   dropdownVal2 = koi.dropdown(
     280, y, w, h,
     items = @["Red", "Green", "Blue", "Yellow", "Purple (with little yellow dots)"],
-    tooltip = "Select a colour",
-    dropdownVal2)
+    dropdownVal2,
+    tooltip = "Select a colour")
+
+  dropdownVal3 = koi.dropdown(
+    430, y, w, h,
+    items = @["This", "Dropdown", "Is", "Disabled"],
+    dropdownVal3,
+    tooltip = "Disabled dropdown",
+    disabled = true)
 
   dropdownTopRight = koi.dropdown(
     winWidth.float - (w+10), 20, w, h,
     items = @["Red", "Green", "Blue", "Yellow", "Purple (with little yellow dots)"],
-    tooltip = "Select a colour",
-    dropdownTopRight)
+    dropdownTopRight,
+    tooltip = "Select a colour")
 
   dropdownBottomRight = koi.dropdown(
     winWidth.float - (w+10), winHeight.float - 40, w, h,
     items = @["Red", "Green", "Blue", "Yellow", "Purple (with little yellow dots)"],
-    tooltip = "Select a colour",
-    dropdownBottomRight)
+    dropdownBottomRight,
+    tooltip = "Select a colour")
 
   dropdownBottomLeft = koi.dropdown(
     10, winHeight.float - 40, w, h,
     items = @["Red", "Green", "Blue", "Yellow", "Purple (with little yellow dots)"],
-    tooltip = "Select a colour",
-    dropdownBottomLeft)
+    dropdownBottomLeft,
+    tooltip = "Select a colour")
 
   # Text fields
   y += pad * 2
   textFieldVal1 = koi.textField(
-    x, y, w * 1.0, h, tooltip = "Text field 1", textFieldVal1)
+    x, y, w * 1.0, h, textFieldVal1, tooltip = "Text field 1")
 
   y += pad
   textFieldVal2 = koi.textField(
-    x, y, w * 1.0, h, tooltip = "Text field 2", textFieldVal2)
+    x, y, w * 1.0, h, textFieldVal2, tooltip = "Text field 2")
 
   y += pad
   textFieldVal3 = koi.rawTextField(
-    x, y, w * 1.0, h, tooltip = "Text field 2", textFieldVal3)
+    x, y, w * 1.0, h, textFieldVal3, tooltip = "Text field 2")
 
   # Checkboxes
   y += pad * 2
   checkBoxVal1 = koi.checkBox(
-    x, y, h, tooltip = "CheckBox 1", checkBoxVal1)
+    x, y, h, checkBoxVal1, tooltip = "CheckBox 1")
 
   checkBoxVal2 = koi.checkBox(
-    x + 30, y, h, tooltip = "CheckBox 2", checkBoxVal2)
+    x + 30, y, h, checkBoxVal2, tooltip = "CheckBox 2")
 
   # Radio buttons (horiz)
   y += pad * 2
   radioButtonsVal1 = koi.radioButtons(
     x, y, 150, h,
     labels = @["PNG", "JPG", "OpenEXR"],
-    tooltips = @["Save PNG image", "Save JPG image", "Save EXR image"],
-    radioButtonsVal1)
+    radioButtonsVal1,
+    tooltips = @["Save PNG image", "Save JPG image", "Save EXR image"])
 
   y += pad
   radioButtonsVal2 = koi.radioButtons(
     x, y, 220, h,
     labels = @["One", "Two", "The Third Option"],
-    tooltips = @["First (1)", "Second (2)", "Third (3)"],
-    radioButtonsVal2)
+    radioButtonsVal2,
+    tooltips = @["First (1)", "Second (2)", "Third (3)"])
 
   # Custom drawn radio buttons
   var radioButtonsDrawProc: RadioButtonsDrawProc =
@@ -287,16 +297,16 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
   radioButtonsVal3 = koi.radioButtons(
     500, 100, 150, 30,
     labels = @["1", "2", "3", "4"],
-    tooltips = @["First (1)", "Second (2)", "Third (3)", "Fourth (4)"],
     radioButtonsVal3,
+    tooltips = @["First (1)", "Second (2)", "Third (3)", "Fourth (4)"],
     drawProc=radioButtonsDrawProc.some
   )
 
   radioButtonsVal4 = koi.radioButtons(
     500, 160, 30, 30,
     labels = @["1", "2", "3", "4"],
-    tooltips = @["First (1)", "Second (2)", "Third (3)", "Fourth (4)"],
     radioButtonsVal4,
+    tooltips = @["First (1)", "Second (2)", "Third (3)", "Fourth (4)"],
     layout=RadioButtonsLayout(kind: rblGridHoriz, itemsPerRow: 4),
     drawProc=radioButtonsDrawProc.some
   )
@@ -304,8 +314,8 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
   radioButtonsVal5 = koi.radioButtons(
     500, 220, 30, 30,
     labels = @["1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B"],
-    tooltips = @[],
     radioButtonsVal5,
+    tooltips = @[],
     layout=RadioButtonsLayout(kind: rblGridHoriz, itemsPerRow: 4),
     drawProc=radioButtonsDrawProc.some
   )
@@ -314,8 +324,8 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
   radioButtonsVal6 = koi.radioButtons(
     700, 100, 30, 30,
     labels = @["1", "2", "3", "4"],
-    tooltips = @["First (1)", "Second (2)", "Third (3)", "Fourth (4)"],
     radioButtonsVal6,
+    tooltips = @["First (1)", "Second (2)", "Third (3)", "Fourth (4)"],
     layout=RadioButtonsLayout(kind: rblGridVert, itemsPerColumn: 4),
     drawProc=radioButtonsDrawProc.some
   )
@@ -323,8 +333,8 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
   radioButtonsVal7 = koi.radioButtons(
     770, 100, 30, 30,
     labels = @["1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B",],
-    tooltips = @[],
     radioButtonsVal7,
+    tooltips = @[],
     layout=RadioButtonsLayout(kind: rblGridVert, itemsPerColumn: 4),
     drawProc=radioButtonsDrawProc.some
   )
@@ -425,7 +435,7 @@ proc init(): Window =
 
   var win = createWindow()
 
-  var flags = {nifStencilStrokes, nifDebug}
+  var flags = {nifStencilStrokes, nifAntialias, nifDebug}
   vg = nvgInit(getProcAddress, flags)
   if vg == nil:
     quit "Error creating NanoVG context"

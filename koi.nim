@@ -14,6 +14,7 @@ import glfw
 from glfw/wrapper import setCursor, createStandardCursor, CursorShape
 import nanovg
 
+import ringbuffer
 import utils
 
 
@@ -229,7 +230,6 @@ var
   # TODO remove these once theming is implemented
   HILITE     = rgb(1.0, 0.4, 0.4)
   GRAY_MID   = gray(0.6)
-  GRAY_MIDLO = gray(0.45)
   GRAY_HI    = gray(0.7)
   GRAY_LO    = gray(0.25)
   GRAY_LOHI  = gray(0.35)
@@ -260,6 +260,24 @@ proc setFramesLeft*(i: Natural = 2) =
   alias(ui, g_uiState)
   ui.framesLeft = 2
 # }}}
+
+type
+  InputEventKind = enum
+    iekKey, iekMouse
+
+  InputEvent* = object
+    case kind: InputEventKind
+    of iekKey:
+      key*:    Key
+      action*: KeyAction
+
+    of iekMouse:
+      mouseButton*: MouseButton
+      pressed*:     bool
+      x*, y*:       int32
+
+    mods*:   set[ModifierKey]
+
 
 # {{{ Utils
 
@@ -296,13 +314,16 @@ proc drawLabel(vg: NVGContext, x, y, w, h, padHoriz: float,
 
   let ty = y + h*TextVertAlignFactor
 
-  vg.scissor(textBoxX, textBoxY, textBoxW, textBoxH)
+  vg.save()
+
+  vg.intersectScissor(textBoxX, textBoxY, textBoxW, textBoxH)
 
   vg.setFont(fontSize, fontFace, align)
   vg.fillColor(color)
   discard vg.text(tx, ty, label)
 
-  vg.resetScissor()
+  vg.restore()
+
 
 # }}}
 
@@ -454,11 +475,6 @@ template isHit(x, y, w, h: float): bool =
 # }}}
 # {{{ Keyboard handling
 
-type KeyEvent* = object
-  key*:    Key
-  action*: KeyAction
-  mods*:   set[ModifierKey]
-
 type KeyShortcut* = object
   key*:    Key
   mods*:   set[ModifierKey]
@@ -507,66 +523,129 @@ type TextEditShortcuts = enum
   tesCancel
 
 
-let textFieldEditShortcuts = {
-  tesCursorOneCharLeft:    @[mkKeyShortcut(keyLeft,      {}),
-                             mkKeyShortcut(keyB,         {mkCtrl})],
+when defined(macosx):
+  let textFieldEditShortcuts = {
+    tesCursorOneCharLeft:    @[mkKeyShortcut(keyLeft,      {}),
+                               mkKeyShortcut(keyB,         {mkCtrl})],
 
-  tesCursorOneCharRight:   @[mkKeyShortcut(keyRight,     {}),
-                             mkKeyShortcut(keyF,         {mkCtrl})],
+    tesCursorOneCharRight:   @[mkKeyShortcut(keyRight,     {}),
+                               mkKeyShortcut(keyF,         {mkCtrl})],
 
-  tesCursorToPreviousWord: @[mkKeyShortcut(keyLeft,      {mkAlt})],
-  tesCursorToNextWord:     @[mkKeyShortcut(keyRight,     {mkAlt})],
+    tesCursorToPreviousWord: @[mkKeyShortcut(keyLeft,      {mkAlt})],
+    tesCursorToNextWord:     @[mkKeyShortcut(keyRight,     {mkAlt})],
 
-  tesCursorToLineStart:    @[mkKeyShortcut(keyLeft,      {mkSuper}),
-                             mkKeyShortcut(keyA,         {mkCtrl}),
-                             mkKeyShortcut(keyP,         {mkCtrl}),
-                             mkKeyShortcut(keyV,         {mkShift, mkCtrl}),
-                             mkKeyShortcut(keyUp,        {})],
+    tesCursorToLineStart:    @[mkKeyShortcut(keyLeft,      {mkSuper}),
+                               mkKeyShortcut(keyA,         {mkCtrl}),
+                               mkKeyShortcut(keyP,         {mkCtrl}),
+                               mkKeyShortcut(keyV,         {mkShift, mkCtrl}),
+                               mkKeyShortcut(keyUp,        {})],
 
-  tesCursorToLineEnd:      @[mkKeyShortcut(keyRight,     {mkSuper}),
-                             mkKeyShortcut(keyE,         {mkCtrl}),
-                             mkKeyShortcut(keyN,         {mkCtrl}),
-                             mkKeyShortcut(keyV,         {mkCtrl}),
-                             mkKeyShortcut(keyDown,      {})],
+    tesCursorToLineEnd:      @[mkKeyShortcut(keyRight,     {mkSuper}),
+                               mkKeyShortcut(keyE,         {mkCtrl}),
+                               mkKeyShortcut(keyN,         {mkCtrl}),
+                               mkKeyShortcut(keyV,         {mkCtrl}),
+                               mkKeyShortcut(keyDown,      {})],
 
-  tesSelectionOneCharLeft:    @[mkKeyShortcut(keyLeft,   {mkShift})],
-  tesSelectionOneCharRight:   @[mkKeyShortcut(keyRight,  {mkShift})],
-  tesSelectionToPreviousWord: @[mkKeyShortcut(keyLeft,   {mkShift, mkAlt})],
-  tesSelectionToNextWord:     @[mkKeyShortcut(keyRight,  {mkShift, mkAlt})],
+    tesSelectionOneCharLeft:    @[mkKeyShortcut(keyLeft,   {mkShift})],
+    tesSelectionOneCharRight:   @[mkKeyShortcut(keyRight,  {mkShift})],
+    tesSelectionToPreviousWord: @[mkKeyShortcut(keyLeft,   {mkShift, mkAlt})],
+    tesSelectionToNextWord:     @[mkKeyShortcut(keyRight,  {mkShift, mkAlt})],
 
-  tesSelectionToLineStart: @[mkKeyShortcut(keyLeft,      {mkShift, mkSuper}),
-                             mkKeyShortcut(keyA,         {mkShift, mkCtrl}),
-                             mkKeyShortcut(keyUp,        {mkShift})],
+    tesSelectionToLineStart: @[mkKeyShortcut(keyLeft,      {mkShift, mkSuper}),
+                               mkKeyShortcut(keyA,         {mkShift, mkCtrl}),
+                               mkKeyShortcut(keyUp,        {mkShift})],
 
-  tesSelectionToLineEnd:   @[mkKeyShortcut(keyRight,     {mkShift, mkSuper}),
-                             mkKeyShortcut(keyE,         {mkShift, mkCtrl}),
-                             mkKeyShortcut(keyDown,      {mkShift})],
+    tesSelectionToLineEnd:   @[mkKeyShortcut(keyRight,     {mkShift, mkSuper}),
+                               mkKeyShortcut(keyE,         {mkShift, mkCtrl}),
+                               mkKeyShortcut(keyDown,      {mkShift})],
 
-  tesDeleteOneCharLeft:    @[mkKeyShortcut(keyBackspace, {}),
-                             mkKeyShortcut(keyH,         {mkCtrl})],
+    tesDeleteOneCharLeft:    @[mkKeyShortcut(keyBackspace, {}),
+                               mkKeyShortcut(keyH,         {mkCtrl})],
 
-  tesDeleteOneCharRight:   @[mkKeyShortcut(keyDelete,    {})],
+    tesDeleteOneCharRight:   @[mkKeyShortcut(keyDelete,    {})],
 
-  tesDeleteWordToRight:    @[mkKeyShortcut(keyDelete,    {mkAlt}),
-                             mkKeyShortcut(keyD,         {mkCtrl})],
+    tesDeleteWordToRight:    @[mkKeyShortcut(keyDelete,    {mkAlt}),
+                               mkKeyShortcut(keyD,         {mkCtrl})],
 
-  tesDeleteWordToLeft:     @[mkKeyShortcut(keyBackspace, {mkAlt})],
-  tesDeleteToLineStart:    @[mkKeyShortcut(keyBackspace, {mkSuper})],
+    tesDeleteWordToLeft:     @[mkKeyShortcut(keyBackspace, {mkAlt})],
+    tesDeleteToLineStart:    @[mkKeyShortcut(keyBackspace, {mkSuper})],
 
-  tesDeleteToLineEnd:      @[mkKeyShortcut(keyDelete,    {mkAlt}),
-                             mkKeyShortcut(keyK,         {mkCtrl})],
+    tesDeleteToLineEnd:      @[mkKeyShortcut(keyDelete,    {mkAlt}),
+                               mkKeyShortcut(keyK,         {mkCtrl})],
 
-  tesSwitchChars:          @[mkKeyShortcut(keyT,         {mkCtrl})],
+    tesSwitchChars:          @[mkKeyShortcut(keyT,         {mkCtrl})],
 
-  tesCutText:              @[mkKeyShortcut(keyX,         {mkSuper})],
-  tesCopyText:             @[mkKeyShortcut(keyC,         {mkSuper})],
-  tesPasteText:            @[mkKeyShortcut(keyV,         {mkSuper})],
+    tesCutText:              @[mkKeyShortcut(keyX,         {mkSuper})],
+    tesCopyText:             @[mkKeyShortcut(keyC,         {mkSuper})],
+    tesPasteText:            @[mkKeyShortcut(keyV,         {mkSuper})],
 
-  tesAccept:               @[mkKeyShortcut(keyEnter,     {}),
-                             mkKeyShortcut(keyKpEnter,   {})],
+    tesAccept:               @[mkKeyShortcut(keyEnter,     {}),
+                               mkKeyShortcut(keyKpEnter,   {})],
 
-  tesCancel:               @[mkKeyShortcut(keyEscape,    {})]
-}.toTable
+    tesCancel:               @[mkKeyShortcut(keyEscape,    {})]
+  }.toTable
+
+else: # windows & linux
+  let textFieldEditShortcuts = {
+    tesCursorOneCharLeft:    @[mkKeyShortcut(keyLeft,      {}),
+                               mkKeyShortcut(keyB,         {mkCtrl})],
+
+    tesCursorOneCharRight:   @[mkKeyShortcut(keyRight,     {}),
+                               mkKeyShortcut(keyF,         {mkCtrl})],
+
+    tesCursorToPreviousWord: @[mkKeyShortcut(keyLeft,      {mkAlt})],
+    tesCursorToNextWord:     @[mkKeyShortcut(keyRight,     {mkAlt})],
+
+    tesCursorToLineStart:    @[mkKeyShortcut(keyLeft,      {mkCtrl}),
+                               mkKeyShortcut(keyA,         {mkCtrl}),
+                               mkKeyShortcut(keyP,         {mkCtrl}),
+                               mkKeyShortcut(keyV,         {mkShift, mkCtrl}),
+                               mkKeyShortcut(keyUp,        {})],
+
+    tesCursorToLineEnd:      @[mkKeyShortcut(keyRight,     {mkCtrl}),
+                               mkKeyShortcut(keyE,         {mkCtrl}),
+                               mkKeyShortcut(keyN,         {mkCtrl}),
+                               mkKeyShortcut(keyV,         {mkCtrl}),
+                               mkKeyShortcut(keyDown,      {})],
+
+    tesSelectionOneCharLeft:    @[mkKeyShortcut(keyLeft,   {mkShift})],
+    tesSelectionOneCharRight:   @[mkKeyShortcut(keyRight,  {mkShift})],
+    tesSelectionToPreviousWord: @[mkKeyShortcut(keyLeft,   {mkShift, mkAlt})],
+    tesSelectionToNextWord:     @[mkKeyShortcut(keyRight,  {mkShift, mkAlt})],
+
+    tesSelectionToLineStart: @[mkKeyShortcut(keyLeft,      {mkShift, mkCtrl}),
+                               mkKeyShortcut(keyA,         {mkShift, mkCtrl}),
+                               mkKeyShortcut(keyUp,        {mkShift})],
+
+    tesSelectionToLineEnd:   @[mkKeyShortcut(keyRight,     {mkShift, mkCtrl}),
+                               mkKeyShortcut(keyE,         {mkShift, mkCtrl}),
+                               mkKeyShortcut(keyDown,      {mkShift})],
+
+    tesDeleteOneCharLeft:    @[mkKeyShortcut(keyBackspace, {}),
+                               mkKeyShortcut(keyH,         {mkCtrl})],
+
+    tesDeleteOneCharRight:   @[mkKeyShortcut(keyDelete,    {})],
+
+    tesDeleteWordToRight:    @[mkKeyShortcut(keyDelete,    {mkAlt}),
+                               mkKeyShortcut(keyD,         {mkCtrl})],
+
+    tesDeleteWordToLeft:     @[mkKeyShortcut(keyBackspace, {mkAlt})],
+    tesDeleteToLineStart:    @[mkKeyShortcut(keyBackspace, {mkCtrl})],
+
+    tesDeleteToLineEnd:      @[mkKeyShortcut(keyDelete,    {mkAlt}),
+                               mkKeyShortcut(keyK,         {mkCtrl})],
+
+    tesSwitchChars:          @[mkKeyShortcut(keyT,         {mkCtrl})],
+
+    tesCutText:              @[mkKeyShortcut(keyX,         {mkCtrl})],
+    tesCopyText:             @[mkKeyShortcut(keyC,         {mkCtrl})],
+    tesPasteText:            @[mkKeyShortcut(keyV,         {mkCtrl})],
+
+    tesAccept:               @[mkKeyShortcut(keyEnter,     {}),
+                               mkKeyShortcut(keyKpEnter,   {})],
+
+    tesCancel:               @[mkKeyShortcut(keyEscape,    {})]
+  }.toTable
 
 
 var textFieldEditShortcutsSet =
@@ -596,12 +675,10 @@ proc consumeCharBuf(): string =
   clearCharBuf()
 
 
-const KeyBufSize = 200
-var
-  # TODO do we need locking around this stuff? written in the callback, read
-  # from the UI code
-  g_keyBuf: array[KeyBufSize, KeyEvent]
-  g_keyBufIdx: Natural
+# TODO do we need locking around this stuff? written in the callback, read
+# from the UI code
+const EventBufSize = 1024
+var g_eventBuf = initRingBuffer[InputEvent](EventBufSize)
 
 
 proc keyCb(win: Window, key: Key, scanCode: int32, action: KeyAction,
@@ -612,30 +689,35 @@ proc keyCb(win: Window, key: Key, scanCode: int32, action: KeyAction,
   if (not g_uiState.focusCaptured) or
      (g_uiState.focusCaptured and action in {kaDown, kaRepeat} and
                                   shortcut in textFieldEditShortcutsSet):
-    if g_keyBufIdx <= g_keyBuf.high:
-      g_keyBuf[g_keyBufIdx] = KeyEvent(key: key, action: action, mods: mods)
-      inc(g_keyBufIdx)
+    discard g_eventBuf.write(
+      InputEvent(
+        kind: iekKey,
+        key: key, action: action, mods: mods
+      )
+    )
 
-
-proc clearKeyBuf*() = g_keyBufIdx = 0
 
 # TODO maybe there's a better way to reduce duplication
-iterator keyBufInternal(): KeyEvent =
-  var i = 0
-  while i < g_keyBufIdx:
-    yield g_keyBuf[i]
-    inc(i)
-  clearKeyBuf()
+iterator eventBufInternal(): InputEvent =
+  while g_eventBuf.canRead():
+    yield g_eventBuf.read().get
 
-iterator keyBuf*(): KeyEvent =
+iterator eventBuf*(): InputEvent =
   alias(ui, g_uiState)
-  var i = 0
-
   if not ui.focusCaptured and (ui.insideDialog or not isDialogActive()):
-    while i < g_keyBufIdx:
-      yield g_keyBuf[i]
-      inc(i)
-    clearKeyBuf()
+    while g_eventBuf.canRead():
+      yield g_eventBuf.read().get
+
+proc clearEventBuf*() = g_eventBuf.clear()
+
+
+# }}}
+# {{{ Mouse handling
+
+#proc mouseButtonCb(win: Window, button: MouseButton, pressed: bool,
+#                   modKeys: set[ModifierKey]) =
+#
+
 
 # }}}
 # {{{ Tooltip handling
@@ -745,7 +827,6 @@ proc tooltipPost() =
 
 # }}}
 # }}}
-
 
 # {{{ Label
 
@@ -922,8 +1003,8 @@ template button*(x, y, w, h: float,
 
 proc checkBox(id:      ItemId,
               x, y, w: float,
-              tooltip: string = "",
-              active:  bool): bool =
+              active:  bool,
+              tooltip: string): bool =
 
   alias(ui, g_uiState)
 
@@ -981,13 +1062,13 @@ proc checkBox(id:      ItemId,
 
 
 template checkBox*(x, y, w: float,
-                   tooltip: string = "",
-                   active:  bool): bool =
+                   active:  bool,
+                   tooltip: string = ""): bool =
 
   let i = instantiationInfo(fullPaths = true)
   let id = generateId(i.filename, i.line, "")
 
-  checkbox(id, x, y, w, tooltip, active)
+  checkbox(id, x, y, w, active, tooltip)
 
 # }}}
 # {{{ RadioButtons
@@ -1088,6 +1169,7 @@ let DefaultRadioButtonDrawProc: RadioButtonsDrawProc =
       bw = round(x + buttonW) - bx
       bh = h - s.buttonPadVert
 
+    vg.save()
 
     vg.setFont(s.labelFontSize)
 
@@ -1110,22 +1192,22 @@ let DefaultRadioButtonDrawProc: RadioButtonsDrawProc =
       textBoxY = y
       textBoxH = bh
 
-    vg.scissor(textBoxX, textBoxY, textBoxW, textBoxH)
+    vg.intersectScissor(textBoxX, textBoxY, textBoxW, textBoxH)
 
     vg.fillColor(labelColor)
     let tw = vg.textWidth(label)
     discard vg.text(bx + bw*0.5 - tw*0.5, y + bh*TextVertAlignFactor,
                     label)
 
-    vg.resetScissor()
+    vg.restore()
 
 
 proc radioButtons(
   id:           ItemId,
   x, y, w, h:   float,
   labels:       seq[string],
-  tooltips:     seq[string] = @[],
   activeButton: Natural,
+  tooltips:     seq[string],
   layout:       RadioButtonsLayout = RadioButtonsLayout(kind: rblHoriz),
   drawProc:     Option[RadioButtonsDrawProc] = RadioButtonsDrawProc.none,
   style:        RadioButtonsStyle = DefaultRadioButtonsStyle
@@ -1265,8 +1347,8 @@ proc radioButtons(
 template radioButtons*(
   x, y, w, h:   float,
   labels:       seq[string],
-  tooltips:     seq[string] = @[],
   activeButton: Natural,
+  tooltips:     seq[string] = @[],
   layout:       RadioButtonsLayout = RadioButtonsLayout(kind: rblHoriz),
   drawProc:     Option[RadioButtonsDrawProc] = RadioButtonsDrawProc.none,
   style:        RadioButtonsStyle = DefaultRadioButtonsStyle
@@ -1275,43 +1357,47 @@ template radioButtons*(
   let i = instantiationInfo(fullPaths = true)
   let id = generateId(i.filename, i.line, "")
 
-  radioButtons(id, x, y, w, h, labels, tooltips, activeButton,
+  radioButtons(id, x, y, w, h, labels, activeButton, tooltips,
                layout, drawProc, style)
 
 # }}}
 # {{{ Dropdown
 
 type DropdownStyle* = ref object
-  buttonCornerRadius*:       float
-  buttonStrokeWidth*:        float
-  buttonStrokeColor*:        Color
-  buttonStrokeColorHover*:   Color
-  buttonStrokeColorDown*:    Color
-  buttonStrokeColorActive*:  Color
-  buttonFillColor*:          Color
-  buttonFillColorHover*:     Color
-  buttonFillColorDown*:      Color
-  buttonFillColorActive*:    Color
-  labelPadHoriz*:            float
-  labelFontSize*:            float
-  labelFontFace*:            string
-  labelAlign*:               HorizontalAlign
-  labelColor*:               Color
-  labelColorHover*:          Color
-  labelColorActive*:         Color
-  labelColorDown*:           Color
-  itemListPadHoriz*:         float
-  itemListPadVert*:          float
-  itemListCornerRadius*:     float
-  itemListStrokeWidth*:      float
-  itemListStrokeColor*:      Color
-  itemListFillColor*:        Color
-  itemFontSize*:             float
-  itemFontFace*:             string
-  itemAlign*:                HorizontalAlign
-  itemColor*:                Color
-  itemColorHover*:           Color
-  itemBackgroundColorHover*: Color
+  buttonCornerRadius*:        float
+  buttonStrokeWidth*:         float
+  buttonStrokeColor*:         Color
+  buttonStrokeColorHover*:    Color
+  buttonStrokeColorDown*:     Color
+  buttonStrokeColorActive*:   Color
+  buttonStrokeColorDisabled*: Color
+  buttonFillColor*:           Color
+  buttonFillColorHover*:      Color
+  buttonFillColorDown*:       Color
+  buttonFillColorActive*:     Color
+  buttonFillColorDisabled*:   Color
+  labelPadHoriz*:             float
+  labelFontSize*:             float
+  labelFontFace*:             string
+  labelAlign*:                HorizontalAlign
+  labelColor*:                Color
+  labelColorHover*:           Color
+  labelColorDown*:            Color
+  labelColorActive*:          Color
+  labelColorDisabled*:        Color
+  itemListAlign*:             HorizontalAlign
+  itemListPadHoriz*:          float
+  itemListPadVert*:           float
+  itemListCornerRadius*:      float
+  itemListStrokeWidth*:       float
+  itemListStrokeColor*:       Color
+  itemListFillColor*:         Color
+  itemFontSize*:              float
+  itemFontFace*:              string
+  itemAlign*:                 HorizontalAlign
+  itemColor*:                 Color
+  itemColorHover*:            Color
+  itemBackgroundColorHover*:  Color
 
 var DefaultDropdownStyle = DropdownStyle(
   buttonCornerRadius        : 5,
@@ -1320,18 +1406,22 @@ var DefaultDropdownStyle = DropdownStyle(
   buttonStrokeColorHover    : black(),
   buttonStrokeColorDown     : black(),
   buttonStrokeColorActive   : black(),
+  buttonStrokeColorDisabled : black(),
   buttonFillColor           : GRAY_MID,
   buttonFillColorHover      : GRAY_HI,
   buttonFillColorDown       : GRAY_MID,
   buttonFillColorActive     : GRAY_MID,
+  buttonFillColorDisabled   : GRAY_LO,
   labelPadHoriz             : 8,
   labelFontSize             : 14.0,
   labelFontFace             : "sans-bold",
   labelAlign                : haLeft,
   labelColor                : GRAY_LO,
   labelColorHover           : GRAY_LO,
-  labelColorActive          : GRAY_LO,
   labelColorDown            : GRAY_LO,
+  labelColorActive          : GRAY_LO,
+  labelColorDisabled        : GRAY_MID,
+  itemListAlign             : haCenter,
   itemListPadHoriz          : 7,
   itemListPadVert           : 7,
   itemListCornerRadius      : 5,
@@ -1357,8 +1447,9 @@ proc setDefaultDropdownStyle*(style: DropdownStyle) =
 proc dropdown(id:           ItemId,
               x, y, w, h:   float,
               items:        seq[string],
-              tooltip:      string = "",
               selectedItem: Natural,
+              tooltip:      string,
+              disabled:     bool,
               style:        DropdownStyle): Natural =
 
   assert items.len > 0
@@ -1387,12 +1478,12 @@ proc dropdown(id:           ItemId,
     ui.focusCaptured = false
     setFramesLeft()
     clearCharBuf()
-    clearKeyBuf()
+    clearEventBuf()
 
   if ds.state == dsClosed:
     if isHit(x, y, w, h):
       setHot(id)
-      if ui.mbLeftDown and noActiveItem():
+      if not disabled and ui.mbLeftDown and noActiveItem():
         setActive(id)
         ds.state = dsOpenLMBPressed
         ds.activeItem = id
@@ -1405,8 +1496,7 @@ proc dropdown(id:           ItemId,
     # Calculate the position of the box around the dropdown items
     var maxItemWidth = 0.0
 
-    # TODO to be kept up to date with the draw proc
-    g_nvgContext.setFont(14.0)
+    g_nvgContext.setFont(s.itemFontSize)
 
     for i in items:
       let tw = g_nvgContext.textWidth(i)
@@ -1415,8 +1505,18 @@ proc dropdown(id:           ItemId,
     itemListW = max(maxItemWidth + s.itemListPadHoriz*2, w)
     itemListH = float(items.len) * itemHeight + s.itemListPadVert*2
 
-    itemListX = if x + itemListW < ui.winWidth: x
-                else: x - (itemListW - w)
+    itemListX = case s.itemListAlign
+    of haLeft:   x
+    of haRight:  x + w - itemListW
+    of haCenter: x + (w - itemListW)*0.5
+
+    const WindowEdgePad = 5
+
+    if itemListX < WindowEdgePad:
+      itemListX = WindowEdgePad
+
+    elif itemListX + itemListW > ui.winWidth - WindowEdgePad:
+      itemListX = ui.winWidth - itemListW - WindowEdgePad
 
     itemListY = if y + h + itemListH < ui.winHeight: y + h
                 else: y - itemListH
@@ -1437,8 +1537,10 @@ proc dropdown(id:           ItemId,
       closeDropdown()
 
     if insideBox:
-      hoverItem = min(((ui.my - itemListY - s.itemListPadVert) / itemHeight).int,
-                      numItems-1)
+      hoverItem = min(
+        ((ui.my - itemListY - s.itemListPadVert) / itemHeight).int,
+        numItems-1
+      )
 
     # LMB released inside the box selects the item under the cursor and closes
     # the dropdown
@@ -1462,21 +1564,27 @@ proc dropdown(id:           ItemId,
     let sw = s.buttonStrokeWidth
     let (x, y, w, h) = snapToGrid(x, y, w, h, sw)
 
-    let drawState = if isHot(id) and noActiveItem(): dsHover
+    let drawState =
+      if disabled: dsDisabled
+      elif isHot(id) and noActiveItem(): dsHover
       elif isHotAndActive(id): dsActive
       else: dsNormal
 
     let (fillColor, strokeColor, textColor) = case drawState
+      of dsNormal:
+        (s.buttonFillColor, s.buttonStrokeColor, s.labelColor)
       of dsHover:
         (s.buttonFillColorHover, s.buttonStrokeColorHover, s.labelColorHover)
       of dsActive:
-        (s.buttonFillColorActive, s.buttonStrokeColorActive,s.labelColorActive)
-      else:
-        (s.buttonFillColor, s.buttonStrokeColor, s.labelColor)
+        (s.buttonFillColorActive, s.buttonStrokeColorActive, s.labelColorActive)
+      of dsDisabled:
+        (s.buttonFillColorDisabled, s.buttonStrokeColorDisabled,
+         s.labelColorDisabled)
 
     vg.fillColor(fillColor)
     vg.strokeColor(strokeColor)
     vg.strokeWidth(sw)
+
     vg.beginPath()
     vg.roundedRect(x, y, w, h, s.buttonCornerRadius)
     vg.fill()
@@ -1484,7 +1592,7 @@ proc dropdown(id:           ItemId,
 
     let itemText = items[selectedItem]
 
-    vg.drawLabel(x, y, w, h, padHoriz=7, itemText, textColor,
+    vg.drawLabel(x, y, w, h, s.labelPadHoriz, itemText, textColor,
                  s.labelFontSize, s.labelFontFace, s.labelAlign)
 
   # Dropdown items
@@ -1494,8 +1602,10 @@ proc dropdown(id:           ItemId,
       vg.fillColor(s.itemListFillColor)
       vg.strokeColor(s.itemListStrokeColor)
       vg.strokeWidth(s.itemListStrokeWidth)
+
       vg.beginPath()
-      vg.roundedRect(itemListX, itemListY, itemListW, itemListH, s.itemListCornerRadius)
+      vg.roundedRect(itemListX, itemListY, itemListW, itemListH,
+                     s.itemListCornerRadius)
       vg.fill()
       vg.stroke()
 
@@ -1525,15 +1635,16 @@ proc dropdown(id:           ItemId,
 template dropdown*(
   x, y, w, h:   float,
   items:        seq[string],
-  tooltip:      string = "",
   selectedItem: Natural,
+  tooltip:      string = "",
+  disabled:     bool = false,
   style:        DropdownStyle = DefaultDropdownStyle
 ): Natural =
 
   let i = instantiationInfo(fullPaths = true)
   let id = generateId(i.filename, i.line, "")
 
-  dropdown(id, x, y, w, h, items, tooltip, selectedItem, style)
+  dropdown(id, x, y, w, h, items, selectedItem, tooltip, disabled, style)
 
 # }}}
 # {{{ TextField
@@ -1545,7 +1656,7 @@ proc textFieldEnterEditMode(id: ItemId, text: string, startX: float) =
 
   setActive(id)
   clearCharBuf()
-  clearKeyBuf()
+  clearEventBuf()
 
   tf.state = tfEdit
   tf.activeItem = id
@@ -1562,9 +1673,9 @@ proc textFieldEnterEditMode(id: ItemId, text: string, startX: float) =
 
 proc textField(id:         ItemId,
                x, y, w, h: float,
-               tooltip:    string = "",
-               drawWidget: bool = true,
-               text:       string): string =
+               text:       string,
+               tooltip:    string,
+               drawWidget: bool): string =
 
   # TODO maxlength parameter
   # TODO only int & float parameter
@@ -1619,7 +1730,7 @@ proc textField(id:         ItemId,
     tf.selEndPos = 0
 
   proc exitEditMode() =
-    clearKeyBuf()
+    clearEventBuf()
     clearCharBuf()
 
     tf.state = tfDefault
@@ -1690,7 +1801,7 @@ proc textField(id:         ItemId,
             text.insert(s, text.runeOffset(insertPos))
           inc(tf.cursorPos, s.runeLen())
 
-    for ke in keyBufInternal():
+    for ke in eventBufInternal():
       alias(shortcuts, textFieldEditShortcuts)
       let sc = mkKeyShortcut(ke.key, ke.mods)
 
@@ -1848,6 +1959,8 @@ proc textField(id:         ItemId,
   let layer = if editing: TopLayer-3 else: ui.currentLayer
 
   addDrawLayer(layer, vg):
+    vg.save()
+
     # Draw text field background
     if drawWidget:
       vg.beginPath()
@@ -1862,7 +1975,7 @@ proc textField(id:         ItemId,
       vg.fill()
 
     # Make scissor region slightly wider because of the cursor
-    vg.scissor(textBoxX-3, textBoxY, textBoxW+3, textBoxH)
+    vg.intersectScissor(textBoxX-3, textBoxY, textBoxW+3, textBoxH)
 
     # Scroll content into view & draw cursor when editing
     if editing:
@@ -1966,30 +2079,30 @@ proc textField(id:         ItemId,
 
     discard vg.text(textX, textY, text)
 
-    vg.resetScissor()
+    vg.restore()
 
   if isHot(id):
     handleTooltip(id, tooltip)
 
 
 template rawTextField*(x, y, w, h: float,
-                       tooltip:    string = "",
-                       text:       string): string =
+                       text:       string,
+                       tooltip:    string = ""): string =
 
   let i = instantiationInfo(fullPaths = true)
   let id = generateId(i.filename, i.line, "")
 
-  textField(id, x, y, w, h, tooltip, drawWidget = false, text)
+  textField(id, x, y, w, h, text, tooltip, drawWidget = false)
 
 
 template textField*(x, y, w, h: float,
-                    tooltip:    string = "",
-                    text:       string): string =
+                    text:       string,
+                    tooltip:    string = ""): string =
 
   let i = instantiationInfo(fullPaths = true)
   let id = generateId(i.filename, i.line, "")
 
-  textField(id, x, y, w, h, tooltip, drawWidget = true, text)
+  textField(id, x, y, w, h, text, tooltip, drawWidget = true)
 
 
 # }}}
@@ -2532,8 +2645,8 @@ proc horizSlider(id:         ItemId,
       setActive(ss.textFieldId)
 
       ss.valueText = koi.textField(ss.textFieldId, x, y, w, h,
-                                   tooltip = "", drawWidget = false,
-                                   ss.valueText)
+                                   ss.valueText, tooltip = "",
+                                   drawWidget = false)
 
       if ui.textFieldState.state == tfDefault:
         value = try:
@@ -2810,6 +2923,7 @@ template closeDialog*() =
 
 
 # }}}
+#[
 # {{{ Menus
 # {{{ menuBar
 
@@ -2856,13 +2970,15 @@ proc menuBar(id:         ItemId,
     else:        GRAY_MID
 
   addDrawLayer(ui.currentLayer, vg):
+    vg.save()
+
     # Draw bar
     vg.beginPath()
     vg.rect(x, y, w, h)
     vg.fillColor(fillColor)
     vg.fill()
 
-    vg.scissor(x, y, w, h)
+    vg.intersectScissor(x, y, w, h)
 
     vg.setFont(14.0)
     vg.fillColor(GRAY_LO)
@@ -2870,7 +2986,7 @@ proc menuBar(id:         ItemId,
     for i in 0..names.high:
       discard vg.text(menuPosX[i], y + h*TextVertAlignFactor, names[i])
 
-    vg.resetScissor()
+    vg.restore()
 
 
 template menuBar*(x, y, w, h: float, names: seq[string]): string =
@@ -2918,6 +3034,7 @@ proc menuItemSeparator*() =
 
 # }}}
 # }}}
+]#
 
 # {{{ init*()
 
@@ -2933,8 +3050,8 @@ proc init*(nvg: NVGContext) =
   let win = currentContext()
   win.keyCb  = keyCb
   win.charCb = charCb
+#  win.mouseCb = mouseButtonCb
 
-  win.stickyMouseButtons = true
   glfw.swapInterval(1)
 
 # }}}
