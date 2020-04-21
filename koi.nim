@@ -125,18 +125,38 @@ type
 # {{{ UIState
 
 type
+  EventKind* = enum
+    ekKey, ekMouse
+
+  Event* = object
+    case kind*: EventKind
+    of ekKey:
+      key*:     Key
+      action*:  KeyAction
+
+    of ekMouse:
+      button*:  MouseButton
+      pressed*: bool
+      x*, y*:   float64
+
+    mods*:      set[ModifierKey]
+
+
   UIState = object
     # General state
     # *************
 
+    hasEvent:       bool
+    currEvent:      Event
+
     # Frames left to render
-    framesLeft: Natural
+    framesLeft:     Natural
 
     # Origin offset, used for relative coordinate handling in dialogs
-    ox, oy: float
+    ox, oy:         float
 
     # Widgets will be drawn on this layer by default
-    currentLayer: Natural
+    currentLayer:   Natural
 
     # Window dimensions (in virtual pixels)
     winWidth, winHeight: float
@@ -158,10 +178,7 @@ type
 
     # Keyboard state
     # --------------
-    shiftDown:      bool
-    altDown:        bool
-    ctrlDown:       bool
-    superDown:      bool
+    keyStates:      array[ord(Key.high), bool]
 
     # Active & hot items
     # ------------------
@@ -196,16 +213,15 @@ type
 
     # Internal tooltip state
     # **********************
-    tooltipState:     TooltipStateVars
+    tooltipState:   TooltipStateVars
 
     # Dialog state
     # **********************
-    activeDialogTitle: Option[string]
-
     # Only true when we're in a dialog (this is needed so widgets outside
     # of the dialog won't register any events).
-    insideDialog:      bool
-    isDialogActive:    bool
+    isDialogOpen:   bool
+    insideDialog:   bool
+
 
 # }}}
 # {{{ DrawState
@@ -229,6 +245,7 @@ var
 
   # TODO remove these once theming is implemented
   HILITE     = rgb(1.0, 0.4, 0.4)
+  HILITE_LO  = rgb(0.9, 0.3, 0.3)
   GRAY_MID   = gray(0.6)
   GRAY_HI    = gray(0.7)
   GRAY_LO    = gray(0.25)
@@ -254,30 +271,6 @@ const
   TextVertAlignFactor = 0.55
 
 # }}}
-
-# {{{ setFramesLeft*()
-proc setFramesLeft*(i: Natural = 2) =
-  alias(ui, g_uiState)
-  ui.framesLeft = 2
-# }}}
-
-type
-  InputEventKind = enum
-    iekKey, iekMouse
-
-  InputEvent* = object
-    case kind: InputEventKind
-    of iekKey:
-      key*:    Key
-      action*: KeyAction
-
-    of iekMouse:
-      mouseButton*: MouseButton
-      pressed*:     bool
-      x*, y*:       int32
-
-    mods*:   set[ModifierKey]
-
 
 # {{{ Utils
 
@@ -424,53 +417,91 @@ template generateId(id: string): ItemId =
   assert h > 0
   h
 
-template generateId(filename: string, line: int, id: string): ItemId =
+template generateId*(filename: string, line: int, id: string): ItemId =
   generateId(filename & ":" & $line & ":" & id)
 
-proc mouseInside(x, y, w, h: float): bool =
+proc setFramesLeft*(i: Natural = 2) =
+  alias(ui, g_uiState)
+  ui.framesLeft = 2
+
+proc mouseInside*(x, y, w, h: float): bool =
   alias(ui, g_uiState)
   ui.mx >= x and ui.mx <= x+w and
   ui.my >= y and ui.my <= y+h
 
-template isHot(id: ItemId): bool =
+proc isHot*(id: ItemId): bool =
   g_uiState.hotItem == id
 
-template setHot(id: ItemId) =
+proc setHot*(id: ItemId) =
   alias(ui, g_uiState)
   ui.hotItem = id
-  setFramesLeft()
 
-template isActive(id: ItemId): bool =
+proc isActive*(id: ItemId): bool =
   g_uiState.activeItem == id
 
-template setActive(id: ItemId) =
+proc setActive*(id: ItemId) =
   g_uiState.activeItem = id
 
-template isHotAndActive(id: ItemId): bool =
+# TODO remove
+proc isHotAndActive*(id: ItemId): bool =
   isHot(id) and isActive(id)
 
-template hasHotItem*(): bool =
+proc hasHotItem*(): bool =
   g_uiState.hotItem > 0
 
-template noActiveItem*(): bool =
+proc noActiveItem*(): bool =
   g_uiState.activeItem == 0
 
-template hasActiveItem(): bool =
+proc hasActiveItem*(): bool =
   g_uiState.activeItem > 0
 
-template isDialogActive*(): bool =
-  g_uiState.isDialogActive
+proc isDialogOpen*(): bool =
+  g_uiState.isDialogOpen
 
-template isHit(x, y, w, h: float): bool =
+proc isHit*(x, y, w, h: float): bool =
   alias(ui, g_uiState)
   let hit = not ui.focusCaptured and
-            (ui.insideDialog or not isDialogActive()) and
+            (ui.insideDialog or not ui.isDialogOpen) and
             mouseInside(x, y, w, h)
 
   # TODO
   # Draw another frame after the current frame (some widgets need one extra
   # frame to refresh properly after finishing the interaction with them).
   hit
+
+proc winWidth*():  float = g_uiState.winWidth
+proc winHeight*(): float = g_uiState.winHeight
+
+proc mx*(): float = g_uiState.mx
+proc my*(): float = g_uiState.my
+
+proc lastmx*(): float = g_uiState.lastmx
+proc lastmy*(): float = g_uiState.lastmy
+
+proc hasEvent*(): bool =
+  alias(ui, g_uiState)
+  if ui.isDialogOpen:
+    if ui.insideDialog:
+      ui.hasEvent and not ui.focusCaptured
+    else:
+      false
+  else:
+    ui.hasEvent and not ui.focusCaptured
+
+proc currEvent*(): Event = g_uiState.currEvent
+
+proc mbLeftDown*():   bool = g_uiState.mbLeftDown
+proc mbRightDown*():  bool = g_uiState.mbRightDown
+proc mbMiddleDown*(): bool = g_uiState.mbMiddleDown
+
+proc keyDown*(key: Key): bool =
+  if key == keyUnknown: false
+  else: g_uiState.keyStates[ord(key)]
+
+proc shiftDown*(): bool = keyDown(keyLeftShift)   or keyDown(keyRightShift)
+proc altDown*():   bool = keyDown(keyLeftAlt)     or keyDown(keyRightAlt)
+proc ctrlDown*():  bool = keyDown(keyLeftControl) or keyDown(keyRightControl)
+proc superDown*(): bool = keyDown(keyLeftSuper)   or keyDown(keyRightSuper)
 
 # }}}
 # {{{ Keyboard handling
@@ -479,7 +510,7 @@ type KeyShortcut* = object
   key*:    Key
   mods*:   set[ModifierKey]
 
-template mkKeyShortcut*(k: Key, m: set[ModifierKey]): KeyShortcut =
+proc mkKeyShortcut*(k: Key, m: set[ModifierKey]): KeyShortcut {.inline.} =
   KeyShortcut(key: k, mods: m)
 
 proc hash(ks: KeyShortcut): Hash =
@@ -524,7 +555,7 @@ type TextEditShortcuts = enum
 
 
 when defined(macosx):
-  let textFieldEditShortcuts = {
+  let g_textFieldEditShortcuts = {
     tesCursorOneCharLeft:    @[mkKeyShortcut(keyLeft,      {}),
                                mkKeyShortcut(keyB,         {mkCtrl})],
 
@@ -544,7 +575,7 @@ when defined(macosx):
                                mkKeyShortcut(keyE,         {mkCtrl}),
                                mkKeyShortcut(keyN,         {mkCtrl}),
                                mkKeyShortcut(keyV,         {mkCtrl}),
-                               mkKeyShortcut(keyDown,      {})],
+                               mkKeyShortcut(Key.keyDown,  {})],
 
     tesSelectionOneCharLeft:    @[mkKeyShortcut(keyLeft,   {mkShift})],
     tesSelectionOneCharRight:   @[mkKeyShortcut(keyRight,  {mkShift})],
@@ -557,7 +588,7 @@ when defined(macosx):
 
     tesSelectionToLineEnd:   @[mkKeyShortcut(keyRight,     {mkShift, mkSuper}),
                                mkKeyShortcut(keyE,         {mkShift, mkCtrl}),
-                               mkKeyShortcut(keyDown,      {mkShift})],
+                               mkKeyShortcut(Key.keyDown,  {mkShift})],
 
     tesDeleteOneCharLeft:    @[mkKeyShortcut(keyBackspace, {}),
                                mkKeyShortcut(keyH,         {mkCtrl})],
@@ -582,11 +613,12 @@ when defined(macosx):
     tesAccept:               @[mkKeyShortcut(keyEnter,     {}),
                                mkKeyShortcut(keyKpEnter,   {})],
 
-    tesCancel:               @[mkKeyShortcut(keyEscape,    {})]
+    tesCancel:               @[mkKeyShortcut(keyEscape,    {}),
+                               mkKeyShortcut(keyLeftBracket, {mkCtrl})]
   }.toTable
 
 else: # windows & linux
-  let textFieldEditShortcuts = {
+  let g_textFieldEditShortcuts = {
     tesCursorOneCharLeft:    @[mkKeyShortcut(keyLeft,      {}),
                                mkKeyShortcut(keyB,         {mkCtrl})],
 
@@ -599,14 +631,12 @@ else: # windows & linux
     tesCursorToLineStart:    @[mkKeyShortcut(keyLeft,      {mkCtrl}),
                                mkKeyShortcut(keyA,         {mkCtrl}),
                                mkKeyShortcut(keyP,         {mkCtrl}),
-                               mkKeyShortcut(keyV,         {mkShift, mkCtrl}),
                                mkKeyShortcut(keyUp,        {})],
 
     tesCursorToLineEnd:      @[mkKeyShortcut(keyRight,     {mkCtrl}),
                                mkKeyShortcut(keyE,         {mkCtrl}),
                                mkKeyShortcut(keyN,         {mkCtrl}),
-                               mkKeyShortcut(keyV,         {mkCtrl}),
-                               mkKeyShortcut(keyDown,      {})],
+                               mkKeyShortcut(Key.keyDown,  {})],
 
     tesSelectionOneCharLeft:    @[mkKeyShortcut(keyLeft,   {mkShift})],
     tesSelectionOneCharRight:   @[mkKeyShortcut(keyRight,  {mkShift})],
@@ -619,7 +649,7 @@ else: # windows & linux
 
     tesSelectionToLineEnd:   @[mkKeyShortcut(keyRight,     {mkShift, mkCtrl}),
                                mkKeyShortcut(keyE,         {mkShift, mkCtrl}),
-                               mkKeyShortcut(keyDown,      {mkShift})],
+                               mkKeyShortcut(Key.keyDown,  {mkShift})],
 
     tesDeleteOneCharLeft:    @[mkKeyShortcut(keyBackspace, {}),
                                mkKeyShortcut(keyH,         {mkCtrl})],
@@ -644,16 +674,14 @@ else: # windows & linux
     tesAccept:               @[mkKeyShortcut(keyEnter,     {}),
                                mkKeyShortcut(keyKpEnter,   {})],
 
-    tesCancel:               @[mkKeyShortcut(keyEscape,    {})]
+    tesCancel:               @[mkKeyShortcut(keyEscape,    {}),
+                               mkKeyShortcut(keyLeftBracket, {mkCtrl})]
   }.toTable
 
 
-var textFieldEditShortcutsSet =
-  toSeq(textFieldEditShortcuts.values).concat.toHashSet
-
 # }}}
 
-const CharBufSize = 200
+const CharBufSize = 64
 var
   # TODO do we need locking around this stuff? written in the callback, read
   # from the UI code
@@ -677,36 +705,27 @@ proc consumeCharBuf(): string =
 
 # TODO do we need locking around this stuff? written in the callback, read
 # from the UI code
-const EventBufSize = 1024
-var g_eventBuf = initRingBuffer[InputEvent](EventBufSize)
+const EventBufSize = 64
+var g_eventBuf = initRingBuffer[Event](EventBufSize)
 
 
 proc keyCb(win: Window, key: Key, scanCode: int32, action: KeyAction,
            mods: set[ModifierKey]) =
 
-  let shortcut = mkKeyShortcut(key, mods)
-
-  if (not g_uiState.focusCaptured) or
-     (g_uiState.focusCaptured and action in {kaDown, kaRepeat} and
-                                  shortcut in textFieldEditShortcutsSet):
-    discard g_eventBuf.write(
-      InputEvent(
-        kind: iekKey,
-        key: key, action: action, mods: mods
-      )
-    )
-
-
-# TODO maybe there's a better way to reduce duplication
-iterator eventBufInternal(): InputEvent =
-  while g_eventBuf.canRead():
-    yield g_eventBuf.read().get
-
-iterator eventBuf*(): InputEvent =
   alias(ui, g_uiState)
-  if not ui.focusCaptured and (ui.insideDialog or not isDialogActive()):
-    while g_eventBuf.canRead():
-      yield g_eventBuf.read().get
+
+  let keyIdx = ord(key)
+  if keyIdx >= 0 and keyIdx <= ui.keyStates.high:
+    case action
+    of kaDown, kaRepeat: ui.keyStates[keyIdx] = true
+    of kaUp:             ui.keyStates[keyIdx] = false
+
+  let event = Event(
+    kind: ekKey,
+    key: key, action: action, mods: mods
+  )
+  discard g_eventBuf.write(event)
+
 
 proc clearEventBuf*() = g_eventBuf.clear()
 
@@ -714,10 +733,21 @@ proc clearEventBuf*() = g_eventBuf.clear()
 # }}}
 # {{{ Mouse handling
 
-#proc mouseButtonCb(win: Window, button: MouseButton, pressed: bool,
-#                   modKeys: set[ModifierKey]) =
-#
+proc mouseButtonCb(win: Window, button: MouseButton, pressed: bool,
+                   modKeys: set[ModifierKey]) =
 
+  let (x, y) = win.cursorPos()
+
+  discard g_eventBuf.write(
+    Event(
+      kind: ekMouse,
+      button: button,
+      pressed: pressed,
+      x: x,
+      y: y,
+      mods: modKeys
+    )
+  )
 
 # }}}
 # {{{ Tooltip handling
@@ -736,6 +766,7 @@ proc handleTooltip(id: ItemId, tooltip: string) =
       let cursorMoved = ui.mx != ui.lastmx or ui.my != ui.lastmy
       if cursorMoved:
         tt.t0 = getTime()
+      setFramesLeft()
 
     # Hide the tooltip immediately if the LMB is pressed inside the widget
     if ui.mbLeftDown and hasActiveItem():
@@ -747,11 +778,13 @@ proc handleTooltip(id: ItemId, tooltip: string) =
          ui.lastHotItem != id:
       tt.state = tsShowDelay
       tt.t0 = getTime()
+      setFramesLeft()
 
     elif tt.state >= tsShow:
       tt.state = tsShow
       tt.t0 = getTime()
       tt.text = tooltip
+      setFramesLeft()
 
 # }}}
 # {{{ drawTooltip
@@ -869,7 +902,7 @@ template label*(x, y, w, h: float,
                 label:      string,
                 style:      LabelStyle = DefaultLabelStyle) =
 
-  let i = instantiationInfo(fullPaths = true)
+  let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
   textLabel(id, x, y, w, h, label, style)
@@ -993,7 +1026,7 @@ template button*(x, y, w, h: float,
                  disabled:   bool = false,
                  style:      ButtonStyle = DefaultButtonStyle): bool =
 
-  let i = instantiationInfo(fullPaths = true)
+  let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
   button(id, x, y, w, h, label, tooltip, disabled, style)
@@ -1065,7 +1098,7 @@ template checkBox*(x, y, w: float,
                    active:  bool,
                    tooltip: string = ""): bool =
 
-  let i = instantiationInfo(fullPaths = true)
+  let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
   checkbox(id, x, y, w, active, tooltip)
@@ -1107,7 +1140,7 @@ var DefaultRadioButtonsStyle = RadioButtonsStyle(
   buttonStrokeColorActive  : black(),
   buttonFillColor          : GRAY_MID,
   buttonFillColorHover     : GRAY_HI,
-  buttonFillColorDown      : HILITE,
+  buttonFillColorDown      : HILITE_LO,
   buttonFillColorActive    : HILITE,
   labelPadHoriz            : 8,
   labelFontSize            : 14.0,
@@ -1354,7 +1387,7 @@ template radioButtons*(
   style:        RadioButtonsStyle = DefaultRadioButtonsStyle
 ): Natural =
 
-  let i = instantiationInfo(fullPaths = true)
+  let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
   radioButtons(id, x, y, w, h, labels, activeButton, tooltips,
@@ -1641,7 +1674,7 @@ template dropdown*(
   style:        DropdownStyle = DefaultDropdownStyle
 ): Natural =
 
-  let i = instantiationInfo(fullPaths = true)
+  let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
   dropdown(id, x, y, w, h, items, selectedItem, tooltip, disabled, style)
@@ -1801,9 +1834,11 @@ proc textField(id:         ItemId,
             text.insert(s, text.runeOffset(insertPos))
           inc(tf.cursorPos, s.runeLen())
 
-    for ke in eventBufInternal():
-      alias(shortcuts, textFieldEditShortcuts)
-      let sc = mkKeyShortcut(ke.key, ke.mods)
+    if ui.hasEvent and ui.currEvent.kind == ekKey and
+                       ui.currEvent.action in {kaDown, kaRepeat}:
+
+      alias(shortcuts, g_textFieldEditShortcuts)
+      let sc = mkKeyShortcut(ui.currEvent.key, ui.currEvent.mods)
 
       if sc in shortcuts[tesCursorOneCharLeft]:
         let newCursorPos = max(tf.cursorPos - 1, 0)
@@ -2089,7 +2124,7 @@ template rawTextField*(x, y, w, h: float,
                        text:       string,
                        tooltip:    string = ""): string =
 
-  let i = instantiationInfo(fullPaths = true)
+  let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
   textField(id, x, y, w, h, text, tooltip, drawWidget = false)
@@ -2099,7 +2134,7 @@ template textField*(x, y, w, h: float,
                     text:       string,
                     tooltip:    string = ""): string =
 
-  let i = instantiationInfo(fullPaths = true)
+  let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
   textField(id, x, y, w, h, text, tooltip, drawWidget = true)
@@ -2183,7 +2218,7 @@ proc horizScrollBar(id:         ItemId,
     of sbsDefault:
       if insideThumb:
         ui.x0 = ui.mx
-        if ui.shiftDown:
+        if shiftDown():
           disableCursor()
           sb.state = sbsDragHidden
         else:
@@ -2196,7 +2231,7 @@ proc horizScrollBar(id:         ItemId,
         ui.t0 = getTime()
 
     of sbsDragNormal:
-      if ui.shiftDown:
+      if shiftDown():
         disableCursor()
         sb.state = sbsDragHidden
       else:
@@ -2216,9 +2251,9 @@ proc horizScrollBar(id:         ItemId,
       # sure the widget is always hot in "drag hidden" mode.
       setHot(id)
 
-      if ui.shiftDown:
-        let d = if ui.altDown: ScrollBarUltraFineDragDivisor
-                else:           ScrollBarFineDragDivisor
+      if shiftDown():
+        let d = if altDown(): ScrollBarUltraFineDragDivisor
+                else:         ScrollBarFineDragDivisor
         let dx = (ui.mx - ui.x0) / d
 
         newThumbX = clamp(thumbX + dx, thumbMinX, thumbMaxX)
@@ -2313,7 +2348,7 @@ template horizScrollBar*(x, y, w, h: float,
                          tooltip:   string = "",
                          value:     float): float =
 
-  let i = instantiationInfo(fullPaths = true)
+  let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
   horizScrollBar(id,
@@ -2396,7 +2431,7 @@ proc vertScrollBar(id:         ItemId,
     of sbsDefault:
       if insideThumb:
         ui.y0 = ui.my
-        if ui.shiftDown:
+        if shiftDown():
           disableCursor()
           sb.state = sbsDragHidden
         else:
@@ -2409,7 +2444,7 @@ proc vertScrollBar(id:         ItemId,
         ui.t0 = getTime()
 
     of sbsDragNormal:
-      if ui.shiftDown:
+      if shiftDown():
         disableCursor()
         sb.state = sbsDragHidden
       else:
@@ -2429,9 +2464,9 @@ proc vertScrollBar(id:         ItemId,
       # sure the widget is always hot in "drag hidden" mode.
       setHot(id)
 
-      if ui.shiftDown:
-        let d = if ui.altDown: ScrollBarUltraFineDragDivisor
-                else:           ScrollBarFineDragDivisor
+      if shiftDown():
+        let d = if altDown(): ScrollBarUltraFineDragDivisor
+                else:         ScrollBarFineDragDivisor
         let dy = (ui.my - ui.y0) / d
 
         newThumbY = clamp(thumbY + dy, thumbMinY, thumbMaxY)
@@ -2520,7 +2555,7 @@ template vertScrollBar*(x, y, w, h: float,
                         tooltip:    string = "",
                         value:      float): float =
 
-  let i = instantiationInfo(fullPaths = true)
+  let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
   vertScrollBar(id,
@@ -2628,9 +2663,9 @@ proc horizSlider(id:         ItemId,
         # here sure the widget is always hot in "drag hidden" mode.
         setHot(id)
 
-        let d = if ui.shiftDown:
-          if ui.altDown: SliderUltraFineDragDivisor
-          else:           SliderFineDragDivisor
+        let d = if shiftDown():
+          if altDown(): SliderUltraFineDragDivisor
+          else:         SliderFineDragDivisor
         else: 1
 
         let dx = (ui.mx - ui.x0) / d
@@ -2722,7 +2757,7 @@ template horizSlider*(x, y, w, h: float,
                       tooltip:    string = "",
                       value:      float): float =
 
-  let i = instantiationInfo(fullPaths = true)
+  let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
   horizSlider(id,
@@ -2789,9 +2824,9 @@ proc vertSlider(id:         ItemId,
       # sure the widget is always hot in "drag hidden" mode.
       setHot(id)
 
-      let d = if ui.shiftDown:
-        if ui.altDown: SliderUltraFineDragDivisor
-        else:           SliderFineDragDivisor
+      let d = if shiftDown():
+        if altDown(): SliderUltraFineDragDivisor
+        else:         SliderFineDragDivisor
       else: 1
 
       let dy = (ui.my - ui.y0) / d
@@ -2843,7 +2878,7 @@ template vertSlider*(x, y, w, h: float,
                      tooltip:    string = "",
                      value:      float): float =
 
-  let i = instantiationInfo(fullPaths = true)
+  let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
   vertSlider(id,
@@ -2876,7 +2911,7 @@ proc sliderPost() =
 type
   DialogProc = proc ()
 
-template beginDialog*(w, h: float, title: string) =
+proc beginDialog*(w, h: float, title: string) =
   alias(ui, g_uiState)
 
   let
@@ -2907,18 +2942,20 @@ template beginDialog*(w, h: float, title: string) =
   ui.ox = x
   ui.oy = y
   ui.insideDialog = true
-  ui.isDialogActive = true
+  ui.isDialogOpen = true
 
 
-template endDialog*() =
+proc endDialog*() =
+  alias(ui, g_uiState)
   ui.ox = 0
   ui.oy = 0
   ui.insideDialog = false
   dec(ui.currentLayer, 2 )  # TODO
 
 
-template closeDialog*() =
-  ui.isDialogActive = false
+proc closeDialog*() =
+  alias(ui, g_uiState)
+  ui.isDialogOpen = false
   setFramesLeft()
 
 
@@ -2991,7 +3028,7 @@ proc menuBar(id:         ItemId,
 
 template menuBar*(x, y, w, h: float, names: seq[string]): string =
 
-  let i = instantiationInfo(fullPaths = true)
+  let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
   menuBar(id, x, y, w, h, names)
@@ -3050,7 +3087,7 @@ proc init*(nvg: NVGContext) =
   let win = currentContext()
   win.keyCb  = keyCb
   win.charCb = charCb
-#  win.mouseCb = mouseButtonCb
+  win.mouseButtonCb = mouseButtonCb
 
   glfw.swapInterval(1)
 
@@ -3083,22 +3120,22 @@ proc beginFrame*(winWidth, winHeight: float) =
 
   (ui.mx, ui.my) = win.cursorPos()
 
-  ui.mbLeftDown   = win.mouseButtonDown(mbLeft)
-  ui.mbRightDown  = win.mouseButtonDown(mbRight)
-  ui.mbMiddleDown = win.mouseButtonDown(mbMiddle)
+  ui.hasEvent = false
 
-  # Store modifier key state (just for convenience for the GUI functions)
-  ui.shiftDown = win.isKeyDown(keyLeftShift) or
-                 win.isKeyDown(keyRightShift)
+  if g_eventBuf.canRead():
+    ui.currEvent = g_eventBuf.read().get
+    ui.hasEvent = true
+    let ev = ui.currEvent
 
-  ui.ctrlDown  = win.isKeyDown(keyLeftControl) or
-                 win.isKeyDown(keyRightControl)
+    case ev.kind:
+    of ekKey: discard
 
-  ui.altDown   = win.isKeyDown(keyLeftAlt) or
-                 win.isKeyDown(keyRightAlt)
-
-  ui.superDown = win.isKeyDown(keyLeftSuper) or
-                 win.isKeyDown(keyRightSuper)
+    of ekMouse:
+      case ev.button
+      of mbLeft:   ui.mbLeftDown   = ev.pressed
+      of mbRight:  ui.mbRightDown  = ev.pressed
+      of mbMiddle: ui.mbMiddleDown = ev.pressed
+      else: discard
 
   # Reset hot item
   ui.hotItem = 0
@@ -3126,7 +3163,7 @@ proc endFrame*() =
   sliderPost()
 
   # Active state reset
-  if ui.mbLeftDown:
+  if ui.mbLeftDown or ui.mbRightDown or ui.mbMiddleDown:
     if ui.activeItem == 0 and ui.hotItem == 0:
       # LMB was pressed outside of any widget. We need to mark this as
       # a separate state so we can't just "drag into" a widget while the LMB
@@ -3152,28 +3189,6 @@ proc shouldRenderNextFrame*(): bool =
 # {{{ nvgContext*()
 proc nvgContext*(): NVGContext =
   g_nvgContext
-
-# }}}
-
-# {{{ Read-only UI state properties
-
-proc winWidth*():  float = g_uiState.winWidth
-proc winHeight*(): float = g_uiState.winHeight
-
-proc mx*(): float = g_uiState.mx
-proc my*(): float = g_uiState.my
-
-proc lastmx*(): float = g_uiState.lastmx
-proc lastmy*(): float = g_uiState.lastmy
-
-proc mbLeftDown*():   bool = g_uiState.mbLeftDown
-proc mbRightDown*():  bool = g_uiState.mbRightDown
-proc mbMiddleDown*(): bool = g_uiState.mbMiddleDown
-
-proc shiftDown*(): bool = g_uiState.shiftDown
-proc altDown*():   bool = g_uiState.altDown
-proc ctrlDown*():  bool = g_uiState.ctrlDown
-proc superDown*(): bool = g_uiState.superDown
 
 # }}}
 
