@@ -2,9 +2,7 @@ import hashes
 import math
 import lenientops
 import options
-import sequtils
 import sets
-import sugar
 import strformat
 import strutils
 import tables
@@ -106,6 +104,11 @@ type
     # restored if the editing is cancelled.
     originalText:    string
 
+    prevItem:        ItemId
+    lastActiveItem:  ItemId
+    moveFocusToNext: bool
+    moveFocusToPrev: bool
+
 # }}}
 # {{{ TooltipState
 
@@ -148,6 +151,7 @@ type
 
     hasEvent:       bool
     currEvent:      Event
+    eventHandled:   bool
 
     # Frames left to render
     framesLeft:     Natural
@@ -478,15 +482,18 @@ proc my*(): float = g_uiState.my
 proc lastmx*(): float = g_uiState.lastmx
 proc lastmy*(): float = g_uiState.lastmy
 
+
 proc hasEvent*(): bool =
   alias(ui, g_uiState)
+
+  template calcHasEvent(): bool =
+    ui.hasEvent and (not ui.eventHandled) and not ui.focusCaptured
+
   if ui.isDialogOpen:
-    if ui.insideDialog:
-      ui.hasEvent and not ui.focusCaptured
-    else:
-      false
-  else:
-    ui.hasEvent and not ui.focusCaptured
+    if ui.insideDialog: calcHasEvent()
+    else: false
+  else: calcHasEvent()
+
 
 proc currEvent*(): Event = g_uiState.currEvent
 
@@ -523,6 +530,9 @@ proc hash(ks: KeyShortcut): Hash =
 # {{{ Shortcut definitions
 
 type TextEditShortcuts = enum
+  tesPrevTextField,
+  tesNextTextField,
+
   tesCursorOneCharLeft,
   tesCursorOneCharRight,
   tesCursorToPreviousWord,
@@ -556,6 +566,9 @@ type TextEditShortcuts = enum
 
 when defined(macosx):
   let g_textFieldEditShortcuts = {
+    tesPrevTextField:        @[mkKeyShortcut(keyTab,       {mkShift})],
+    tesNextTextField:        @[mkKeyShortcut(keyTab,       {})],
+
     tesCursorOneCharLeft:    @[mkKeyShortcut(keyLeft,      {}),
                                mkKeyShortcut(keyB,         {mkCtrl})],
 
@@ -619,6 +632,9 @@ when defined(macosx):
 
 else: # windows & linux
   let g_textFieldEditShortcuts = {
+    tesPrevTextField:        @[mkKeyShortcut(keyTab,       {mkShift})],
+    tesNextTextField:        @[mkKeyShortcut(keyTab,       {})],
+
     tesCursorOneCharLeft:    @[mkKeyShortcut(keyLeft,      {}),
                                mkKeyShortcut(keyB,         {mkCtrl})],
 
@@ -1708,6 +1724,7 @@ proc textField(id:         ItemId,
                x, y, w, h: float,
                text:       string,
                tooltip:    string,
+               activate:   bool,
                drawWidget: bool): string =
 
   # TODO maxlength parameter
@@ -1750,11 +1767,17 @@ proc textField(id:         ItemId,
     else:
       (tf.selEndPos.int, tf.selStartPos)
 
+  var tabActivate = false
+
   if tf.state == tfDefault:
+    if tf.moveFocusToNext and tf.prevItem == tf.lastActiveItem:
+      tabActivate = true
+      tf.moveFocusToNext = false
+
     # Hit testing
-    if isHit(x, y, w, h):
+    if isHit(x, y, w, h) or activate or tabActivate:
       setHot(id)
-      if ui.mbLeftDown and noActiveItem():
+      if (ui.mbLeftDown and noActiveItem()) or activate or tabActivate:
         textFieldEnterEditMode(id, text, textBoxX)
         tf.state = tfEditLMBPressed
 
@@ -1772,6 +1795,7 @@ proc textField(id:         ItemId,
     tf.displayStartPos = 0
     tf.displayStartX = textBoxX
     tf.originalText = ""
+    tf.lastActiveItem = id
     clearSelection()
 
     ui.focusCaptured = false
@@ -1834,13 +1858,24 @@ proc textField(id:         ItemId,
             text.insert(s, text.runeOffset(insertPos))
           inc(tf.cursorPos, s.runeLen())
 
-    if ui.hasEvent and ui.currEvent.kind == ekKey and
-                       ui.currEvent.action in {kaDown, kaRepeat}:
+    if ui.hasEvent and (not ui.eventHandled) and
+       ui.currEvent.kind == ekKey and
+       ui.currEvent.action in {kaDown, kaRepeat}:
 
       alias(shortcuts, g_textFieldEditShortcuts)
       let sc = mkKeyShortcut(ui.currEvent.key, ui.currEvent.mods)
 
-      if sc in shortcuts[tesCursorOneCharLeft]:
+      ui.eventHandled = true
+
+      if sc in shortcuts[tesPrevTextField]:
+        exitEditMode()
+        tf.moveFocusToPrev = true
+
+      elif sc in shortcuts[tesNextTextField]:
+        exitEditMode()
+        tf.moveFocusToNext = true
+
+      elif sc in shortcuts[tesCursorOneCharLeft]:
         let newCursorPos = max(tf.cursorPos - 1, 0)
         clearSelection()
         tf.cursorPos = newCursorPos
@@ -1965,6 +2000,9 @@ proc textField(id:         ItemId,
         exitEditMode()
         # Note we won't process any remaining characters in the buffer
         # because exitEditMode() clears the key buffer.
+
+      else:
+        ui.eventHandled = false
 
     # Splice newly entered characters into the string.
     # (If we exited edit mode in the above key handler, this will result in
@@ -2119,25 +2157,33 @@ proc textField(id:         ItemId,
   if isHot(id):
     handleTooltip(id, tooltip)
 
+  # TODO a bit hacky, why is it needed?
+  if activate or tabActivate:
+    ui.tooltipState.state = tsOff
+
+  tf.prevItem = id
+
 
 template rawTextField*(x, y, w, h: float,
                        text:       string,
-                       tooltip:    string = ""): string =
+                       tooltip:    string = "",
+                       activate:   bool = false): string =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  textField(id, x, y, w, h, text, tooltip, drawWidget = false)
+  textField(id, x, y, w, h, text, tooltip, activate, drawWidget = false)
 
 
 template textField*(x, y, w, h: float,
                     text:       string,
-                    tooltip:    string = ""): string =
+                    tooltip:    string = "",
+                    activate:   bool = false): string =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  textField(id, x, y, w, h, text, tooltip, drawWidget = true)
+  textField(id, x, y, w, h, text, tooltip, activate, drawWidget = true)
 
 
 # }}}
@@ -2679,9 +2725,10 @@ proc horizSlider(id:         ItemId,
       # The textfield will only work correctly if it thinks it's active
       setActive(ss.textFieldId)
 
+      # TODO couldn't we do activate=true here and simplify the code?
       ss.valueText = koi.textField(ss.textFieldId, x, y, w, h,
                                    ss.valueText, tooltip = "",
-                                   drawWidget = false)
+                                   drawWidget = false, activate = false)
 
       if ui.textFieldState.state == tfDefault:
         value = try:
@@ -2908,9 +2955,6 @@ proc sliderPost() =
 
 # {{{ Dialog
 
-type
-  DialogProc = proc ()
-
 proc beginDialog*(w, h: float, title: string) =
   alias(ui, g_uiState)
 
@@ -3121,6 +3165,7 @@ proc beginFrame*(winWidth, winHeight: float) =
   (ui.mx, ui.my) = win.cursorPos()
 
   ui.hasEvent = false
+  ui.eventHandled = false
 
   if g_eventBuf.canRead():
     ui.currEvent = g_eventBuf.read().get

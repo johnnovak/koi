@@ -43,9 +43,13 @@ var
   dropdownBottomLeft = 0
   dropdownBottomRight = 0
 
-  textFieldVal1 = ""
-  textFieldVal2 = "Nobody expects the Spanish Inquisition!"
-  textFieldVal3 = "Raw text field"
+#  textFieldVal1 = ""
+#  textFieldVal2 = "Nobody expects the Spanish Inquisition!"
+#  textFieldVal3 = "Raw text field"
+#
+  textFieldVal1 = "1"
+  textFieldVal2 = "2"
+  textFieldVal3 = "3"
 
 
 ############################################################
@@ -240,7 +244,7 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
 
   y += pad
   textFieldVal3 = koi.rawTextField(
-    x, y, w * 1.0, h, textFieldVal3, tooltip = "Text field 2")
+    x, y, w * 1.0, h, textFieldVal3, tooltip = "Text field 3")
 
   # Checkboxes
   y += pad * 2
@@ -450,7 +454,7 @@ proc init(): Window =
   win.windowPositionCb = windowPosCb
   win.framebufferSizeCb = framebufSizeCb
 
-#  glfw.swapInterval(0)
+  glfw.swapInterval(1)
 
   win.pos = (400, 150)  # TODO for development
   wrapper.showWindow(win.getHandle())
