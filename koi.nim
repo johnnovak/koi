@@ -1700,7 +1700,6 @@ template dropdown*(
 # }}}
 # {{{ TextField
 
-# TODO
 proc textFieldEnterEditMode(id: ItemId, text: string, startX: float) =
   alias(ui, g_uiState)
   alias(tf, ui.textFieldState)
@@ -1722,12 +1721,29 @@ proc textFieldEnterEditMode(id: ItemId, text: string, startX: float) =
   showIBeamCursor()
 
 
-proc textField(id:         ItemId,
-               x, y, w, h: float,
-               text:       string,
-               tooltip:    string,
-               activate:   bool,
-               drawWidget: bool): string =
+type
+  TextFieldConstraintKind* = enum
+    tckString, tckInteger
+
+  TextFieldConstraint* = object
+    case kind*: TextFieldConstraintKind
+    of tckString:
+      minLen*: Natural
+      maxLen*: int
+
+    of tckInteger:
+      min*, max*: int
+
+
+proc textField(
+  id:         ItemId,
+  x, y, w, h: float,
+  text:       string,
+  tooltip:    string = "",
+  activate:   bool = false,
+  drawWidget: bool = false,
+  constraint: Option[TextFieldConstraint] = TextFieldConstraint.none
+): string =
 
   # TODO maxlength parameter
   # TODO only int & float parameter
@@ -1772,10 +1788,13 @@ proc textField(id:         ItemId,
   var tabActivate = false
 
   if tf.state == tfDefault:
-    if tf.activateNext and tf.lastActiveItem == tf.prevItem:
+    if tf.activateNext and tf.lastActiveItem == tf.prevItem and
+       id != tf.prevItem:  # exit editing textfield if there's just one
       tf.activateNext = false
       tabActivate = true
-    elif tf.activatePrev and id == tf.itemToActivate:
+
+    elif tf.activatePrev and id == tf.itemToActivate and
+         id != tf.prevItem:  # exit editing textfield if there's just one
       tf.activatePrev = false
       tabActivate = true
 
@@ -1806,6 +1825,29 @@ proc textField(id:         ItemId,
     ui.focusCaptured = false
     showArrowCursor()
 
+  proc enforceConstraint(text, originalText: string): string =
+    var text = unicode.strip(text)
+    result = text
+    if constraint.isSome:
+      alias(c, constraint.get)
+
+      case c.kind
+      of tckString:
+        if text.len < c.minLen:
+          result = originalText
+
+        if c.maxLen > -1 and text.len > c.maxLen:
+          result = text[0..<c.maxLen]
+
+      of tckInteger:
+        try:
+          let i = parseInt(text)
+          if   i < c.min: result = $c.min
+          elif i > c.max: result = $c.max
+          else:           result = $i
+        except ValueError:
+          result = originalText
+
   # We 'fall through' to the edit state to avoid a 1-frame delay when going
   # into edit mode
   if tf.activeItem == id and tf.state >= tfEditLMBPressed:
@@ -1818,6 +1860,7 @@ proc textField(id:         ItemId,
     else:
       # LMB pressed outside the text field exits edit mode
       if ui.mbLeftDown and not mouseInside(x, y, w, h):
+        text = enforceConstraint(text, tf.originalText)
         exitEditMode()
 
     # Handle text field shortcuts
@@ -1863,6 +1906,7 @@ proc textField(id:         ItemId,
             text.insert(s, text.runeOffset(insertPos))
           inc(tf.cursorPos, s.runeLen())
 
+
     if ui.hasEvent and (not ui.eventHandled) and
        ui.currEvent.kind == ekKey and
        ui.currEvent.action in {kaDown, kaRepeat}:
@@ -1873,12 +1917,14 @@ proc textField(id:         ItemId,
       ui.eventHandled = true
 
       if sc in shortcuts[tesPrevTextField]:
+        text = enforceConstraint(text, tf.originalText)
         exitEditMode()
         tf.activatePrev = true
         tf.itemToActivate = tf.prevItem
         setFramesLeft()
 
       elif sc in shortcuts[tesNextTextField]:
+        text = enforceConstraint(text, tf.originalText)
         exitEditMode()
         tf.activateNext = true
         setFramesLeft()
@@ -1999,6 +2045,7 @@ proc textField(id:         ItemId,
         insertString(s)
 
       elif sc in shortcuts[tesAccept]:
+        text = enforceConstraint(text, tf.originalText)
         exitEditMode()
         # Note we won't process any remaining characters in the buffer
         # because exitEditMode() clears the key buffer.
@@ -2172,26 +2219,34 @@ proc textField(id:         ItemId,
   tf.prevItem = id
 
 
-template rawTextField*(x, y, w, h: float,
-                       text:       string,
-                       tooltip:    string = "",
-                       activate:   bool = false): string =
+template rawTextField*(
+  x, y, w, h: float,
+  text:       string,
+  tooltip:    string = "",
+  activate:   bool = false,
+  constraint: Option[TextFieldConstraint] = TextFieldConstraint.none
+): string =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  textField(id, x, y, w, h, text, tooltip, activate, drawWidget = false)
+  textField(id, x, y, w, h, text, tooltip, activate, drawWidget = false,
+            constraint)
 
 
-template textField*(x, y, w, h: float,
-                    text:       string,
-                    tooltip:    string = "",
-                    activate:   bool = false): string =
+template textField*(
+  x, y, w, h: float,
+  text:       string,
+  tooltip:    string = "",
+  activate:   bool = false,
+  constraint: Option[TextFieldConstraint] = TextFieldConstraint.none
+): string =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  textField(id, x, y, w, h, text, tooltip, activate, drawWidget = true)
+  textField(id, x, y, w, h, text, tooltip, activate, drawWidget = true,
+            constraint)
 
 
 # }}}
@@ -2735,8 +2790,7 @@ proc horizSlider(id:         ItemId,
 
       # TODO couldn't we do activate=true here and simplify the code?
       ss.valueText = koi.textField(ss.textFieldId, x, y, w, h,
-                                   ss.valueText, tooltip = "",
-                                   drawWidget = false, activate = false)
+                                   ss.valueText, drawWidget = false)
 
       if ui.textFieldState.state == tfDefault:
         value = try:
