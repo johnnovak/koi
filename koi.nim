@@ -104,10 +104,12 @@ type
     # restored if the editing is cancelled.
     originalText:    string
 
+    # State variables for tabbing back and forth between textfields
     prevItem:        ItemId
     lastActiveItem:  ItemId
-    moveFocusToNext: bool
-    moveFocusToPrev: bool
+    itemToActivate:  ItemId
+    activateNext:    bool
+    activatePrev:    bool
 
 # }}}
 # {{{ TooltipState
@@ -1770,9 +1772,12 @@ proc textField(id:         ItemId,
   var tabActivate = false
 
   if tf.state == tfDefault:
-    if tf.moveFocusToNext and tf.prevItem == tf.lastActiveItem:
+    if tf.activateNext and tf.lastActiveItem == tf.prevItem:
+      tf.activateNext = false
       tabActivate = true
-      tf.moveFocusToNext = false
+    elif tf.activatePrev and id == tf.itemToActivate:
+      tf.activatePrev = false
+      tabActivate = true
 
     # Hit testing
     if isHit(x, y, w, h) or activate or tabActivate:
@@ -1869,11 +1874,14 @@ proc textField(id:         ItemId,
 
       if sc in shortcuts[tesPrevTextField]:
         exitEditMode()
-        tf.moveFocusToPrev = true
+        tf.activatePrev = true
+        tf.itemToActivate = tf.prevItem
+        setFramesLeft()
 
       elif sc in shortcuts[tesNextTextField]:
         exitEditMode()
-        tf.moveFocusToNext = true
+        tf.activateNext = true
+        setFramesLeft()
 
       elif sc in shortcuts[tesCursorOneCharLeft]:
         let newCursorPos = max(tf.cursorPos - 1, 0)
