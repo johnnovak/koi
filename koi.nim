@@ -1700,6 +1700,54 @@ template dropdown*(
 # }}}
 # {{{ TextField
 
+type TextFieldStyle* = ref object
+  bgCornerRadius*:        float
+  bgStrokeWidth*:         float
+  bgStrokeColor*:         Color
+  bgStrokeColorHover*:    Color
+  bgStrokeColorActive*:   Color
+  bgFillColor*:           Color
+  bgFillColorHover*:      Color
+  bgFillColorActive*:     Color
+  textPadHoriz*:          float
+  textPadVert*:           float
+  textFontSize*:          float
+  textFontFace*:          string
+  textColor*:             Color
+  textColorHover*:        Color
+  textColorActive*:       Color
+  cursorWidth*:           float
+  cursorColor*:           Color
+  selectionColor*:        Color
+
+var DefaultTextFieldStyle = TextFieldStyle(
+  bgCornerRadius      : 5,
+  bgStrokeWidth       : 0,
+  bgStrokeColor       : black(),
+  bgStrokeColorHover  : black(),
+  bgStrokeColorActive : black(),
+  bgFillColor         : GRAY_MID,
+  bgFillColorHover    : GRAY_HI,
+  bgFillColorActive   : GRAY_LO,
+  textPadHoriz        : 8.0,
+  textPadVert         : 2.0,
+  textFontSize        : 14.0,
+  textFontFace        : "sans",
+  textColor           : GRAY_LO,
+  textColorHover      : GRAY_LO,
+  textColorActive     : GRAY_HI,
+  cursorColor         : HILITE,
+  cursorWidth         : 1.0,
+  selectionColor      : rgb(0.5, 0.15, 0.15)
+)
+
+proc getDefaultTextFieldStyle*(): TextFieldStyle =
+  DefaultTextFieldStyle.deepCopy
+
+proc setDefaultTextFieldStyle*(style: TextFieldStyle) =
+  DefaultTextFieldStyle = style.deepCopy
+
+
 proc textFieldEnterEditMode(id: ItemId, text: string, startX: float) =
   alias(ui, g_uiState)
   alias(tf, ui.textFieldState)
@@ -1742,28 +1790,26 @@ proc textField(
   tooltip:    string = "",
   activate:   bool = false,
   drawWidget: bool = false,
-  constraint: Option[TextFieldConstraint] = TextFieldConstraint.none
+  constraint: Option[TextFieldConstraint] = TextFieldConstraint.none,
+  style:      TextFieldStyle = DefaultTextFieldStyle
 ): string =
 
-  # TODO maxlength parameter
-  # TODO only int & float parameter
-
-  const MaxTextLen = 1000
+  const MaxTextLen = 2000
 
   assert text.runeLen <= MaxTextLen
 
   alias(ui, g_uiState)
   alias(tf, ui.textFieldState)
+  alias(s, style)
 
   let
     x = x + ui.ox
     y = y + ui.oy
 
   # The text is displayed within this rectangle (used for drawing later)
-  const TextBoxPadX = 8
   let
-    textBoxX = x + TextBoxPadX
-    textBoxW = w - TextBoxPadX*2
+    textBoxX = x + s.textPadHoriz
+    textBoxW = w - s.textPadhOriz*2
     textBoxY = y
     textBoxH = h
 
@@ -1772,8 +1818,7 @@ proc textField(
     glyphs: array[MaxTextLen, GlyphPosition]  # TODO is this buffer large enough?
 
   proc calcGlyphPos() =
-    # TODO to be kept up to date with the draw proc
-    g_nvgContext.setFont(14.0)
+    g_nvgContext.setFont(s.textFontSize)
     discard g_nvgContext.textGlyphPositions(0, 0, text, glyphs)
 
   proc hasSelection(): bool =
@@ -2079,10 +2124,10 @@ proc textField(
     textX = textBoxX
     textY = y + h*TextVertAlignFactor
 
-  let fillColor = case drawState
-    of dsHover:  GRAY_HI
-    of dsActive: GRAY_LO
-    else:        GRAY_MID
+  let (fillColor, strokeColor) = case drawState
+    of dsHover:  (s.bgFillColorHover,  s.bgStrokeColorHover)
+    of dsActive: (s.bgFillColorActive, s.bgStrokeColorActive)
+    else:        (s.bgFillColor,       s.bgStrokeColor)
 
   let layer = if editing: TopLayer-3 else: ui.currentLayer
 
@@ -2092,17 +2137,21 @@ proc textField(
     # Draw text field background
     if drawWidget:
       vg.beginPath()
-      vg.roundedRect(x, y, w, h, 5)
+      vg.roundedRect(x, y, w, h, s.bgCornerRadius)
       vg.fillColor(fillColor)
       vg.fill()
 
     elif editing:
       vg.beginPath()
-      vg.rect(textBoxX, textBoxY + 2, textBoxW, textBoxH - 2*2)
+      vg.rect(
+        textBoxX, textBoxY + s.textPadVert,
+        textBoxW, textBoxH - s.textPadVert*2
+      )
       vg.fillColor(fillColor)
       vg.fill()
 
     # Make scissor region slightly wider because of the cursor
+    # TODO convert constants into style params?
     vg.intersectScissor(textBoxX-3, textBoxY, textBoxW+3, textBoxH)
 
     # Scroll content into view & draw cursor when editing
@@ -2163,7 +2212,7 @@ proc textField(
       # Draw selection
       if hasSelection():
         var (startPos, endPos) = getSelection()
-        endPos = max(endPos - 1, 0)
+        endPos = max(endPos-1, 0)
 
         let
           selStartX = tf.displayStartX + glyphs[startPos].minX -
@@ -2173,8 +2222,9 @@ proc textField(
                                        glyphs[tf.displayStartPos].x
 
         vg.beginPath()
+        # TODO convert constants into style params?
         vg.rect(selStartX, y + 2, selEndX - selStartX, h - 4)
-        vg.fillColor(rgb(0.5, 0.15, 0.15))
+        vg.fillColor(s.selectionColor)
         vg.fill()
 
       # Draw cursor
@@ -2191,20 +2241,21 @@ proc textField(
       else: textBoxX
 
       vg.beginPath()
-      vg.strokeColor(HILITE)
-      vg.strokeWidth(1.0)
-      vg.moveTo(cursorX, y + 2)
-      vg.lineTo(cursorX, y+h - 2)
+      vg.strokeColor(s.cursorColor)
+      vg.strokeWidth(s.cursorWidth)
+      # TODO convert constants into style params?
+      vg.moveTo(cursorX+0.5, y + 2)
+      vg.lineTo(cursorX+0.5, y+h - 2)
       vg.stroke()
 
       text = text.runeSubStr(tf.displayStartPos)
 
     # Draw text
-    let textColor = if editing: GRAY_HI else: GRAY_LO
+    # TODO text color hover
+    let textColor = if editing: s.textColorActive else: s.textColor
 
-    vg.setFont(14.0)
+    vg.setFont(s.textFontSize)
     vg.fillColor(textColor)
-
     discard vg.text(textX, textY, text)
 
     vg.restore()
@@ -2224,14 +2275,15 @@ template rawTextField*(
   text:       string,
   tooltip:    string = "",
   activate:   bool = false,
-  constraint: Option[TextFieldConstraint] = TextFieldConstraint.none
+  constraint: Option[TextFieldConstraint] = TextFieldConstraint.none,
+  style:      TextFieldStyle = DefaultTextFieldStyle
 ): string =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
   textField(id, x, y, w, h, text, tooltip, activate, drawWidget = false,
-            constraint)
+            constraint, style)
 
 
 template textField*(
@@ -2239,14 +2291,15 @@ template textField*(
   text:       string,
   tooltip:    string = "",
   activate:   bool = false,
-  constraint: Option[TextFieldConstraint] = TextFieldConstraint.none
+  constraint: Option[TextFieldConstraint] = TextFieldConstraint.none,
+  style:      TextFieldStyle = DefaultTextFieldStyle
 ): string =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
   textField(id, x, y, w, h, text, tooltip, activate, drawWidget = true,
-            constraint)
+            constraint, style)
 
 
 # }}}
@@ -3017,8 +3070,31 @@ proc sliderPost() =
 
 # {{{ Dialog
 
-proc beginDialog*(w, h: float, title: string) =
+type DialogStyle* = ref object
+  cornerRadius*:       float
+  backgroundColor*:    Color
+  titleBarBgColor*:    Color
+  titleBarTextColor*:  Color
+
+var DefaultDialogStyle = DialogStyle(
+  cornerRadius:       7,
+  backgroundColor:    gray(0.2),
+  titleBarBgColor:    gray(0.05),
+  titleBarTextColor:  gray(0.85)
+)
+
+proc getDefaultDialogStyle*(): DialogStyle =
+  DefaultDialogStyle.deepCopy
+
+proc setDefaultDialogStyle*(style: DialogStyle) =
+  DefaultDialogStyle = style.deepCopy
+
+
+proc beginDialog*(w, h: float, title: string,
+                  style: DialogStyle = DefaultDialogStyle) =
+
   alias(ui, g_uiState)
+  alias(s, style)
 
   let
     x = floor((ui.winWidth - w) / 2)
@@ -3029,20 +3105,23 @@ proc beginDialog*(w, h: float, title: string) =
   addDrawLayer(ui.currentLayer, vg):
     const TitleBarHeight = 30.0
 
+    # Dialog background
     vg.beginPath()
-    vg.fillColor(gray(0.2, 0.962))
-    vg.roundedRect(x, y, w, h, 7)
+    vg.fillColor(s.backgroundColor)
+    vg.roundedRect(x, y, w, h, s.cornerRadius)
     vg.fill()
 
+    # Title bar
     vg.beginPath()
-    vg.fillColor(gray(0.05))
-    vg.roundedRectVarying(x, y, w, TitleBarHeight, 7, 7, 0, 0)
+    vg.fillColor(s.titleBarBgColor)
+    vg.roundedRectVarying(x, y, w, TitleBarHeight,
+                          s.cornerRadius, s.cornerRadius, 0, 0)
     vg.fill()
 
     vg.fontFace("sans-bold")
     vg.fontSize(15.0)
     vg.textAlign(haLeft, vaMiddle)
-    vg.fillColor(gray(0.85))
+    vg.fillColor(s.titleBarTextColor)
     discard vg.text(x+10.0, y + TitleBarHeight * TextVertAlignFactor, title)
 
   ui.ox = x
