@@ -299,7 +299,8 @@ proc setFont*(vg: NVGContext, size: float, name: string = "sans-bold",
 # {{{ drawLabel()
 proc drawLabel(vg: NVGContext, x, y, w, h, padHoriz: float,
                label: string, color: Color,
-               fontSize: float, fontFace: string, align: HorizontalAlign) =
+               fontSize: float, fontFace: string, align: HorizontalAlign,
+               multiLine: bool = false, lineHeight: float = 1.5) =
   let
     textBoxX = x + padHoriz
     textBoxW = w - padHoriz*2
@@ -319,7 +320,12 @@ proc drawLabel(vg: NVGContext, x, y, w, h, padHoriz: float,
 
   vg.setFont(fontSize, fontFace, align)
   vg.fillColor(color)
-  discard vg.text(tx, ty, label)
+
+  if multiLine:
+    vg.textLineHeight(lineHeight)
+    vg.textBox(tx, ty, textBoxW, label)
+  else:
+    discard vg.text(tx, ty, label)
 
   vg.restore()
 
@@ -882,16 +888,20 @@ proc tooltipPost() =
 # {{{ Label
 
 type LabelStyle* = ref object
-  fontSize*: float
-  fontFace*: string
-  align*:    HorizontalAlign
-  color*:    Color
+  multiLine*:  bool
+  fontSize*:   float
+  fontFace*:   string
+  align*:      HorizontalAlign
+  lineHeight*: float
+  color*:      Color
 
 var DefaultLabelStyle = LabelStyle(
-  fontSize : 14.0,
-  fontFace : "sans-bold",
-  align    : haCenter,
-  color    : GRAY_LO
+  multiLine  : false,
+  fontSize   : 14.0,
+  fontFace   : "sans-bold",
+  align      : haCenter,
+  lineHeight : 1.5,
+  color      : GRAY_LO
 )
 
 proc getDefaultLabelStyle*(): LabelStyle =
@@ -913,7 +923,7 @@ proc textLabel(id:         ItemId,
 
   addDrawLayer(ui.currentLayer, vg):
     vg.drawLabel(x, y, w, h, padHoriz = 0, label, s.color,
-                 s.fontSize, s.fontFace, s.align)
+                 s.fontSize, s.fontFace, s.align, s.multiLine, s.lineHeight)
 
 
 template label*(x, y, w, h: float,
