@@ -1062,19 +1062,65 @@ template button*(x, y, w, h: float,
 # }}}
 # {{{ CheckBox
 
+type CheckBoxStyle* = ref object
+  cornerRadius*:        float
+  strokeWidth*:         float
+  strokeColor*:         Color
+  strokeColorHover*:    Color
+  strokeColorDown*:     Color
+  strokeColorActive*:   Color
+  fillColor*:           Color
+  fillColorHover*:      Color
+  fillColorDown*:       Color
+  fillColorActive*:     Color
+  iconColor*:           Color
+  iconColorHover*:      Color
+  iconColorDown*:       Color
+  iconColorActive*:     Color
+  iconFontSize*:        float
+  iconFontFace*:        string
+  iconActive*:          string
+  iconInactive*:        string
+
+var DefaultCheckBoxStyle = CheckBoxStyle(
+  cornerRadius      : 5,
+  strokeWidth       : 0,
+  strokeColor       : black(),
+  strokeColorHover  : black(),
+  strokeColorDown   : black(),
+  strokeColorActive : black(),
+  fillColor         : GRAY_MID,
+  fillColorHover    : GRAY_HI,
+  fillColorDown     : GRAY_LOHI,
+  fillColorActive   : GRAY_LO,
+  iconColor         : GRAY_LO,
+  iconColorHover    : GRAY_LO,
+  iconColorDown     : GRAY_HI,
+  iconColorActive   : GRAY_HI,
+  iconFontSize      : 14.0,
+  iconFontFace      : "sans-bold",
+  iconActive        : "X",
+  iconInactive      : "/"
+)
+
+proc getDefaultCheckBoxStyle*(): CheckBoxStyle =
+  DefaultCheckBoxStyle.deepCopy
+
+proc setDefaultCheckBoxStyle*(style: CheckBoxStyle) =
+  DefaultCheckBoxStyle = style.deepCopy
+
+
 proc checkBox(id:      ItemId,
               x, y, w: float,
               active:  bool,
-              tooltip: string): bool =
+              tooltip: string,
+              style:   CheckBoxStyle): bool =
 
   alias(ui, g_uiState)
+  alias(s, style)
 
-  let
-    x = x + ui.ox
-    y = y + ui.oy
-
-  const
-    CheckPad = 3
+  let x = x + ui.ox
+  let y = y + ui.oy
 
   # Hit testing
   if isHit(x, y, w, w):
@@ -1088,35 +1134,41 @@ proc checkBox(id:      ItemId,
 
   result = active
 
-  # Draw check box
-  let drawState = if isHot(id) and noActiveItem(): dsHover
-    elif isHotAndActive(id): dsActive
-    else: dsNormal
-
-  # Draw background
-  let bgColor = case drawState
-    of dsHover, dsActive: GRAY_HI
-    else:                 GRAY_MID
-
   addDrawLayer(ui.currentLayer, vg):
-    vg.beginPath()
-    vg.roundedRect(x, y, w, w, 5)
-    vg.fillColor(bgColor)
-    vg.fill()
+    let sw = s.strokeWidth
+    let (x, y, w, _) = snapToGrid(x, y, w, w, sw)
 
-    # Draw check mark
-    let checkColor = case drawState
+    let drawState = if isHot(id) and noActiveItem(): dsHover
+      elif isHotAndActive(id): dsActive
+      else: dsNormal
+
+    var (fillColor, strokeColor, iconColor) =
+      case drawState
+      of dsNormal:
+        if active:
+          (s.fillColorActive, s.strokeColorActive, s.iconColorActive)
+        else:
+          (s.fillColor, s.strokeColor, s.iconColor)
       of dsHover:
-        if active: white() else: GRAY_LOHI
-      of dsActive: HILITE
-      else:
-        if active: GRAY_LO else: GRAY_HI
+        (s.fillColorHover, s.strokeColorHover, s.iconColorHover)
+      of dsActive:
+        (s.fillColorDown, s.strokeColorDown, s.iconColorDown)
+      of dsDisabled:
+        # TODO
+        (s.fillColorDown, s.strokeColorDown, s.iconColorDown)
 
-    let w = w - CheckPad*2
+    vg.fillColor(fillColor)
+    vg.strokeColor(strokeColor)
+    vg.strokeWidth(sw)
     vg.beginPath()
-    vg.roundedRect(x + CheckPad, y + CheckPad, w, w, 5)
-    vg.fillColor(checkColor)
+    vg.roundedRect(x, y, w, w, s.cornerRadius)
     vg.fill()
+    vg.stroke()
+
+    let icon = if active: s.iconActive else: s.iconInactive
+    if icon != "":
+      vg.drawLabel(x, y, w, w, 0, icon, iconColor,
+                   s.iconFontSize, s.iconFontFace, haCenter)
 
   if isHot(id):
     handleTooltip(id, tooltip)
@@ -1124,12 +1176,13 @@ proc checkBox(id:      ItemId,
 
 template checkBox*(x, y, w: float,
                    active:  bool,
-                   tooltip: string = ""): bool =
+                   tooltip: string = "",
+                   style:   CheckBoxStyle = DefaultCheckBoxStyle): bool =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  checkbox(id, x, y, w, active, tooltip)
+  checkbox(id, x, y, w, active, tooltip, style)
 
 # }}}
 # {{{ RadioButtons

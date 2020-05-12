@@ -257,14 +257,14 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
   # Radio buttons (horiz)
   y += pad * 2
   radioButtonsVal1 = koi.radioButtons(
-    x, y, 150, h,
+    x, y, 150, h+2,
     labels = @["PNG", "JPG", "OpenEXR"],
     radioButtonsVal1,
     tooltips = @["Save PNG image", "Save JPG image", "Save EXR image"])
 
   y += pad
   radioButtonsVal2 = koi.radioButtons(
-    x, y, 220, h,
+    x, y, 220, h+2,
     labels = @["One", "Two", "The Third Option"],
     radioButtonsVal2,
     tooltips = @["First (1)", "Second (2)", "Third (3)"])
