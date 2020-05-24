@@ -1143,19 +1143,19 @@ proc checkBox(id:      ItemId,
       else: dsNormal
 
     var (fillColor, strokeColor, iconColor) =
-      case drawState
-      of dsNormal:
-        if active:
-          (s.fillColorActive, s.strokeColorActive, s.iconColorActive)
-        else:
+      if active:
+        (s.fillColorActive, s.strokeColorActive, s.iconColorActive)
+      else:
+        case drawState
+        of dsNormal:
           (s.fillColor, s.strokeColor, s.iconColor)
-      of dsHover:
-        (s.fillColorHover, s.strokeColorHover, s.iconColorHover)
-      of dsActive:
-        (s.fillColorDown, s.strokeColorDown, s.iconColorDown)
-      of dsDisabled:
-        # TODO
-        (s.fillColorDown, s.strokeColorDown, s.iconColorDown)
+        of dsHover:
+          (s.fillColorHover, s.strokeColorHover, s.iconColorHover)
+        of dsActive:
+          (s.fillColorDown, s.strokeColorDown, s.iconColorDown)
+        of dsDisabled:
+          # TODO
+          (s.fillColorDown, s.strokeColorDown, s.iconColorDown)
 
     vg.fillColor(fillColor)
     vg.strokeColor(strokeColor)
@@ -3138,12 +3138,20 @@ type DialogStyle* = ref object
   backgroundColor*:    Color
   titleBarBgColor*:    Color
   titleBarTextColor*:  Color
+  outerBorderColor*:   Color
+  innerBorderColor*:   Color
+  outerBorderWidth*:   float
+  innerBorderWidth*:   float
 
 var DefaultDialogStyle = DialogStyle(
   cornerRadius:       7,
   backgroundColor:    gray(0.2),
   titleBarBgColor:    gray(0.05),
-  titleBarTextColor:  gray(0.85)
+  titleBarTextColor:  gray(0.85),
+  outerBorderColor:   black(),
+  innerBorderColor:   white(),
+  outerBorderWidth:   0,
+  innerBorderWidth:   0
 )
 
 proc getDefaultDialogStyle*(): DialogStyle =
@@ -3167,6 +3175,26 @@ proc beginDialog*(w, h: float, title: string,
 
   addDrawLayer(ui.currentLayer, vg):
     const TitleBarHeight = 30.0
+
+    # Outer border
+    if s.outerBorderWidth > 0:
+      let bw = s.outerBorderWidth + s.innerBorderWidth
+      let cr = if s.cornerRadius > 0: s.cornerRadius+bw else: 0
+
+      vg.beginPath()
+      vg.fillColor(s.outerBorderColor)
+      vg.roundedRect(x-bw, y-bw, w+bw*2, h+bw*2, cr)
+      vg.fill()
+
+    # Inner border
+    if s.innerBorderWidth > 0:
+      let bw = s.innerBorderWidth
+      let cr = if s.cornerRadius > 0: s.cornerRadius+bw else: 0
+
+      vg.beginPath()
+      vg.fillColor(s.innerBorderColor)
+      vg.roundedRect(x-bw, y-bw, w+bw*2, h+bw*2, cr)
+      vg.fill()
 
     # Dialog background
     vg.beginPath()
