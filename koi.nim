@@ -77,7 +77,12 @@ type
 
 type
   TextFieldState = enum
-    tfDefault, tfEditLMBPressed, tfEdit
+    tfsDefault,
+    tfsEditLMBPressed,
+    tfsEdit
+    tfsDragStart,
+    tfsDragDelay,
+    tfsDragScroll
 
   TextFieldStateVars = object
     state:           TextFieldState
@@ -86,8 +91,8 @@ type
     activeItem:      ItemId
 
     # The cursor is before the Rune with this index. If the cursor is at the end
-    # of the text, the cursor pos equals the lenght of the text. From this
-    # follow that the cursor position for an empty text is 0.
+    # of the text, the cursor pos equals the length of the text. From this
+    # follows that the cursor position for an empty string is 0.
     cursorPos:       Natural
 
     # Index of the start Rune in the selection, -1 if nothing is selected.
@@ -98,6 +103,9 @@ type
 
     # The text is displayed starting from the Rune with this index.
     displayStartPos: Natural
+
+    # The text will be drawn at thix X coordinate (can be smaller than the
+    # starting X coordinate of the textbox)
     displayStartX:   float
 
     # The original text is stored when going into edit mode so it can be
@@ -265,6 +273,8 @@ const
   TooltipShowDelay       = 0.4
   TooltipFadeOutDelay    = 0.1
   TooltipFadeOutDuration = 0.4
+
+  TextFieldScrollDelay   = 0.1
 
   ScrollBarFineDragDivisor         = 10.0
   ScrollBarUltraFineDragDivisor    = 100.0
@@ -1819,7 +1829,7 @@ proc textFieldEnterEditMode(id: ItemId, text: string, startX: float) =
   clearCharBuf()
   clearEventBuf()
 
-  tf.state = tfEdit
+  tf.state = tfsEdit
   tf.activeItem = id
   tf.cursorPos = text.runeLen
   tf.displayStartPos = 0
@@ -1880,22 +1890,9 @@ proc textField(
     text = text
     glyphs: array[MaxTextLen, GlyphPosition]  # TODO is this buffer large enough?
 
-  proc calcGlyphPos() =
-    g_nvgContext.setFont(s.textFontSize)
-    discard g_nvgContext.textGlyphPositions(0, 0, text, glyphs)
-
-  proc hasSelection(): bool =
-    tf.selStartPos > -1 and tf.selStartPos != tf.selEndPos
-
-  proc getSelection(): (int, int) =
-    if (tf.selStartPos < tf.selEndPos):
-      (tf.selStartPos, tf.selEndPos.int)
-    else:
-      (tf.selEndPos.int, tf.selStartPos)
-
   var tabActivate = false
 
-  if tf.state == tfDefault:
+  if tf.state == tfsDefault:
     if tf.activateNext and tf.lastActiveItem == tf.prevItem and
        id != tf.prevItem:  # exit editing textfield if there's just one
       tf.activateNext = false
@@ -1911,7 +1908,27 @@ proc textField(
       setHot(id)
       if (ui.mbLeftDown and noActiveItem()) or activate or tabActivate:
         textFieldEnterEditMode(id, text, textBoxX)
-        tf.state = tfEditLMBPressed
+        tf.state = tfsEditLMBPressed
+
+
+  proc calcGlyphPos() =
+    g_nvgContext.setFont(s.textFontSize)
+    discard g_nvgContext.textGlyphPositions(0, 0, text, glyphs)
+
+  proc hasSelection(): bool =
+    tf.selStartPos > -1 and tf.selStartPos != tf.selEndPos
+
+  proc getSelection(): (int, int) =
+    if (tf.selStartPos < tf.selEndPos):
+      (tf.selStartPos, tf.selEndPos.int)
+    else:
+      (tf.selEndPos.int, tf.selStartPos)
+
+  proc updateSelection(newCursorPos: Natural) =
+    if tf.selStartPos == -1:
+      tf.selStartPos = tf.cursorPos
+      tf.selEndPos   = tf.cursorPos
+    tf.selEndPos = newCursorPos
 
   proc clearSelection() =
     tf.selStartPos = -1
@@ -1921,7 +1938,7 @@ proc textField(
     clearEventBuf()
     clearCharBuf()
 
-    tf.state = tfDefault
+    tf.state = tfsDefault
     tf.activeItem = 0
     tf.cursorPos = 0
     tf.displayStartPos = 0
@@ -1956,20 +1973,92 @@ proc textField(
         except ValueError:
           result = originalText
 
+
+  proc getCursorPosAtXPos(x: float): Natural =
+    for p in tf.displayStartPos..text.runeLen-1:
+      let midX = glyphs[p].minX + (glyphs[p].maxX - glyphs[p].minX) / 2
+      if x < tf.displayStartX + midX - glyphs[tf.displayStartPos].x:
+        return p
+
+    result = text.runeLen
+
+
+  const ScrollArea = 10
+
   # We 'fall through' to the edit state to avoid a 1-frame delay when going
   # into edit mode
-  if tf.activeItem == id and tf.state >= tfEditLMBPressed:
+  if tf.activeItem == id and tf.state >= tfsEditLMBPressed:
+    calcGlyphPos()
+
     setHot(id)
     setActive(id)
 
-    if tf.state == tfEditLMBPressed:
+    if tf.state == tfsEditLMBPressed:
       if not ui.mbLeftDown:
-        tf.state = tfEdit
+        tf.state = tfsEdit
+
+    elif tf.state == tfsDragStart:
+      if ui.mbLeftDown:
+        if ui.mx < textBoxX or
+           ui.mx > textBoxX + textBoxW - ScrollArea:
+          ui.t0 = getTime()
+          tf.state = tfsDragDelay
+        else:
+          let mouseCursorPos = getCursorPosAtXPos(ui.mx)
+          updateSelection(mouseCursorPos)
+          tf.cursorPos = mouseCursorPos
+      else:
+        tf.state = tfsEdit
+      setFramesLeft()
+
+    elif tf.state == tfsDragDelay:
+      if ui.mbLeftDown:
+        var dx = ui.mx - textBoxX
+        if dx > 0:
+          dx = (textBoxX + textBoxW - ScrollArea) - ui.mx
+
+        if dx < 0:
+          if getTime() - ui.t0 > TextFieldScrollDelay / (-dx/10):
+            tf.state = tfsDragScroll
+        else:
+          tf.state = tfsDragStart
+      else:
+        tf.state = tfsEdit
+      setFramesLeft()
+
+    elif tf.state == tfsDragScroll:
+      if ui.mbLeftDown:
+        let mouseCursorPos = getCursorPosAtXPos(ui.mx)
+ 
+        let newCursorPos = if ui.mx < textBoxX:
+          max(tf.cursorPos - 1, 0)
+        elif ui.mx > textBoxX + textBoxW - ScrollArea:
+          min(tf.cursorPos + 1, text.runeLen)
+        else:
+          tf.cursorPos
+
+        updateSelection(newCursorPos)
+        tf.cursorPos = newCursorPos
+        ui.t0 = getTime()
+        tf.state = tfsDragDelay
+      else:
+        tf.state = tfsEdit
+      setFramesLeft()
+
+    # TODO double-click should select word under cursor
+
     else:
       # LMB pressed outside the text field exits edit mode
-      if ui.mbLeftDown and not mouseInside(x, y, w, h):
-        text = enforceConstraint(text, tf.originalText)
-        exitEditMode()
+      if ui.mbLeftDown:
+        if mouseInside(x, y, w, h):
+          clearSelection()
+          tf.cursorPos = getCursorPosAtXPos(ui.mx)
+          ui.x0 = ui.mx
+          tf.state = tfsDragStart
+
+        else:
+          text = enforceConstraint(text, tf.originalText)
+          exitEditMode()
 
     # Handle text field shortcuts
     # (If we exited edit mode above key handler, this will result in a noop as
@@ -1986,12 +2075,6 @@ proc textField(
       while p > 0 and     text.runeAt(p-1).isWhiteSpace: dec(p)
       while p > 0 and not text.runeAt(p-1).isWhiteSpace: dec(p)
       result = p
-
-    proc updateSelection(newCursorPos: Natural) =
-      if tf.selStartPos == -1:
-        tf.selStartPos = tf.cursorPos
-        tf.selEndPos   = tf.cursorPos
-      tf.selEndPos = newCursorPos
 
     proc deleteSelection() =
       let (startPos, endPos) = getSelection()
@@ -2176,6 +2259,7 @@ proc textField(
 
   result = text
 
+
   # Draw text field
   let editing = tf.activeItem == id
 
@@ -2219,7 +2303,8 @@ proc textField(
 
     # Scroll content into view & draw cursor when editing
     if editing:
-      calcGlyphPos()
+      # Glyph positions have already been calculated at this point
+      # in the input handling routine if we're in edit mode
       let textLen = text.runeLen
 
       if textLen == 0:
@@ -2908,7 +2993,7 @@ proc horizSlider(id:         ItemId,
       ss.valueText = koi.textField(ss.textFieldId, x, y, w, h,
                                    ss.valueText, drawWidget = false)
 
-      if ui.textFieldState.state == tfDefault:
+      if ui.textFieldState.state == tfsDefault:
         value = try:
           let f = parseFloat(ss.valueText)
           if startVal < endVal: clamp(f, startVal, endVal)

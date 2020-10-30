@@ -47,9 +47,9 @@ var
 #  textFieldVal2 = "Nobody expects the Spanish Inquisition!"
 #  textFieldVal3 = "Raw text field"
 #
-  textFieldVal1 = "1"
-  textFieldVal2 = "2"
-  textFieldVal3 = "3"
+  textFieldVal1 = "Some text"
+  textFieldVal2 = "Look behind you! A three-headed monkey!"
+  textFieldVal3 = "42"
 
 
 ############################################################
