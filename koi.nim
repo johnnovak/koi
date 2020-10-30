@@ -512,13 +512,6 @@ type KeyShortcut* = object
 proc mkKeyShortcut*(k: Key, m: set[ModifierKey]): KeyShortcut {.inline.} =
   KeyShortcut(key: k, mods: m)
 
-proc hash(ks: KeyShortcut): Hash =
-  var h: Hash = 0
-  h = h !& hash(ord(ks.key))
-  for m in ks.mods:
-    h = h !& hash(ord(m))
-  result = !$h
-
 # {{{ Shortcut definitions
 
 type TextEditShortcuts = enum
@@ -1956,10 +1949,15 @@ proc textField(
     tf.selStartPos = -1
     tf.selEndPos = 0
 
+  proc isAlphanumeric(r: Rune): bool =
+    if r.isAlpha: return true
+    let s = $r
+    if s[0] == '_' or s[0].isDigit: return true
+
   proc findNextWordEnd(): Natural =
     var p = tf.cursorPos
-    while p < text.runeLen and     text.runeAt(p).isWhiteSpace: inc(p)
-    while p < text.runeLen and not text.runeAt(p).isWhiteSpace: inc(p)
+    while p < text.runeLen and     text.runeAt(p).isAlphanumeric: inc(p)
+    while p < text.runeLen and not text.runeAt(p).isAlphanumeric: inc(p)
     result = p
 
   proc findPrevWordStart(): Natural =
