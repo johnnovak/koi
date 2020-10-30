@@ -1983,7 +1983,7 @@ proc textField(
     result = text.runeLen
 
 
-  const ScrollArea = 10
+  const ScrollRightOffset = 10
 
   # We 'fall through' to the edit state to avoid a 1-frame delay when going
   # into edit mode
@@ -2000,7 +2000,7 @@ proc textField(
     elif tf.state == tfsDragStart:
       if ui.mbLeftDown:
         if ui.mx < textBoxX or
-           ui.mx > textBoxX + textBoxW - ScrollArea:
+           ui.mx > textBoxX + textBoxW - ScrollRightOffset:
           ui.t0 = getTime()
           tf.state = tfsDragDelay
         else:
@@ -2009,22 +2009,21 @@ proc textField(
           tf.cursorPos = mouseCursorPos
       else:
         tf.state = tfsEdit
-      setFramesLeft()
 
     elif tf.state == tfsDragDelay:
       if ui.mbLeftDown:
         var dx = ui.mx - textBoxX
         if dx > 0:
-          dx = (textBoxX + textBoxW - ScrollArea) - ui.mx
+          dx = (textBoxX + textBoxW - ScrollRightOffset) - ui.mx
 
         if dx < 0:
           if getTime() - ui.t0 > TextFieldScrollDelay / (-dx/10):
             tf.state = tfsDragScroll
         else:
           tf.state = tfsDragStart
+        setFramesLeft()
       else:
         tf.state = tfsEdit
-      setFramesLeft()
 
     elif tf.state == tfsDragScroll:
       if ui.mbLeftDown:
@@ -2032,7 +2031,7 @@ proc textField(
  
         let newCursorPos = if ui.mx < textBoxX:
           max(tf.cursorPos - 1, 0)
-        elif ui.mx > textBoxX + textBoxW - ScrollArea:
+        elif ui.mx > textBoxX + textBoxW - ScrollRightOffset:
           min(tf.cursorPos + 1, text.runeLen)
         else:
           tf.cursorPos
@@ -2041,9 +2040,9 @@ proc textField(
         tf.cursorPos = newCursorPos
         ui.t0 = getTime()
         tf.state = tfsDragDelay
+        setFramesLeft()
       else:
         tf.state = tfsEdit
-      setFramesLeft()
 
     # TODO double-click should select word under cursor
 
@@ -2585,10 +2584,12 @@ proc horizScrollBar(id:         ItemId,
 
       sb.state = sbsTrackClickDelay
       ui.t0 = getTime()
+      setFramesLeft()
 
     of sbsTrackClickDelay:
       if getTime() - ui.t0 > ScrollBarTrackClickRepeatDelay:
         sb.state = sbsTrackClickRepeat
+      setFramesLeft()
 
     of sbsTrackClickRepeat:
       if isHot(id):
@@ -2608,6 +2609,7 @@ proc horizScrollBar(id:         ItemId,
           ui.t0 = getTime()
       else:
         ui.t0 = getTime()
+      setFramesLeft()
 
   result = newValue
 
@@ -2798,10 +2800,12 @@ proc vertScrollBar(id:         ItemId,
 
       sb.state = sbsTrackClickDelay
       ui.t0 = getTime()
+      setFramesLeft()
 
     of sbsTrackClickDelay:
       if getTime() - ui.t0 > ScrollBarTrackClickRepeatDelay:
         sb.state = sbsTrackClickRepeat
+      setFramesLeft()
 
     of sbsTrackClickRepeat:
       if isHot(id):
@@ -2821,6 +2825,7 @@ proc vertScrollBar(id:         ItemId,
           ui.t0 = getTime()
       else:
         ui.t0 = getTime()
+      setFramesLeft()
 
   result = newValue
 
