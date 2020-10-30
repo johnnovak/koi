@@ -3,13 +3,16 @@ BUGS
 
 - maybe keep dropdown open in LMBPressed mode even if the cursor goes
   outside of the selection box
+- scrollbar: click-repeat bug -
+    click & hold, wait until track is under the cursor, then click & hold
+    at the opposite side of the track without leaving the widget
+- scrollbar: click-hold doesn't work if the tooltip appeared
 
 
 TASKS
 =====
 
 - value entry widget (modified slider)
-- text field mouse support
 - menus
 - display tooltip based on screen position
 - windows (e.g. modal popups)
@@ -22,11 +25,3 @@ TASKS
 - "soft asserts" (check) that print errors to stderr instead of aborting
 
 
-
-DONE
-
-- copy/paste support
-- deferred rendering
-- text clipping (all widgets)
-- edit value fields
-- display combo box items based on screen position
