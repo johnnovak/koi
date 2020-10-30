@@ -190,6 +190,15 @@ type
     mbRightDown:    bool
     mbMiddleDown:   bool
 
+    # Time and position of the last left mouse button down event (for
+    # double-click detenction)
+    mbLeftDownT:     float
+    mbLeftDownX:     float
+    mbLeftDownY:     float
+    lastMbLeftDownT: float
+    lastMbLeftDownX: float
+    lastMbLeftDownY: float
+
     # Keyboard state
     # --------------
     keyStates:      array[ord(Key.high), bool]
@@ -286,6 +295,10 @@ const
 
   TextVertAlignFactor = 0.55
 
+  DoubleClickMaxDelay = 0.1
+  DoubleClickMaxXOffs = 4
+  DoubleClickMaxYOffs = 4
+
 # }}}
 
 # {{{ Utils
@@ -341,45 +354,6 @@ proc drawLabel(vg: NVGContext, x, y, w, h, padHoriz: float,
 
 
 # }}}
-
-proc hideCursor*() =
-  glfw.currentContext().cursorMode = cmHidden
-
-proc disableCursor*() =
-  glfw.currentContext().cursorMode = cmDisabled
-
-proc showCursor*() =
-  glfw.currentContext().cursorMode = cmNormal
-
-proc showArrowCursor*() =
-  let win = glfw.currentContext()
-  wrapper.setCursor(win.getHandle, g_cursorArrow)
-
-proc showIBeamCursor*() =
-  let win = glfw.currentContext()
-  wrapper.setCursor(win.getHandle, g_cursorIBeam)
-
-proc showHorizResizeCursor*() =
-  let win = glfw.currentContext()
-  wrapper.setCursor(win.getHandle, g_cursorHorizResize)
-
-proc showVertResizeCursor*() =
-  let win = glfw.currentContext()
-  wrapper.setCursor(win.getHandle, g_cursorVertResize)
-
-proc showHandCursor*() =
-  let win = glfw.currentContext()
-  wrapper.setCursor(win.getHandle, g_cursorHand)
-
-proc setCursorPosX*(x: float) =
-  let win = glfw.currentContext()
-  let (_, currY) = win.cursorPos()
-  win.cursorPos = (x, currY)
-
-proc setCursorPosY*(y: float) =
-  let win = glfw.currentContext()
-  let (currX, _) = win.cursorPos()
-  win.cursorPos = (currX, y)
 
 proc toClipboard*(s: string) =
   glfw.currentContext().clipboardString = s
@@ -783,6 +757,54 @@ proc mouseButtonCb(win: Window, button: MouseButton, pressed: bool,
     )
   )
 
+proc hideCursor*() =
+  glfw.currentContext().cursorMode = cmHidden
+
+proc disableCursor*() =
+  glfw.currentContext().cursorMode = cmDisabled
+
+proc showCursor*() =
+  glfw.currentContext().cursorMode = cmNormal
+
+proc showArrowCursor*() =
+  let win = glfw.currentContext()
+  wrapper.setCursor(win.getHandle, g_cursorArrow)
+
+proc showIBeamCursor*() =
+  let win = glfw.currentContext()
+  wrapper.setCursor(win.getHandle, g_cursorIBeam)
+
+proc showHorizResizeCursor*() =
+  let win = glfw.currentContext()
+  wrapper.setCursor(win.getHandle, g_cursorHorizResize)
+
+proc showVertResizeCursor*() =
+  let win = glfw.currentContext()
+  wrapper.setCursor(win.getHandle, g_cursorVertResize)
+
+proc showHandCursor*() =
+  let win = glfw.currentContext()
+  wrapper.setCursor(win.getHandle, g_cursorHand)
+
+proc setCursorPosX*(x: float) =
+  let win = glfw.currentContext()
+  let (_, currY) = win.cursorPos()
+  win.cursorPos = (x, currY)
+
+proc setCursorPosY*(y: float) =
+  let win = glfw.currentContext()
+  let (currX, _) = win.cursorPos()
+  win.cursorPos = (currX, y)
+
+
+proc isDoubleClick*(): bool =
+  alias(ui, g_uiState)
+
+  ui.mbLeftDown and
+  getTime() - ui.lastMbLeftDownT <= DoubleClickMaxDelay and
+  abs(ui.lastMbLeftDownX - ui.mx) <= DoubleClickMaxXOffs and
+  abs(ui.lastMbLeftDownY - ui.my) <= DoubleClickMaxYOffs
+ 
 # }}}
 # {{{ Tooltip handling
 # {{{ handleTooltip
@@ -1867,7 +1889,7 @@ proc textField(
   style:      TextFieldStyle = DefaultTextFieldStyle
 ): string =
 
-  const MaxTextLen = 2000
+  const MaxTextLen = 5000
 
   assert text.runeLen <= MaxTextLen
 
@@ -1888,7 +1910,7 @@ proc textField(
 
   var
     text = text
-    glyphs: array[MaxTextLen, GlyphPosition]  # TODO is this buffer large enough?
+    glyphs: array[MaxTextLen, GlyphPosition]
 
   var tabActivate = false
 
@@ -1933,6 +1955,24 @@ proc textField(
   proc clearSelection() =
     tf.selStartPos = -1
     tf.selEndPos = 0
+
+  proc findNextWordEnd(): Natural =
+    var p = tf.cursorPos
+    while p < text.runeLen and     text.runeAt(p).isWhiteSpace: inc(p)
+    while p < text.runeLen and not text.runeAt(p).isWhiteSpace: inc(p)
+    result = p
+
+  proc findPrevWordStart(): Natural =
+    var p = tf.cursorPos
+    while p > 0 and     text.runeAt(p-1).isWhiteSpace: dec(p)
+    while p > 0 and not text.runeAt(p-1).isWhiteSpace: dec(p)
+    result = p
+
+  proc deleteSelection() =
+    let (startPos, endPos) = getSelection()
+    text = text.runeSubStr(0, startPos) & text.runeSubStr(endPos)
+    tf.cursorPos = startPos
+    clearSelection()
 
   proc exitEditMode() =
     clearEventBuf()
@@ -2027,8 +2067,6 @@ proc textField(
 
     elif tf.state == tfsDragScroll:
       if ui.mbLeftDown:
-        let mouseCursorPos = getCursorPosAtXPos(ui.mx)
- 
         let newCursorPos = if ui.mx < textBoxX:
           max(tf.cursorPos - 1, 0)
         elif ui.mx > textBoxX + textBoxW - ScrollRightOffset:
@@ -2044,17 +2082,21 @@ proc textField(
       else:
         tf.state = tfsEdit
 
-    # TODO double-click should select word under cursor
-
     else:
-      # LMB pressed outside the text field exits edit mode
       if ui.mbLeftDown:
         if mouseInside(x, y, w, h):
           clearSelection()
           tf.cursorPos = getCursorPosAtXPos(ui.mx)
-          ui.x0 = ui.mx
-          tf.state = tfsDragStart
 
+          if isDoubleClick():
+            tf.selStartPos = findPrevWordStart()
+            tf.selEndPos = findNextWordEnd()
+            tf.cursorPos = tf.selEndPos
+          else:
+            ui.x0 = ui.mx
+            tf.state = tfsDragStart
+
+        # LMB pressed outside the text field exits edit mode
         else:
           text = enforceConstraint(text, tf.originalText)
           exitEditMode()
@@ -2062,24 +2104,6 @@ proc textField(
     # Handle text field shortcuts
     # (If we exited edit mode above key handler, this will result in a noop as
     # exitEditMode() clears the key buffer.)
-
-    proc findNextWordEnd(): Natural =
-      var p = tf.cursorPos
-      while p < text.runeLen and     text.runeAt(p).isWhiteSpace: inc(p)
-      while p < text.runeLen and not text.runeAt(p).isWhiteSpace: inc(p)
-      result = p
-
-    proc findPrevWordStart(): Natural =
-      var p = tf.cursorPos
-      while p > 0 and     text.runeAt(p-1).isWhiteSpace: dec(p)
-      while p > 0 and not text.runeAt(p-1).isWhiteSpace: dec(p)
-      result = p
-
-    proc deleteSelection() =
-      let (startPos, endPos) = getSelection()
-      text = text.runeSubStr(0, startPos) & text.runeSubStr(endPos)
-      tf.cursorPos = startPos
-      clearSelection()
 
     proc insertString(s: string) =
       if s.len > 0:
@@ -3499,7 +3523,17 @@ proc beginFrame*(winWidth, winHeight: float) =
 
     of ekMouse:
       case ev.button
-      of mbLeft:   ui.mbLeftDown   = ev.pressed
+      of mbLeft:
+        ui.mbLeftDown = ev.pressed
+
+        ui.lastMbLeftDownX = ui.mbLeftDownX
+        ui.lastMbLeftDownY = ui.mbLeftDownY
+        ui.lastMbLeftDownT = ui.mbLeftDownT
+
+        ui.mbLeftDownT = getTime()
+        ui.mbLeftDownX = ui.mx
+        ui.mbLeftDownY = ui.my
+ 
       of mbRight:  ui.mbRightDown  = ev.pressed
       of mbMiddle: ui.mbMiddleDown = ev.pressed
       else: discard

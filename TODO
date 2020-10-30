@@ -9,9 +9,10 @@ BUGS
 - scrollbar: click-hold doesn't work if the tooltip appeared
 
 
-TASKS
-=====
+TODO
+====
 
+- OS X specific shortcuts (e.g. Ctrl-A = Select All on Win)
 - value entry widget (modified slider)
 - menus
 - display tooltip based on screen position
