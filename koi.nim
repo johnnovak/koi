@@ -20,6 +20,17 @@ import utils
 
 type ItemId = int64
 
+# {{{ TextSelection
+type
+  TextSelection = object
+    # Index of the start Rune in the selection, -1 if nothing is selected.
+    startPos: int
+
+    # Index of the last Rune in the selection.
+    endPos:   Natural
+
+# }}}
+
 # {{{ SliderState
 
 type
@@ -87,19 +98,16 @@ type
   TextFieldStateVars = object
     state:           TextFieldState
 
-    # Text field item in edit mode, 0 if no text field is being edited.
-    activeItem:      ItemId
-
     # The cursor is before the Rune with this index. If the cursor is at the end
     # of the text, the cursor pos equals the length of the text. From this
     # follows that the cursor position for an empty string is 0.
     cursorPos:       Natural
 
-    # Index of the start Rune in the selection, -1 if nothing is selected.
-    selStartPos:     int
+    # Current text selection
+    selection:       TextSelection
 
-    # Index of the last Rune in the selection.
-    selEndPos:       Natural
+    # Text field item in edit mode, 0 if no text field is being edited.
+    activeItem:      ItemId
 
     # The text is displayed starting from the Rune with this index.
     displayStartPos: Natural
@@ -1850,8 +1858,8 @@ proc textFieldEnterEditMode(id: ItemId, text: string, startX: float) =
   tf.displayStartPos = 0
   tf.displayStartX = startX
   tf.originalText = text
-  tf.selStartPos = 0
-  tf.selEndPos = tf.cursorPos
+  tf.selection.startPos = 0
+  tf.selection.endPos = tf.cursorPos
 
   ui.focusCaptured = true
   showIBeamCursor()
@@ -1930,47 +1938,53 @@ proc textField(
     g_nvgContext.setFont(s.textFontSize)
     discard g_nvgContext.textGlyphPositions(0, 0, text, glyphs)
 
-  proc hasSelection(): bool =
-    tf.selStartPos > -1 and tf.selStartPos != tf.selEndPos
+  proc hasSelection(sel: TextSelection): bool =
+    sel.startPos > -1 and sel.startPos != sel.endPos
 
-  proc getSelection(): (int, int) =
-    if (tf.selStartPos < tf.selEndPos):
-      (tf.selStartPos, tf.selEndPos.int)
+  proc normaliseSelection(sel: TextSelection): TextSelection =
+    if (sel.startPos < sel.endPos):
+      TextSelection(
+        startPos: sel.startPos,
+        endPos:   sel.endPos.int
+      )
     else:
-      (tf.selEndPos.int, tf.selStartPos)
+      TextSelection(
+        startPos: sel.endPos.int,
+        endPos:   sel.startPos
+      )
 
-  proc updateSelection(newCursorPos: Natural) =
-    if tf.selStartPos == -1:
-      tf.selStartPos = tf.cursorPos
-      tf.selEndPos   = tf.cursorPos
-    tf.selEndPos = newCursorPos
+  proc updateSelection(sel: TextSelection,
+                       cursorPos, newCursorPos: Natural): TextSelection =
+    if sel.startPos == -1:
+      result.startPos = cursorPos
+      result.endPos   = cursorPos
+    result.endPos = newCursorPos
 
-  proc clearSelection() =
-    tf.selStartPos = -1
-    tf.selEndPos = 0
+  const NoSelection = TextSelection(startPos: -1, endPos: 0)
 
   proc isAlphanumeric(r: Rune): bool =
     if r.isAlpha: return true
     let s = $r
     if s[0] == '_' or s[0].isDigit: return true
 
-  proc findNextWordEnd(): Natural =
-    var p = tf.cursorPos
+  proc findNextWordEnd(text: string, cursorPos: Natural): Natural =
+    var p = cursorPos
     while p < text.runeLen and     text.runeAt(p).isAlphanumeric: inc(p)
     while p < text.runeLen and not text.runeAt(p).isAlphanumeric: inc(p)
     result = p
 
-  proc findPrevWordStart(): Natural =
-    var p = tf.cursorPos
+  proc findPrevWordStart(text: string, cursorPos: Natural): Natural =
+    var p = cursorPos
     while p > 0 and     text.runeAt(p-1).isWhiteSpace: dec(p)
     while p > 0 and not text.runeAt(p-1).isWhiteSpace: dec(p)
     result = p
 
-  proc deleteSelection() =
-    let (startPos, endPos) = getSelection()
-    text = text.runeSubStr(0, startPos) & text.runeSubStr(endPos)
-    tf.cursorPos = startPos
-    clearSelection()
+  proc deleteSelection(text: var string, sel: var TextSelection,
+                       cursorPos: var Natural) =
+    let ns = normaliseSelection(sel)
+    text = text.runeSubStr(0, ns.startPos) & text.runeSubStr(ns.endPos)
+    cursorPos = ns.startPos
+    sel = NoSelection
 
   proc exitEditMode() =
     clearEventBuf()
@@ -1979,11 +1993,11 @@ proc textField(
     tf.state = tfsDefault
     tf.activeItem = 0
     tf.cursorPos = 0
+    tf.selection = NoSelection
     tf.displayStartPos = 0
     tf.displayStartX = textBoxX
     tf.originalText = ""
     tf.lastActiveItem = id
-    clearSelection()
 
     ui.focusCaptured = false
     showArrowCursor()
@@ -2043,7 +2057,8 @@ proc textField(
           tf.state = tfsDragDelay
         else:
           let mouseCursorPos = getCursorPosAtXPos(ui.mx)
-          updateSelection(mouseCursorPos)
+          tf.selection = updateSelection(tf.selection, tf.cursorPos,
+                                         newCursorPos = mouseCursorPos)
           tf.cursorPos = mouseCursorPos
       else:
         tf.state = tfsEdit
@@ -2072,7 +2087,8 @@ proc textField(
         else:
           tf.cursorPos
 
-        updateSelection(newCursorPos)
+        tf.selection = updateSelection(tf.selection, tf.cursorPos,
+                                       newCursorPos)
         tf.cursorPos = newCursorPos
         ui.t0 = getTime()
         tf.state = tfsDragDelay
@@ -2083,13 +2099,13 @@ proc textField(
     else:
       if ui.mbLeftDown:
         if mouseInside(x, y, w, h):
-          clearSelection()
+          tf.selection = NoSelection
           tf.cursorPos = getCursorPosAtXPos(ui.mx)
 
           if isDoubleClick():
-            tf.selStartPos = findPrevWordStart()
-            tf.selEndPos = findNextWordEnd()
-            tf.cursorPos = tf.selEndPos
+            tf.selection.startPos = findPrevWordStart(text, tf.cursorPos)
+            tf.selection.endPos = findNextWordEnd(text, tf.cursorPos)
+            tf.cursorPos = tf.selection.endPos
           else:
             ui.x0 = ui.mx
             tf.state = tfsDragStart
@@ -2105,11 +2121,11 @@ proc textField(
 
     proc insertString(s: string) =
       if s.len > 0:
-        if hasSelection():
-          let (startPos, endPos) = getSelection()
-          text = text.runeSubStr(0, startPos) & s & text.runeSubStr(endPos)
-          tf.cursorPos = startPos + s.runeLen()
-          clearSelection()
+        if hasSelection(tf.selection):
+          let ns = normaliseSelection(tf.selection)
+          text = text.runeSubStr(0, ns.startPos) & s & text.runeSubStr(ns.endPos)
+          tf.cursorPos = ns.startPos + s.runeLen()
+          tf.selection = NoSelection
         else:
           let insertPos = tf.cursorPos
           if insertPos == text.runeLen():
@@ -2143,91 +2159,97 @@ proc textField(
 
       elif sc in shortcuts[tesCursorOneCharLeft]:
         let newCursorPos = max(tf.cursorPos - 1, 0)
-        clearSelection()
         tf.cursorPos = newCursorPos
+        tf.selection = NoSelection
 
       elif sc in shortcuts[tesCursorOneCharRight]:
         let newCursorPos = min(tf.cursorPos + 1, text.runeLen)
-        clearSelection()
         tf.cursorPos = newCursorPos
+        tf.selection = NoSelection
 
       elif sc in shortcuts[tesCursorToPreviousWord]:
-        let newCursorPos = findPrevWordStart()
-        clearSelection()
+        let newCursorPos = findPrevWordStart(text, tf.cursorPos)
         tf.cursorPos = newCursorPos
+        tf.selection = NoSelection
 
       elif sc in shortcuts[tesCursorToNextWord]:
-        let newCursorPos = findNextWordEnd()
-        clearSelection()
+        let newCursorPos = findNextWordEnd(text, tf.cursorPos)
         tf.cursorPos = newCursorPos
+        tf.selection = NoSelection
 
       elif sc in shortcuts[tesCursorToLineStart]:
         let newCursorPos = 0
-        clearSelection()
         tf.cursorPos = newCursorPos
+        tf.selection = NoSelection
 
       elif sc in shortcuts[tesCursorToLineEnd]:
         let newCursorPos = text.runeLen
-        clearSelection()
         tf.cursorPos = newCursorPos
+        tf.selection = NoSelection
 
       elif sc in shortcuts[tesSelectionOneCharLeft]:
         let newCursorPos = max(tf.cursorPos - 1, 0)
-        updateSelection(newCursorPos)
+        tf.selection = updateSelection(tf.selection, tf.cursorPos,
+                                       newCursorPos)
         tf.cursorPos = newCursorPos
 
       elif sc in shortcuts[tesSelectionOneCharRight]:
         let newCursorPos = min(tf.cursorPos + 1, text.runeLen)
-        updateSelection(newCursorPos)
+        tf.selection = updateSelection(tf.selection, tf.cursorPos,
+                                       newCursorPos)
         tf.cursorPos = newCursorPos
 
       elif sc in shortcuts[tesSelectionToPreviousWord]:
-        let newCursorPos = findPrevWordStart()
-        updateSelection(newCursorPos)
+        let newCursorPos = findPrevWordStart(text, tf.cursorPos)
+        tf.selection = updateSelection(tf.selection, tf.cursorPos,
+                                       newCursorPos)
         tf.cursorPos = newCursorPos
 
       elif sc in shortcuts[tesSelectionToNextWord]:
-        let newCursorPos = findNextWordEnd()
-        updateSelection(newCursorPos)
+        let newCursorPos = findNextWordEnd(text, tf.cursorPos)
+        tf.selection = updateSelection(tf.selection, tf.cursorPos,
+                                       newCursorPos)
         tf.cursorPos = newCursorPos
 
       elif sc in shortcuts[tesSelectionToLineStart]:
         let newCursorPos = 0
-        updateSelection(newCursorPos)
+        tf.selection = updateSelection(tf.selection, tf.cursorPos,
+                                       newCursorPos)
         tf.cursorPos = newCursorPos
 
       elif sc in shortcuts[tesSelectionToLineEnd]:
         let newCursorPos = text.runeLen
-        updateSelection(newCursorPos)
+        tf.selection = updateSelection(tf.selection, tf.cursorPos,
+                                       newCursorPos)
         tf.cursorPos = newCursorPos
 
       elif sc in shortcuts[tesDeleteOneCharLeft]:
-        if hasSelection():
-          deleteSelection()
+        if hasSelection(tf.selection):
+          deleteSelection(text, tf.selection, tf.cursorPos)
         elif tf.cursorPos > 0:
           text = text.runeSubStr(0, tf.cursorPos - 1) &
                  text.runeSubStr(tf.cursorPos)
           dec(tf.cursorPos)
 
       elif sc in shortcuts[tesDeleteOneCharRight]:
-        if hasSelection():
-          deleteSelection()
+        if hasSelection(tf.selection):
+          deleteSelection(text, tf.selection, tf.cursorPos)
         elif text.len > 0:
             text = text.runeSubStr(0, tf.cursorPos) &
                    text.runeSubStr(tf.cursorPos + 1)
 
       elif sc in shortcuts[tesDeleteWordToRight]:
-        if hasSelection():
-          deleteSelection()
+        if hasSelection(tf.selection):
+          deleteSelection(text, tf.selection, tf.cursorPos)
         else:
-          let p = findNextWordEnd()
+          let p = findNextWordEnd(text, tf.cursorPos)
           text = text.runeSubStr(0, tf.cursorPos) & text.runeSubStr(p)
 
       elif sc in shortcuts[tesDeleteWordToLeft]:
-        if hasSelection():
-          deleteSelection()
+        if hasSelection(tf.selection):
+          deleteSelection(text, tf.selection, tf.cursorPos)
         else:
-          let p = findPrevWordStart()
+          let p = findPrevWordStart(text, tf.cursorPos)
           text = text.runeSubStr(0, p) & text.runeSubStr(tf.cursorPos)
           tf.cursorPos = p
 
@@ -2242,15 +2264,15 @@ proc textField(
         discard # TODO
 
       elif sc in shortcuts[tesCutText]:
-        if hasSelection():
-          let (startPos, endPos) = getSelection()
-          toClipboard(text.runeSubStr(startPos, endPos - startPos))
-          deleteSelection()
+        if hasSelection(tf.selection):
+          let ns = normaliseSelection(tf.selection)
+          toClipboard(text.runeSubStr(ns.startPos, ns.endPos - ns.startPos))
+          deleteSelection(text, tf.selection, tf.cursorPos)
 
       elif sc in shortcuts[tesCopyText]:
-        if hasSelection():
-          let (startPos, endPos) = getSelection()
-          toClipboard(text.runeSubStr(startPos, endPos - startPos))
+        if hasSelection(tf.selection):
+          let ns = normaliseSelection(tf.selection)
+          toClipboard(text.runeSubStr(ns.startPos, ns.endPos - ns.startPos))
 
       elif sc in shortcuts[tesPasteText]:
         let s = fromClipboard()
@@ -2330,8 +2352,7 @@ proc textField(
 
       if textLen == 0:
         tf.cursorPos = 0
-        tf.selStartPos = -1
-        tf.selEndPos = 0
+        tf.selection = NoSelection
         tf.displayStartPos = 0
         tf.displayStartX = textBoxX
 
@@ -2379,15 +2400,15 @@ proc textField(
       textX = tf.displayStartX
 
       # Draw selection
-      if hasSelection():
-        var (startPos, endPos) = getSelection()
-        endPos = max(endPos-1, 0)
+      if hasSelection(tf.selection):
+        var ns = normaliseSelection(tf.selection)
+        ns.endPos = max(ns.endPos-1, 0)
 
         let
-          selStartX = tf.displayStartX + glyphs[startPos].minX -
+          selStartX = tf.displayStartX + glyphs[ns.startPos].minX -
                                          glyphs[tf.displayStartPos].x
 
-          selEndX = tf.displayStartX + glyphs[endPos].maxX -
+          selEndX = tf.displayStartX + glyphs[ns.endPos].maxX -
                                        glyphs[tf.displayStartPos].x
 
         vg.beginPath()
