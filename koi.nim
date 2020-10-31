@@ -2663,6 +2663,19 @@ proc textField(
     result = text.runeLen
 
 
+  proc getCursorXPos(): float =
+    if tf.cursorPos == 0: textBoxX
+
+    elif tf.cursorPos == text.runeLen:
+      tf.displayStartX + glyphs[tf.cursorPos-1].maxX -
+                         glyphs[tf.displayStartPos].x
+
+    elif tf.cursorPos > 0:
+      tf.displayStartX + glyphs[tf.cursorPos].x -
+                         glyphs[tf.displayStartPos].x
+    else: textBoxX
+
+
   const ScrollRightOffset = 10
 
   # We 'fall through' to the edit state to avoid a 1-frame delay when going
@@ -2679,9 +2692,11 @@ proc textField(
         tf.state = tfsEdit
 
     elif tf.state == tfsDragStart:
+      let cursorX = getCursorXPos()
       if ui.mbLeftDown:
-        if ui.mx < textBoxX or
-           ui.mx > textBoxX + textBoxW - ScrollRightOffset:
+        if (ui.mx < textBoxX and cursorX < textBoxX + 10) or
+           (ui.mx > textBoxX + textBoxW - ScrollRightOffset and
+            cursorX > textBoxX + textBoxW - ScrollRightOffset - 10):
           ui.t0 = getTime()
           tf.state = tfsDragDelay
         else:
@@ -2930,16 +2945,7 @@ proc textField(
         vg.fill()
 
       # Draw cursor
-      let cursorX = if tf.cursorPos == 0: textBoxX
-
-        elif tf.cursorPos == text.runeLen:
-          tf.displayStartX + glyphs[tf.cursorPos-1].maxX -
-                             glyphs[tf.displayStartPos].x
-
-        elif tf.cursorPos > 0:
-          tf.displayStartX + glyphs[tf.cursorPos].x -
-                             glyphs[tf.displayStartPos].x
-        else: textBoxX
+      let cursorX = getCursorXPos()
 
       vg.beginPath()
       vg.strokeColor(s.cursorColor)
