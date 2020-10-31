@@ -15,6 +15,8 @@ import nanovg
 import ringbuffer
 import utils
 
+export CursorShape
+
 
 # {{{ Types
 
@@ -208,6 +210,8 @@ type
     lastMbLeftDownX: float
     lastMbLeftDownY: float
 
+    cursorShape:     CursorShape
+
     # Keyboard state
     # --------------
     keyStates:      array[ord(Key.high), bool]
@@ -271,6 +275,7 @@ var
 
   g_cursorArrow:       Cursor
   g_cursorIBeam:       Cursor
+  g_cursorCrosshair:   Cursor
   g_cursorHorizResize: Cursor
   g_cursorVertResize:  Cursor
   g_cursorHand:        Cursor
@@ -759,34 +764,31 @@ proc mouseButtonCb(win: Window, button: MouseButton, pressed: bool,
     )
   )
 
+proc showCursor*() =
+  glfw.currentContext().cursorMode = cmNormal
+
 proc hideCursor*() =
   glfw.currentContext().cursorMode = cmHidden
 
 proc disableCursor*() =
   glfw.currentContext().cursorMode = cmDisabled
 
-proc showCursor*() =
-  glfw.currentContext().cursorMode = cmNormal
+proc setCursorShape*(cs: CursorShape) =
+  g_uiState.cursorShape = cs
 
-proc showArrowCursor*() =
+proc setCursorMode(cs: CursorShape) =
   let win = glfw.currentContext()
-  wrapper.setCursor(win.getHandle, g_cursorArrow)
 
-proc showIBeamCursor*() =
-  let win = glfw.currentContext()
-  wrapper.setCursor(win.getHandle, g_cursorIBeam)
+  var c: Cursor
+  if   cs == csArrow:       c = g_cursorArrow
+  elif cs == csIBeam:       c = g_cursorIBeam
+  elif cs == csCrosshair:   c = g_cursorCrosshair
+  elif cs == csHand:        c = g_cursorHand
+  elif cs == csHorizResize: c = g_cursorHorizResize
+  elif cs == csVertResize:  c = g_cursorVertResize
 
-proc showHorizResizeCursor*() =
-  let win = glfw.currentContext()
-  wrapper.setCursor(win.getHandle, g_cursorHorizResize)
+  wrapper.setCursor(win.getHandle, c)
 
-proc showVertResizeCursor*() =
-  let win = glfw.currentContext()
-  wrapper.setCursor(win.getHandle, g_cursorVertResize)
-
-proc showHandCursor*() =
-  let win = glfw.currentContext()
-  wrapper.setCursor(win.getHandle, g_cursorHand)
 
 proc setCursorPosX*(x: float) =
   let win = glfw.currentContext()
@@ -2537,7 +2539,6 @@ proc textFieldEnterEditMode(id: ItemId, text: string, startX: float) =
   tf.selection.endPos = tf.cursorPos
 
   ui.focusCaptured = true
-  showIBeamCursor()
 
 
 type
@@ -2627,7 +2628,7 @@ proc textField(
     tf.lastActiveItem = id
 
     ui.focusCaptured = false
-    showArrowCursor()
+    setCursorShape(csArrow)
 
   proc enforceConstraint(text, originalText: string): string =
     var text = unicode.strip(text)
@@ -2671,6 +2672,7 @@ proc textField(
 
     setHot(id)
     setActive(id)
+    setCursorShape(csIBeam)
 
     if tf.state == tfsEditLMBPressed:
       if not ui.mbLeftDown:
@@ -3548,6 +3550,7 @@ proc init*(nvg: NVGContext) =
 
   g_cursorArrow       = wrapper.createStandardCursor(csArrow)
   g_cursorIBeam       = wrapper.createStandardCursor(csIBeam)
+  g_cursorCrosshair   = wrapper.createStandardCursor(csCrosshair)
   g_cursorHorizResize = wrapper.createStandardCursor(csHorizResize)
   g_cursorVertResize  = wrapper.createStandardCursor(csVertResize)
   g_cursorHand        = wrapper.createStandardCursor(csHand)
@@ -3635,6 +3638,8 @@ proc endFrame*() =
 
   # Post-frame processing
   tooltipPost()
+
+  setCursorMode(ui.cursorShape)
 
   g_drawLayers.draw(g_nvgContext)
 
