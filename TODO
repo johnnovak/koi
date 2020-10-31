@@ -8,6 +8,12 @@ BUGS
     at the opposite side of the track without leaving the widget
 - scrollbar: click-hold doesn't work if the tooltip appeared
 
+- textfield:
+  - type really fast, movement keys are screwed
+  - mouse select: selecting should have no delay until we hit the border of
+    the textbox
+
+
 
 TODO
 ====

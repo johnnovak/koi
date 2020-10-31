@@ -2309,7 +2309,6 @@ proc insertString(
       result.text = text.runeSubStr(0, ns.startPos) & toInsert &
                     text.runeSubStr(ns.endPos)
       result.cursorPos = ns.startPos + toInsert.runeLen()
-      result.selection = NoSelection
 
     else:
       result.text = text
@@ -2319,9 +2318,9 @@ proc insertString(
         result.text.add(toInsert)
       else:
         result.text.insert(toInsert, text.runeOffset(insertPos))
-
       result.cursorPos = cursorPos + toInsert.runeLen()
-      result.selection = selection
+
+    result.selection = NoSelection
 
 # }}}
 # {{{ deleteSelection()
@@ -2343,6 +2342,7 @@ proc handleCommonTextEditingShortcuts(
   var eventHandled = true
 
   var res: TextEditResult
+  res.text = text
   res.cursorPos = cursorPos
   res.selection = selection
 
@@ -2411,7 +2411,7 @@ proc handleCommonTextEditingShortcuts(
       res = deleteSelection(text, selection, cursorPos)
     elif cursorPos > 0:
       res.text = text.runeSubStr(0, cursorPos-1) &
-                    text.runeSubStr(cursorPos)
+                 text.runeSubStr(cursorPos)
       res.cursorPos = cursorPos-1
       res.selection = NoSelection
 
@@ -2420,7 +2420,7 @@ proc handleCommonTextEditingShortcuts(
       res = deleteSelection(text, selection, cursorPos)
     elif text.len > 0:
       res.text = text.runeSubStr(0, cursorPos) &
-                    text.runeSubStr(cursorPos+1)
+                 text.runeSubStr(cursorPos+1)
 
   elif sc in shortcuts[tesDeleteWordToRight]:
     if hasSelection(selection):
@@ -2465,13 +2465,7 @@ proc handleCommonTextEditingShortcuts(
   else:
     eventHandled = false
 
-  if eventHandled:
-    # Just a simple optimisation so we don't copy the text twice if edited
-    if res.text == "":
-      res.text = text
-    result = res.some
-  else:
-    result = TextEditResult.none
+  result = if eventHandled: res.some else: TextEditResult.none
 
 # }}}
 # }}}
@@ -2814,7 +2808,7 @@ proc textField(
       let res = insertString(text, tf.cursorPos, tf.selection, newChars)
       text = res.text
       tf.cursorPos = res.cursorPos
-      tf.selection = tf.selection
+      tf.selection = res.selection
 
   result = text
 
