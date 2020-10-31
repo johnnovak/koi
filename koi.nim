@@ -93,7 +93,8 @@ type
     tfsEdit
     tfsDragStart,
     tfsDragDelay,
-    tfsDragScroll
+    tfsDragScroll,
+    tfsDoubleClicked
 
   TextFieldStateVars = object
     state:           TextFieldState
@@ -805,7 +806,7 @@ proc isDoubleClick*(): bool =
   getTime() - ui.lastMbLeftDownT <= DoubleClickMaxDelay and
   abs(ui.lastMbLeftDownX - ui.mx) <= DoubleClickMaxXOffs and
   abs(ui.lastMbLeftDownY - ui.my) <= DoubleClickMaxYOffs
- 
+
 # }}}
 # {{{ Tooltip handling
 # {{{ handleTooltip
@@ -1955,10 +1956,12 @@ proc textField(
 
   proc updateSelection(sel: TextSelection,
                        cursorPos, newCursorPos: Natural): TextSelection =
+    var sel = sel
     if sel.startPos == -1:
-      result.startPos = cursorPos
-      result.endPos   = cursorPos
-    result.endPos = newCursorPos
+      sel.startPos = cursorPos
+      sel.endPos   = cursorPos
+    sel.endPos = newCursorPos
+    result = sel
 
   const NoSelection = TextSelection(startPos: -1, endPos: 0)
 
@@ -2027,7 +2030,7 @@ proc textField(
 
 
   proc getCursorPosAtXPos(x: float): Natural =
-    for p in tf.displayStartPos..text.runeLen-1:
+    for p in tf.displayStartPos..max(text.runeLen-1, 0):
       let midX = glyphs[p].minX + (glyphs[p].maxX - glyphs[p].minX) / 2
       if x < tf.displayStartX + midX - glyphs[tf.displayStartPos].x:
         return p
@@ -2040,7 +2043,7 @@ proc textField(
   # We 'fall through' to the edit state to avoid a 1-frame delay when going
   # into edit mode
   if tf.activeItem == id and tf.state >= tfsEditLMBPressed:
-    calcGlyphPos()
+    calcGlyphPos()  # required for the mouse interactions
 
     setHot(id)
     setActive(id)
@@ -2096,6 +2099,12 @@ proc textField(
       else:
         tf.state = tfsEdit
 
+    # This state is needed to prevent going into drag-select mode after
+    # selecting a word by double-clicking
+    elif tf.state == tfsDoubleClicked:
+      if not ui.mbLeftDown:
+        tf.state = tfsEdit
+
     else:
       if ui.mbLeftDown:
         if mouseInside(x, y, w, h):
@@ -2106,6 +2115,7 @@ proc textField(
             tf.selection.startPos = findPrevWordStart(text, tf.cursorPos)
             tf.selection.endPos = findNextWordEnd(text, tf.cursorPos)
             tf.cursorPos = tf.selection.endPos
+            tf.state = tfsDoubleClicked
           else:
             ui.x0 = ui.mx
             tf.state = tfsDragStart
@@ -2135,6 +2145,7 @@ proc textField(
           inc(tf.cursorPos, s.runeLen())
 
 
+    # "Fall-through" into edit mode happens here
     if ui.hasEvent and (not ui.eventHandled) and
        ui.currEvent.kind == ekKey and
        ui.currEvent.action in {kaDown, kaRepeat}:
@@ -2302,7 +2313,6 @@ proc textField(
 
   result = text
 
-
   # Draw text field
   let editing = tf.activeItem == id
 
@@ -2346,8 +2356,9 @@ proc textField(
 
     # Scroll content into view & draw cursor when editing
     if editing:
-      # Glyph positions have already been calculated at this point
-      # in the input handling routine if we're in edit mode
+      # Need to recalculate glyph positions as the text might have changed
+      calcGlyphPos()
+
       let textLen = text.runeLen
 
       if textLen == 0:
@@ -2418,17 +2429,16 @@ proc textField(
         vg.fill()
 
       # Draw cursor
-      let cursorX = if tf.cursorPos == 0:
-        textBoxX
+      let cursorX = if tf.cursorPos == 0: textBoxX
 
-      elif tf.cursorPos == text.runeLen:
-        tf.displayStartX + glyphs[tf.cursorPos-1].maxX -
-                           glyphs[tf.displayStartPos].x
+        elif tf.cursorPos == text.runeLen:
+          tf.displayStartX + glyphs[tf.cursorPos-1].maxX -
+                             glyphs[tf.displayStartPos].x
 
-      elif tf.cursorPos > 0:
-        tf.displayStartX + glyphs[tf.cursorPos].x -
-                           glyphs[tf.displayStartPos].x
-      else: textBoxX
+        elif tf.cursorPos > 0:
+          tf.displayStartX + glyphs[tf.cursorPos].x -
+                             glyphs[tf.displayStartPos].x
+        else: textBoxX
 
       vg.beginPath()
       vg.strokeColor(s.cursorColor)
@@ -3552,7 +3562,7 @@ proc beginFrame*(winWidth, winHeight: float) =
         ui.mbLeftDownT = getTime()
         ui.mbLeftDownX = ui.mx
         ui.mbLeftDownY = ui.my
- 
+
       of mbRight:  ui.mbRightDown  = ev.pressed
       of mbMiddle: ui.mbMiddleDown = ev.pressed
       else: discard
