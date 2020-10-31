@@ -691,7 +691,7 @@ else: # windows & linux
 
 # }}}
 
-const CharBufSize = 64
+const CharBufSize = 256
 var
   # TODO do we need locking around this stuff? written in the callback, read
   # from the UI code
@@ -3615,6 +3615,12 @@ proc beginFrame*(winWidth, winHeight: float) =
       of mbRight:  ui.mbRightDown  = ev.pressed
       of mbMiddle: ui.mbMiddleDown = ev.pressed
       else: discard
+
+    # Because up to one event is processed per frame, handling keystroke
+    # events can become "out of sync" with the char buffer. So we need to keep
+    # processing one more frame while there are still events in the buffer to
+    # prevent that from happening.
+    if g_eventBuf.canRead(): setFramesLeft()
 
   # Reset hot item
   ui.hotItem = 0
