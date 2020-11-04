@@ -51,6 +51,8 @@ var
   textFieldVal2 = "Look behind you! A three-headed monkey!"
   textFieldVal3 = "42"
 
+  textAreaVal1 = "A merry little surge of electricity piped by automatic alarm from the mood organ beside his bed awakened Rick Deckard. Surprised—it always surprised him to find himself awake without prior notice—­he rose from the bed, stood up in his multicolored pajamas, and stretched.\n\nNow, in her bed, his wife Iran opened her gray, unmerry eyes, blinked, then groaned and shut her eyes again."
+
 
 ############################################################
 
@@ -342,6 +344,11 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
     layout=RadioButtonsLayout(kind: rblGridVert, itemsPerColumn: 4),
     drawProc=radioButtonsDrawProc.some
   )
+
+
+  textAreaVal1 = koi.textArea(
+    650, 300, 300, 230, textAreaVal1, tooltip = "Text area 1")
+
 
   # Menu
 

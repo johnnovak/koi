@@ -87,7 +87,6 @@ type
 
 # }}}
 # {{{ TextFieldState
-
 type
   TextFieldState = enum
     tfsDefault,
@@ -131,6 +130,43 @@ type
     activatePrev:    bool
 
 # }}}
+# {{{ TextAreaState
+type
+  TextAreaState = enum
+    tasDefault
+    tasEditEntered,
+    tasEdit
+#    tasDragStart,
+#    tasDragDelay,
+#    tasDragScroll,
+#    tasDoubleClicked
+
+  TextAreaStateVars = object
+    state:           TextAreaState
+
+    # The cursor is before the Rune with this index. If the cursor is at the end
+    # of the text, the cursor pos equals the length of the text. From this
+    # follows that the cursor position for an empty string is 0.
+    cursorPos:       Natural
+
+    # Current text selection
+    selection:       TextSelection
+
+    # Text area item in edit mode, 0 if no text area is being edited.
+    activeItem:      ItemId
+
+    # The original text is stored when going into edit mode so it can be
+    # restored if the editing is cancelled.
+    originalText:    string
+
+    # State variables for tabbing back and forth between textfields
+    prevItem:        ItemId
+    lastActiveItem:  ItemId
+    itemToActivate:  ItemId
+    activateNext:    bool
+    activatePrev:    bool
+
+# }}}
 # {{{ TooltipState
 
 type
@@ -146,6 +182,14 @@ type
     text:      string
 
 # }}}
+
+# {{{ DrawState
+
+type DrawState* = enum
+  dsNormal, dsHover, dsActive, dsDisabled
+
+# }}}
+
 # {{{ UIState
 
 type
@@ -244,6 +288,7 @@ type
 
     dropdownState:  DropdownStateVars
     textFieldState: TextFieldStateVars
+    textAreaState:  TextAreaStateVars
     scrollBarState: ScrollBarStateVars
     sliderState:    SliderStateVars
 
@@ -258,12 +303,6 @@ type
     isDialogOpen:   bool
     insideDialog:   bool
 
-
-# }}}
-# {{{ DrawState
-
-type DrawState* = enum
-  dsNormal, dsHover, dsActive, dsDisabled
 
 # }}}
 # }}}
@@ -529,38 +568,38 @@ proc mkKeyShortcut*(k: Key, m: set[ModifierKey]): KeyShortcut {.inline.} =
 # {{{ Shortcut definitions
 
 type TextEditShortcuts = enum
-  tesPrevTextField,
-  tesNextTextField,
+  tesPrevTextField, # TODO "global" widget level shortcut
+  tesNextTextField, # TODO "global" widget level shortcut
 
-  tesCursorOneCharLeft,
-  tesCursorOneCharRight,
-  tesCursorToPreviousWord,
-  tesCursorToNextWord,
+  tesCursorOneCharLeft, # common
+  tesCursorOneCharRight, # common
+  tesCursorToPreviousWord, # common
+  tesCursorToNextWord, # common
   tesCursorToLineStart,
   tesCursorToLineEnd,
 
-  tesSelectionOneCharLeft,
-  tesSelectionOneCharRight,
-  tesSelectionToPreviousWord,
-  tesSelectionToNextWord,
+  tesSelectionOneCharLeft, # common
+  tesSelectionOneCharRight, # common
+  tesSelectionToPreviousWord, # common
+  tesSelectionToNextWord, # common
   tesSelectionToLineStart,
   tesSelectionToLineEnd,
 
-  tesDeleteOneCharLeft,
-  tesDeleteOneCharRight,
-  tesDeleteWordToRight,
-  tesDeleteWordToLeft,
+  tesDeleteOneCharLeft, # common
+  tesDeleteOneCharRight, # common
+  tesDeleteWordToRight, # common
+  tesDeleteWordToLeft, # common
   tesDeleteToLineStart,
   tesDeleteToLineEnd,
 
   tesSwitchChars,
 
-  tesCutText,
-  tesCopyText,
-  tesPasteText,
+  tesCutText, # common
+  tesCopyText, # common
+  tesPasteText, # common
 
-  tesAccept,
-  tesCancel
+  tesAccept, # common
+  tesCancel # common
 
 
 when defined(macosx):
@@ -2614,6 +2653,7 @@ proc textField(
     g_nvgContext.setFont(s.textFontSize)
     discard g_nvgContext.textGlyphPositions(0, 0, text, glyphs)
 
+
   proc exitEditMode() =
     clearEventBuf()
     clearCharBuf()
@@ -2629,6 +2669,7 @@ proc textField(
 
     ui.focusCaptured = false
     setCursorShape(csArrow)
+
 
   proc enforceConstraint(text, originalText: string): string =
     var text = unicode.strip(text)
@@ -3010,7 +3051,352 @@ template textField*(
 
 
 # }}}
-#
+# {{{ TextArea
+
+type TextAreaStyle* = object
+  bgCornerRadius*:      float
+  bgStrokeWidth*:       float
+  bgStrokeColor*:       Color
+  bgStrokeColorHover*:  Color
+  bgStrokeColorActive*: Color
+  bgFillColor*:         Color
+  bgFillColorHover*:    Color
+  bgFillColorActive*:   Color
+  textPadHoriz*:        float
+  textPadVert*:         float
+  textFontSize*:        float
+  textFontFace*:        string
+  textColor*:           Color
+  textColorHover*:      Color
+  textColorActive*:     Color
+  cursorWidth*:         float
+  cursorColor*:         Color
+  selectionColor*:      Color
+
+var DefaultTextAreaStyle = TextAreaStyle(
+  bgCornerRadius      : 5,
+  bgStrokeWidth       : 0,
+  bgStrokeColor       : black(),
+  bgStrokeColorHover  : black(),
+  bgStrokeColorActive : black(),
+  bgFillColor         : GRAY_MID,
+  bgFillColorHover    : GRAY_HI,
+  bgFillColorActive   : GRAY_LO,
+  textPadHoriz        : 8.0,
+  textPadVert         : 2.0,
+  textFontSize        : 14.0,
+  textFontFace        : "sans",
+  textColor           : GRAY_LO,
+  textColorHover      : GRAY_LO,
+  textColorActive     : GRAY_HI,
+  cursorColor         : HILITE,
+  cursorWidth         : 1.0,
+  selectionColor      : rgb(0.5, 0.15, 0.15)
+)
+
+proc getDefaultTextAreaStyle*(): TextAreaStyle =
+  DefaultTextAreaStyle.deepCopy
+
+proc setDefaultTextAreaStyle*(style: TextAreaStyle) =
+  DefaultTextAreaStyle = style.deepCopy
+
+
+type
+  TextAreaConstraint* = object
+    minLen*: Natural
+    maxLen*: int
+
+
+proc textArea(
+  id:         ItemId,
+  x, y, w, h: float,
+  text:       string,
+  tooltip:    string = "",
+  activate:   bool = false,
+  drawWidget: bool = false,
+  constraint: Option[TextAreaConstraint] = TextAreaConstraint.none,
+  style:      TextAreaStyle = DefaultTextAreaStyle
+): string =
+
+  const MaxTextLen = 5000
+
+  assert text.runeLen <= MaxTextLen
+
+  alias(ui, g_uiState)
+  alias(ta, ui.textAreaState)
+  alias(s, style)
+
+  let
+    x = x + ui.ox
+    y = y + ui.oy
+
+  # The text is displayed within this rectangle (used for drawing later)
+  let
+    textBoxX = x + s.textPadHoriz
+    textBoxW = w - s.textPadhOriz*2
+    textBoxY = y
+    textBoxH = h
+
+  var
+    text = text
+    glyphs: array[MaxTextLen, GlyphPosition]
+
+
+  proc calcGlyphPos() =
+    g_nvgContext.setFont(s.textFontSize)
+    discard g_nvgContext.textGlyphPositions(0, 0, text, glyphs)
+
+
+  proc enterEditMode(id: ItemId, text: string, startX: float) =
+    setActive(id)
+    clearCharBuf()
+    clearEventBuf()
+
+    ta.state = tasEdit
+    ta.activeItem = id
+    ta.cursorPos = text.runeLen
+    ta.originalText = text
+    ta.selection.startPos = 0
+    ta.selection.endPos = ta.cursorPos
+
+    ui.focusCaptured = true
+
+
+  proc exitEditMode() =
+    clearEventBuf()
+    clearCharBuf()
+
+    ta.state = tasDefault
+    ta.activeItem = 0
+    ta.cursorPos = 0
+    ta.selection = NoSelection
+    ta.originalText = ""
+    ta.lastActiveItem = id
+
+    ui.focusCaptured = false
+    setCursorShape(csArrow)
+
+
+  var tabActivate = false
+
+  if ta.state == tasDefault:
+    if ta.activateNext and ta.lastActiveItem == ta.prevItem and
+       id != ta.prevItem:  # exit editing textarea if there's just one
+      ta.activateNext = false
+      tabActivate = true
+
+    elif ta.activatePrev and id == ta.itemToActivate and
+         id != ta.prevItem:  # exit editing textarea if there's just one
+      ta.activatePrev = false
+      tabActivate = true
+
+    # Hit testing
+    if isHit(x, y, w, h) or activate or tabActivate:
+      setHot(id)
+      if (ui.mbLeftDown and noActiveItem()) or activate or tabActivate:
+        enterEditMode(id, text, textBoxX)
+        ta.state = tasEditEntered
+
+
+  # We 'fall through' to the edit state to avoid a 1-frame delay when going
+  # into edit mode
+  if ta.activeItem == id and ta.state >= tasEditEntered:
+    calcGlyphPos()  # required for the mouse interactions
+
+    setHot(id)
+    setActive(id)
+    setCursorShape(csIBeam)
+
+    if ta.state == tasEditEntered:
+      if not ui.mbLeftDown:
+        ta.state = tasEdit
+
+    else:
+      if ui.mbLeftDown:
+        if mouseInside(x, y, w, h):
+#[          tf.selection = NoSelection
+          tf.cursorPos = getCursorPosAtXPos(ui.mx)
+
+          if isDoubleClick():
+            tf.selection.startPos = findPrevWordStart(text, tf.cursorPos)
+            tf.selection.endPos = findNextWordEnd(text, tf.cursorPos)
+            tf.cursorPos = tf.selection.endPos
+            tf.state = tasDoubleClicked
+          else:
+            ui.x0 = ui.mx
+            tf.state = tasDragStart
+
+        # LMB pressed outside the text field exits edit mode
+        ]#
+          discard
+        else:
+#          text = enforceConstraint(text, tf.originalText)
+          exitEditMode()
+
+    # Handle text field shortcuts
+    # (If we exited edit mode above key handler, this will result in a noop as
+    # exitEditMode() clears the key buffer.)
+
+    # "Fall-through" into edit mode happens here
+    if ui.hasEvent and (not ui.eventHandled) and
+       ui.currEvent.kind == ekKey and
+       ui.currEvent.action in {kaDown, kaRepeat}:
+
+      alias(shortcuts, g_textFieldEditShortcuts)
+      let sc = mkKeyShortcut(ui.currEvent.key, ui.currEvent.mods)
+
+      ui.eventHandled = true
+
+      let res = handleCommonTextEditingShortcuts(sc, text,
+                                                 ta.cursorPos, ta.selection)
+
+      if res.isSome:
+        text = res.get.text
+        ta.cursorPos = res.get.cursorPos
+        ta.selection = res.get.selection
+
+      else:
+        if sc in shortcuts[tesPrevTextField]:
+#          text = enforceConstraint(text, ta.originalText)
+          exitEditMode()
+          ta.activatePrev = true
+          ta.itemToActivate = ta.prevItem
+          setFramesLeft()
+
+        elif sc in shortcuts[tesNextTextField]:
+#          text = enforceConstraint(text, ta.originalText)
+          exitEditMode()
+          ta.activateNext = true
+          setFramesLeft()
+
+        elif sc in shortcuts[tesAccept]:
+#          text = enforceConstraint(text, ta.originalText)
+          exitEditMode()
+          # Note we won't process any remaining characters in the buffer
+          # because exitEditMode() clears the key buffer.
+
+        elif sc in shortcuts[tesCancel]:
+          text = ta.originalText
+          exitEditMode()
+          # Note we won't process any remaining characters in the buffer
+          # because exitEditMode() clears the key buffer.
+
+        else:
+          ui.eventHandled = false
+
+    # Splice newly entered characters into the string.
+    # (If we exited edit mode in the above key handler, this will result in
+    # a noop as exitEditMode() clears the char buffer.)
+    if not charBufEmpty():
+      var newChars = consumeCharBuf()
+      let res = insertString(text, ta.cursorPos, ta.selection, newChars)
+      text = res.text
+      ta.cursorPos = res.cursorPos
+      ta.selection = res.selection
+
+  result = text
+
+  # Draw text field
+  let editing = ta.activeItem == id
+
+  let drawState = if isHot(id) and noActiveItem(): dsHover
+    elif editing: dsActive
+    else: dsNormal
+
+  var
+    textX = textBoxX
+    textY = y + s.textFontSize
+
+  let (fillColor, strokeColor) = case drawState
+    of dsHover:  (s.bgFillColorHover,  s.bgStrokeColorHover)
+    of dsActive: (s.bgFillColorActive, s.bgStrokeColorActive)
+    else:        (s.bgFillColor,       s.bgStrokeColor)
+
+  let layer = if editing: TopLayer-3 else: ui.currentLayer
+
+  addDrawLayer(layer, vg):
+    vg.save()
+
+    # Draw text field background
+    if drawWidget:
+      vg.beginPath()
+      vg.roundedRect(x, y, w, h, s.bgCornerRadius)
+      vg.fillColor(fillColor)
+      vg.fill()
+
+    elif editing:
+      vg.beginPath()
+      vg.rect(
+        textBoxX, textBoxY + s.textPadVert,
+        textBoxW, textBoxH - s.textPadVert*2
+      )
+      vg.fillColor(fillColor)
+      vg.fill()
+
+    # Make scissor region slightly wider because of the cursor
+    # TODO convert constants into style params?
+    vg.intersectScissor(textBoxX-3, textBoxY, textBoxW+3, textBoxH)
+
+    # Scroll content into view & draw cursor when editing
+    if editing:
+      # Need to recalculate glyph positions as the text might have changed
+      calcGlyphPos()
+
+      let textLen = text.runeLen
+
+      if textLen == 0:
+        ta.cursorPos = 0
+        ta.selection = NoSelection
+
+      else:
+        # Text fits into the text box
+#        if glyphs[textLen-1].maxX < textBoxW:
+#          ta.displayStartPos = 0
+#          ta.displayStartX = textBoxX
+#        else:
+        var p = min(ta.cursorPos, textLen-1)
+
+    # Draw text
+    # TODO text color hover
+    let textColor = if editing: s.textColorActive else: s.textColor
+
+    vg.setFont(s.textFontSize)
+    vg.fillColor(textColor)
+
+    # TODO param
+    vg.textLineHeight(1.4)
+    vg.textBox(textX, textY, textBoxW, text)
+
+    vg.restore()
+
+  if isHot(id):
+    handleTooltip(id, tooltip)
+
+  # TODO a bit hacky, why is it needed?
+  if activate or tabActivate:
+    ui.tooltipState.state = tsOff
+
+  ta.prevItem = id
+
+
+template textArea*(
+  x, y, w, h: float,
+  text:       string,
+  tooltip:    string = "",
+  activate:   bool = false,
+  constraint: Option[TextAreaConstraint] = TextAreaConstraint.none,
+  style:      TextAreaStyle = DefaultTextAreaStyle
+): string =
+
+  let i = instantiationInfo(fullPaths=true)
+  let id = generateId(i.filename, i.line, "")
+
+  textArea(id, x, y, w, h, text, tooltip, activate, drawWidget = true,
+           constraint, style)
+
+
+# }}}
+
 # {{{ Slider
 # {{{ horizSlider
 
