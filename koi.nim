@@ -17,7 +17,6 @@ import utils
 
 export CursorShape
 
-
 # {{{ Types
 
 type ItemId = int64
@@ -376,7 +375,7 @@ proc setFont*(vg: NVGContext, size: float, name: string = "sans-bold",
 proc drawLabel(vg: NVGContext, x, y, w, h, padHoriz: float,
                label: string, color: Color,
                fontSize: float, fontFace: string, align: HorizontalAlign,
-               multiLine: bool = false, lineHeight: float = 1.5) =
+               multiLine: bool = false, lineHeight: float = 1.4) =
   let
     textBoxX = x + padHoriz
     textBoxW = w - padHoriz*2
@@ -975,7 +974,7 @@ var DefaultLabelStyle = LabelStyle(
   fontSize   : 14.0,
   fontFace   : "sans-bold",
   align      : haCenter,
-  lineHeight : 1.5,
+  lineHeight : 1.4,
   color      : GRAY_LO
 )
 
@@ -2868,7 +2867,62 @@ proc textField(
       tf.cursorPos = res.cursorPos
       tf.selection = res.selection
 
+    # Update textfield state vars based on the new text & current cursor
+    # position
+    let textLen = text.runeLen
+
+    if textLen == 0:
+      tf.cursorPos = 0
+      tf.selection = NoSelection
+      tf.displayStartPos = 0
+      tf.displayStartX = textBoxX
+
+    else:
+      # Need to recalculate glyph positions as the text might have changed
+      calcGlyphPos()
+
+      # Text fits into the text box
+      if glyphs[textLen-1].maxX < textBoxW:
+        tf.displayStartPos = 0
+        tf.displayStartX = textBoxX
+      else:
+        var p = min(tf.cursorPos, textLen-1)
+        let startOffsetX = textBoxX - tf.displayStartX
+
+        proc calcDisplayStart(fromPos: Natural): (Natural, float) =
+          let x0 = glyphs[fromPos].maxX
+          var p = fromPos
+
+          while p > 0 and x0 - glyphs[p].minX < textBoxW: dec(p)
+
+          let
+            displayStartPos = p
+            textW = x0 - glyphs[p].minX
+            startOffsetX = textW - textBoxW
+            displayStartX = min(textBoxX - startOffsetX, textBoxX)
+
+          (displayStartPos, displayStartX)
+
+        # Cursor past the right edge of the text box
+        if glyphs[p].maxX -
+           glyphs[tf.displayStartPos].minX - startOffsetX > textBoxW:
+
+          (tf.displayStartPos, tf.displayStartX) = calcDisplayStart(p)
+
+        # Make sure the text is always aligned to the right edge of the text
+        # box
+        elif glyphs[textLen-1].maxX -
+             glyphs[tf.displayStartPos].minX - startOffsetX < textBoxW:
+
+          (tf.displayStartPos, tf.displayStartX) = calcDisplayStart(textLen-1)
+
+        # Cursor past the left edge of the text box
+        elif glyphs[p].minX < glyphs[tf.displayStartPos].minX + startOffsetX:
+          tf.displayStartX = textBoxX
+          tf.displayStartPos = min(tf.displayStartPos, p)
+
   result = text
+
 
   # Draw text field
   let editing = tf.activeItem == id
@@ -2913,58 +2967,6 @@ proc textField(
 
     # Scroll content into view & draw cursor when editing
     if editing:
-      # Need to recalculate glyph positions as the text might have changed
-      calcGlyphPos()
-
-      let textLen = text.runeLen
-
-      if textLen == 0:
-        tf.cursorPos = 0
-        tf.selection = NoSelection
-        tf.displayStartPos = 0
-        tf.displayStartX = textBoxX
-
-      else:
-        # Text fits into the text box
-        if glyphs[textLen-1].maxX < textBoxW:
-          tf.displayStartPos = 0
-          tf.displayStartX = textBoxX
-        else:
-          var p = min(tf.cursorPos, textLen-1)
-          let startOffsetX = textBoxX - tf.displayStartX
-
-          proc calcDisplayStart(fromPos: Natural): (Natural, float) =
-            let x0 = glyphs[fromPos].maxX
-            var p = fromPos
-
-            while p > 0 and x0 - glyphs[p].minX < textBoxW: dec(p)
-
-            let
-              displayStartPos = p
-              textW = x0 - glyphs[p].minX
-              startOffsetX = textW - textBoxW
-              displayStartX = min(textBoxX - startOffsetX, textBoxX)
-
-            (displayStartPos, displayStartX)
-
-          # Cursor past the right edge of the text box
-          if glyphs[p].maxX -
-             glyphs[tf.displayStartPos].minX - startOffsetX > textBoxW:
-
-            (tf.displayStartPos, tf.displayStartX) = calcDisplayStart(p)
-
-          # Make sure the text is always aligned to the right edge of the text
-          # box
-          elif glyphs[textLen-1].maxX -
-               glyphs[tf.displayStartPos].minX - startOffsetX < textBoxW:
-
-            (tf.displayStartPos, tf.displayStartX) = calcDisplayStart(textLen-1)
-
-          # Cursor past the left edge of the text box
-          elif glyphs[p].minX < glyphs[tf.displayStartPos].minX + startOffsetX:
-            tf.displayStartX = textBoxX
-            tf.displayStartPos = min(tf.displayStartPos, p)
-
       textX = tf.displayStartX
 
       # Draw selection
@@ -3066,6 +3068,7 @@ type TextAreaStyle* = object
   textPadVert*:         float
   textFontSize*:        float
   textFontFace*:        string
+  textLineHeight*:      float
   textColor*:           Color
   textColorHover*:      Color
   textColorActive*:     Color
@@ -3086,6 +3089,7 @@ var DefaultTextAreaStyle = TextAreaStyle(
   textPadVert         : 2.0,
   textFontSize        : 14.0,
   textFontFace        : "sans",
+  textLineHeight      : 1.4,
   textColor           : GRAY_LO,
   textColorHover      : GRAY_LO,
   textColorActive     : GRAY_HI,
@@ -3294,9 +3298,17 @@ proc textArea(
       ta.cursorPos = res.cursorPos
       ta.selection = res.selection
 
+    # Update textarea field vars after the edits
+    let textLen = text.runeLen
+
+    if textLen == 0:
+      ta.cursorPos = 0
+      ta.selection = NoSelection
+
+
   result = text
 
-  # Draw text field
+  # Draw text area
   let editing = ta.activeItem == id
 
   let drawState = if isHot(id) and noActiveItem(): dsHover
@@ -3337,25 +3349,6 @@ proc textArea(
     # TODO convert constants into style params?
     vg.intersectScissor(textBoxX-3, textBoxY, textBoxW+3, textBoxH)
 
-    # Scroll content into view & draw cursor when editing
-    if editing:
-      # Need to recalculate glyph positions as the text might have changed
-      calcGlyphPos()
-
-      let textLen = text.runeLen
-
-      if textLen == 0:
-        ta.cursorPos = 0
-        ta.selection = NoSelection
-
-      else:
-        # Text fits into the text box
-#        if glyphs[textLen-1].maxX < textBoxW:
-#          ta.displayStartPos = 0
-#          ta.displayStartX = textBoxX
-#        else:
-        var p = min(ta.cursorPos, textLen-1)
-
     # Draw text
     # TODO text color hover
     let textColor = if editing: s.textColorActive else: s.textColor
@@ -3363,9 +3356,51 @@ proc textArea(
     vg.setFont(s.textFontSize)
     vg.fillColor(textColor)
 
-    # TODO param
-    vg.textLineHeight(1.4)
-    vg.textBox(textX, textY, textBoxW, text)
+    var (_, _, lineHeight) = vg.textMetrics()
+    lineHeight = lineHeight * s.textLineHeight
+
+    ##########
+    var
+      textStart: cstring = text[0].addr
+      textEnd: cstring = text[text.high].addr ++ 1
+
+      rows: array[3, TextRow]
+      numRows = vg.textBreakLines(textStart, textEnd, textBoxW, rows)
+
+    while numRows > 0:
+      for i in 0..<numRows:
+        let row = rows[i]
+
+        discard vg.text(textX, textY, row.startPos, row.endPos)
+
+#[
+        if hit:
+          let numGlyphs = vg.textGlyphPositions(textX, textY,
+                                                row.startPos, row.endPos,
+                                                glyphs)
+          var
+            caretX = if (mx < x + row.width / 2): x else: x + row.width
+            px = x
+
+          for j in 0..<nglyphs:
+            let
+              x0 = glyphs[j].x
+              x1 = if (j+1 < nglyphs): glyphs[j+1].x else: x + row.width
+              gx = x0 * 0.3 + x1 * 0.7
+
+            if mx >= px and mx < gx:
+              caretX = glyphs[j].x
+            px = gx
+
+          vg.beginPath()
+          vg.fillColor(rgb(255, 192, 0))
+          vg.rect(caretX, yy, 1, lineHeight)
+          vg.fill()
+]#
+        textY += lineHeight
+
+      textStart = rows[numRows-1].next
+      numRows = vg.textBreakLines(textStart, textEnd, textBoxW, rows)
 
     vg.restore()
 

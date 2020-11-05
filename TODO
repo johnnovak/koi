@@ -9,9 +9,9 @@ BUGS
 - scrollbar: click-hold doesn't work if the tooltip appeared
 
 - textfield:
-  - type really fast, movement keys are screwed
-  - mouse select: selecting should have no delay until we hit the border of
-    the textbox
+  - move cursor past the right edge when text doesn't fit into the the
+    textfield - the cursor should be after the last character, not after the 
+    one before the last
 
 
 
