@@ -3360,18 +3360,17 @@ proc textArea(
     lineHeight = lineHeight * s.textLineHeight
 
     ##########
+    let maxRows = 3
+
     var
-      textStart: cstring = text[0].addr
-      textEnd: cstring = text[text.high].addr ++ 1
+      textStart = 0
+      textEnd = text.high
 
-      rows: array[3, TextRow]
-      numRows = vg.textBreakLines(textStart, textEnd, textBoxW, rows)
+      rows = vg.textBreakLines(text, textStart, textEnd, textBoxW, maxRows)
 
-    while numRows > 0:
-      for i in 0..<numRows:
-        let row = rows[i]
-
-        discard vg.text(textX, textY, row.startPos, row.endPos)
+    while rows.len > 0:
+      for row in rows:
+        discard vg.text(textX, textY, text, row.startPos, row.endPos)
 
 #[
         if hit:
@@ -3399,8 +3398,8 @@ proc textArea(
 ]#
         textY += lineHeight
 
-      textStart = rows[numRows-1].next
-      numRows = vg.textBreakLines(textStart, textEnd, textBoxW, rows)
+      textStart = rows[^1].nextPos
+      rows = vg.textBreakLines(text, textStart, textEnd, textBoxW, maxRows)
 
     vg.restore()
 
