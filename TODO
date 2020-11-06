@@ -13,6 +13,7 @@ BUGS
     textfield - the cursor should be after the last character, not after the 
     one before the last
 
+- text: cursor should be hidden in selection mode
 
 
 TODO
@@ -30,5 +31,4 @@ TODO
 - SweepCheckBox?
 
 - "soft asserts" (check) that print errors to stderr instead of aborting
-
 

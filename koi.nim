@@ -2338,6 +2338,14 @@ proc findPrevWordStart(text: string, cursorPos: Natural): Natural =
   while p > 0 and not text.runeAt(p-1).isWhiteSpace: dec(p)
   result = p
 
+proc drawCursor(vg: NVGContext, x, y1, y2: float, color: Color, width: float) =
+  vg.beginPath()
+  vg.strokeColor(color)
+  vg.strokeWidth(width)
+  vg.moveTo(x+0.5, y1)
+  vg.lineTo(x+0.5, y2)
+  vg.stroke()
+
 # {{{ insertString()
 proc insertString(
   text: string, cursorPos: Natural, selection: TextSelection, toInsert: string
@@ -2983,20 +2991,13 @@ proc textField(
 
         vg.beginPath()
         # TODO convert constants into style params?
-        vg.rect(selStartX, y + 2, selEndX - selStartX, h - 4)
+        vg.rect(selStartX, y+2, selEndX - selStartX, h-4)
         vg.fillColor(s.selectionColor)
         vg.fill()
 
       # Draw cursor
       let cursorX = getCursorXPos()
-
-      vg.beginPath()
-      vg.strokeColor(s.cursorColor)
-      vg.strokeWidth(s.cursorWidth)
-      # TODO convert constants into style params?
-      vg.moveTo(cursorX+0.5, y + 2)
-      vg.lineTo(cursorX+0.5, y+h - 2)
-      vg.stroke()
+      drawCursor(vg, cursorX, y+2, y+h-2, s.cursorColor, s.cursorWidth)
 
       text = text.runeSubStr(tf.displayStartPos)
 
@@ -3122,9 +3123,9 @@ proc textArea(
   style:      TextAreaStyle = DefaultTextAreaStyle
 ): string =
 
-  const MaxTextLen = 5000
+  const MaxLineLen = 1000
 
-  assert text.runeLen <= MaxTextLen
+  assert text.runeLen <= MaxLineLen
 
   alias(ui, g_uiState)
   alias(ta, ui.textAreaState)
@@ -3143,7 +3144,7 @@ proc textArea(
 
   var
     text = text
-    glyphs: array[MaxTextLen, GlyphPosition]
+    glyphs: array[MaxLineLen, GlyphPosition]
 
 
   proc calcGlyphPos() =
@@ -3315,10 +3316,6 @@ proc textArea(
     elif editing: dsActive
     else: dsNormal
 
-  var
-    textX = textBoxX
-    textY = y + s.textFontSize
-
   let (fillColor, strokeColor) = case drawState
     of dsHover:  (s.bgFillColorHover,  s.bgStrokeColorHover)
     of dsActive: (s.bgFillColorActive, s.bgStrokeColorActive)
@@ -3353,24 +3350,37 @@ proc textArea(
     # TODO text color hover
     let textColor = if editing: s.textColorActive else: s.textColor
 
-    vg.setFont(s.textFontSize)
+    vg.setFont(s.textFontSize, vertAlign=vaBaseline)
     vg.fillColor(textColor)
 
     var (_, _, lineHeight) = vg.textMetrics()
     lineHeight = lineHeight * s.textLineHeight
 
-    ##########
-    let maxRows = 3
+    let rows = vg.textBreakLines(text, textBoxW)
 
     var
-      textStart = 0
-      textEnd = text.high
+      textX = textBoxX
+      textY = y + lineHeight
 
-      rows = vg.textBreakLines(text, textStart, textEnd, textBoxW, maxRows)
+    for row in rows:
+      discard vg.text(textX, textY, text, row.startPos, row.endPos)
 
-    while rows.len > 0:
-      for row in rows:
-        discard vg.text(textX, textY, text, row.startPos, row.endPos)
+      let numGlyphs = vg.textGlyphPositions(textX, textY,
+                                            text, row.startPos, row.endPos,
+                                            glyphs)
+
+      if ta.cursorPos >= row.startPos and
+         ta.cursorPos <= row.endPos:
+
+        let cursorX = glyphs[ta.cursorPos - row.startPos].x
+        let cursorYAdjust = lineHeight*0.3
+
+        drawCursor(vg, cursorX,
+                   textY + cursorYAdjust,
+                   textY - lineHeight + cursorYAdjust,
+                   s.cursorColor, s.cursorWidth)
+
+      textY += lineHeight
 
 #[
         if hit:
@@ -3396,10 +3406,6 @@ proc textArea(
           vg.rect(caretX, yy, 1, lineHeight)
           vg.fill()
 ]#
-        textY += lineHeight
-
-      textStart = rows[^1].nextPos
-      rows = vg.textBreakLines(text, textStart, textEnd, textBoxW, maxRows)
 
     vg.restore()
 
