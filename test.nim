@@ -106,9 +106,9 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
 
   ##########################################
 
-#  var txt = textAreaVal1
+  var txt = textAreaVal1
 #  var txt = "i\nF\nii\nFi\n\niii\n\n\ndoes not\nwork."
-  var txt = "i\nii\n\niii\n\n\ndoes not\nwork.\n"
+#  var txt = "i\nii\n\niii\n\n\ndoes not\nwork."
 
   if printBreakRows:
     let rows = breakLines(txt, 300)

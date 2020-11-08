@@ -4141,9 +4141,13 @@ proc nvgContext*(): NVGContext =
 type
   TextRow* = object
     startPos*: Natural
+    startBytePos*: Natural
+
     endPos*: Natural
+    endBytePos*: Natural
 
     nextRowPos*: int
+    nextRowBytePos*: int
 
     width*: float
 #    minX*:  cfloat
@@ -4173,16 +4177,20 @@ proc breakLines*(text: string, maxWidth: float, maxRows: int = -1): seq[TextRow]
 
     textPos = 0       # current rune position
     textBytePos = 0   # byte offset of the current rune
+    prevTextPos = 0
+    prevTextBytePos = 0
 
     # glyphPos is ahead by 1 rune, so glyphs[glyphPos].x will give us the end
     # of the current rune
     glyphPos = 3
 
-    rowStartPos = 0
+    rowStartPos, rowStartBytePos: Natural
     rowStartX = glyphs[0].x
 
     lastBreakPos = -1
+    lastBreakBytePos = -1
     lastBreakPosStartX: float
+    lastBreakPosPrev, lastBreakBytePosPrev: Natural
 
 
   fillGlyphsBuffer(textPos, textBytePos)
@@ -4203,22 +4211,33 @@ proc breakLines*(text: string, maxWidth: float, maxRows: int = -1): seq[TextRow]
         let runeBeforeNewLineEndX = glyphs[glyphPos-2].x
         let newLinePos = textPos - 1
 
-        result.add(TextRow(
-          startPos:   rowStartPos,
-          endPos:     newLinePos,
-          nextRowPos: textPos,
-          width:      runeBeforeNewLineEndX - rowStartX
-        ))
+        let row = TextRow(
+          startPos:       rowStartPos,
+          startBytePos:   rowStartBytePos,
+          endPos:         prevTextPos,
+          endBytePos:     prevTextBytePos,
+          nextRowPos:     textPos,
+          nextRowBytePos: textBytePos,
+          width:          runeBeforeNewLineEndX - rowStartX
+        )
+        result.add(row)
 
-        rowStartPos = textPos
+        rowStartPos = row.nextRowPos
+        rowStartBytePos = row.nextRowBytePos
         rowStartX = newLineEndX
         lastBreakPos = -1
+        lastBreakBytePos = -1
 
       else: # not a new line
 
         # are we at the start of a new word?
         if prevRune == Space and rune != Space:
           lastBreakPos = textPos
+          lastBreakBytePos = textBytePos
+
+          lastBreakPosPrev = prevTextPos
+          lastBreakBytePosPrev = prevTextBytePos
+
           let prevRuneEndX = glyphs[glyphPos-1].x
           lastBreakPosStartX = prevRuneEndX
 
@@ -4228,53 +4247,71 @@ proc breakLines*(text: string, maxWidth: float, maxRows: int = -1): seq[TextRow]
           # break line at the last found break position
           if lastBreakPos > 0:
             let row = TextRow(
-              startPos:   rowStartPos,
-              endPos:     lastBreakPos-1,
-              nextRowPos: lastBreakPos,
-              width:      lastBreakPosStartX - rowStartX
+              startPos:       rowStartPos,
+              startBytePos:   rowStartBytePos,
+              endPos:         lastBreakPosPrev,
+              endBytePos:     lastBreakBytePosPrev,
+              nextRowPos:     lastBreakPos,
+              nextRowBytePos: lastBreakBytePos,
+              width:          lastBreakPosStartX - rowStartX
             )
             result.add(row)
 
             rowStartPos = row.nextRowPos
+            rowStartBytePos = row.nextRowBytePos
             rowStartX = lastBreakPosStartX
             lastBreakPos = -1
+            lastBreakBytePos = -1
 
           # no break position has been found (the line is basically a single
           # long word)
           else:
             let prevRuneEndX = glyphs[glyphPos-1].x
             let row = TextRow(
-              startPos:   rowStartPos,
-              endPos:     textPos-1,
-              nextRowPos: textPos,
-              width:      prevRuneEndX - rowStartX
+              startPos:       rowStartPos,
+              startBytePos:   rowStartBytePos,
+              endPos:         prevTextPos,
+              endBytePos:     prevTextBytePos,
+              nextRowPos:     textPos,
+              nextRowBytePos: textBytePos,
+              width:          prevRuneEndX - rowStartX
             )
             result.add(row)
 
             rowStartPos = row.nextRowPos
+            rowStartBytePos = row.nextRowBytePos
             rowStartX = prevRuneEndX
             lastBreakPos = -1
+            lastBreakBytePos = -1
 
     # flush last row if we're processing the last rune
     if textPos == textLen-1:
       if rune == NewLine:
         let runeBeforeNewLineEndX = glyphs[glyphPos-1].x
         result.add(TextRow(
-          startPos:   rowStartPos,
-          endPos:     textPos,
-          nextRowPos: -1,
-          width:      runeBeforeNewLineEndX - rowStartX
+          startPos:       rowStartPos,
+          startBytePos:   rowStartBytePos,
+          endPos:         textPos,
+          endBytePos:     textBytePos,
+          nextRowPos:     -1,
+          nextRowBytePos: -1,
+          width:          runeBeforeNewLineEndX - rowStartX
         ))
       else:
         let currRuneEndX = glyphs[glyphPos].x
         result.add(TextRow(
-          startPos:   rowStartPos,
-          endPos:     textPos,
-          nextRowPos: -1,
-          width:      currRuneEndX - rowStartX
+          startPos:       rowStartPos,
+          startBytePos:   rowStartBytePos,
+          endPos:         textPos,
+          endBytePos:     textBytePos,
+          nextRowPos:     -1,
+          nextRowBytePos: -1,
+          width:          currRuneEndX - rowStartX
         ))
 
     prevRune = rune
+    prevTextPos = textPos
+    prevTextBytePos = textBytePos
 
     inc(textPos)
     inc(textBytePos, rune.size)
