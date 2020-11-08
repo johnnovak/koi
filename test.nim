@@ -1,5 +1,6 @@
 import lenientops
 import strformat
+import unicode
 
 import glad/gl
 import glfw
@@ -51,7 +52,8 @@ var
   textFieldVal2 = "Look behind you! A three-headed monkey!"
   textFieldVal3 = "42"
 
-  textAreaVal1 = "A merry little surge of electricity piped by automatic alarm from the mood organ beside his bed awakened Rick Deckard. Surprised—it always surprised him to find himself awake without prior notice—­he rose from the bed, stood up in his multicolored pajamas, and stretched.\n\nNow, in her bed, his wife Iran opened her gray, unmerry eyes, blinked, then groaned and shut her eyes again."
+  textAreaVal1 = "A merry little surge of electricity piped by automatic alarm from the mood organ beside his bed awakened Rick Deckard. Surprised—it always surprised him to find himself awake without prior notice—he rose from the bed, stood up in his multicolored pajamas, and stretched.\n\nNow, in her bed, his wife Iran opened her gray, unmerry eyes, blinked, then groaned and shut her eyes again."
+  printBreakRows = true
 
 
 ############################################################
@@ -101,6 +103,25 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
 
   vg.beginFrame(winWidth.float, winHeight.float, pxRatio)
   koi.beginFrame(winWidth.float, winHeight.float)
+
+  ##########################################
+
+  var txt = " "
+#  var txt = "\ni\nii\n\niii\n\n\n  does not\nwork."
+
+  if printBreakRows:
+    let rows = breakLines(txt, 300)
+    printBreakRows = false
+
+    echo vg.textWidth("i")
+    echo vg.textWidth("ii")
+    echo vg.textWidth("iii")
+    echo vg.textWidth("  does not")
+
+    for row in rows:
+      echo row
+      echo "'", txt.runeSubStr(row.startPos, row.endPos - row.startPos + 1), "'"
+      echo ""
 
   ############################################################
   let

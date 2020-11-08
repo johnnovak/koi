@@ -3123,13 +3123,14 @@ proc textArea(
   style:      TextAreaStyle = DefaultTextAreaStyle
 ): string =
 
-  const MaxLineLen = 1000
-
-  assert text.runeLen <= MaxLineLen
-
   alias(ui, g_uiState)
   alias(ta, ui.textAreaState)
   alias(s, style)
+
+  const MaxLineLen = 1000
+  assert text.runeLen <= MaxLineLen
+
+  let TextRightPad = s.textFontSize * 0.7
 
   let
     x = x + ui.ox
@@ -3138,7 +3139,7 @@ proc textArea(
   # The text is displayed within this rectangle (used for drawing later)
   let
     textBoxX = x + s.textPadHoriz
-    textBoxW = w - s.textPadhOriz*2
+    textBoxW = w - s.textPadHoriz*2 - TextRightPad
     textBoxY = y
     textBoxH = h
 
@@ -3362,20 +3363,43 @@ proc textArea(
       textX = textBoxX
       textY = y + lineHeight
 
-    for row in rows:
+    for rowIdx, row in rows.pairs():
       discard vg.text(textX, textY, text, row.startPos, row.endPos)
 
       let numGlyphs = vg.textGlyphPositions(textX, textY,
                                             text, row.startPos, row.endPos,
                                             glyphs)
 
-      if ta.cursorPos >= row.startPos and
-         ta.cursorPos <= row.endPos:
+      let startRunePos = text.substr(0, row.startPos-1).runeLen
+      let lastRunePos  = text.substr(0, row.nextPos-2).runeLen
 
-        let cursorX = glyphs[ta.cursorPos - row.startPos].x
-        let cursorYAdjust = lineHeight*0.3
+      var cursorX = float.none
+      var drawCursorAtEndOfLine = false
 
-        drawCursor(vg, cursorX,
+      if ta.cursorPos >= startRunePos and
+         ta.cursorPos <= lastRunePos:
+
+        let n = ta.cursorPos - startRunePos
+        if n < numGlyphs:
+          cursorX = (glyphs[n].x.float).some
+        else:
+          drawCursorAtEndOfLine = true
+
+      elif rowIdx == rows.high and ta.cursorPos == text.runeLen:
+        drawCursorAtEndOfLine = true
+
+
+      if drawCursorAtEndOfLine:
+        if numGlyphs > 0:
+          cursorX = (glyphs[numGlyphs-1].maxX.float).some
+        else:
+          cursorX = textX.some
+
+
+      let cursorYAdjust = lineHeight*0.3
+
+      if cursorX.isSome:
+        drawCursor(vg, cursorX.get,
                    textY + cursorYAdjust,
                    textY - lineHeight + cursorYAdjust,
                    s.cursorColor, s.cursorWidth)
@@ -4113,5 +4137,125 @@ proc nvgContext*(): NVGContext =
   g_nvgContext
 
 # }}}
+
+type
+  TextRow* = object
+    startPos*: Natural
+    endPos*: Natural
+
+    nextRowPos*: Natural
+
+    width*: cfloat
+#    minX*:  cfloat
+#    maxX*:  cfloat
+
+
+proc breakLines*(text: string, maxWidth: float, maxRows: int = -1): seq[TextRow] =
+  var glyphs: array[2048, GlyphPosition]
+  result = newSeq[TextRow]()
+
+  let textLen = text.runeLen
+
+  proc fillGlyphsBuffer(textPos, textBytePos: Natural) =
+    let numGlyphs = min(glyphs.len, textLen - textPos)
+    discard g_nvgContext.textGlyphPositions(0, 0, text, textPos, numGlyphs,
+                                            glyphs)
+
+  const
+    NewLine = "\n".runeAt(0)
+    Space   = " ".runeAt(0)
+
+  var
+    prevRune: Rune
+
+    textPos = 0       # current rune position
+    textBytePos = 0   # byte offset of the current rune
+
+    # glyphPos is ahead by 1 rune, so glyphs[glyphPos].x will give us the end
+    # of the current rune
+    glyphPos = 1
+
+    rowStartPos = 0
+    rowStartX = glyphs[0].x
+
+    lastBreakPos = -1
+    lastBreakPosStartX: float
+
+
+  fillGlyphsBuffer(textPos, textBytePos)
+
+  for rune in text.runes:
+    if glyphPos >= glyphs.len:
+      fillGlyphsBuffer(textPos, textBytePos)
+      glyphPos = 0
+
+    if rune == NewLine and prevRune != NewLine:
+      discard
+
+    else:
+      if prevRune == NewLine:
+        # we're at the rune after the endline
+        let newLineEndX           = glyphs[glyphPos-1].x
+        let runeBeforeNewLineEndX = glyphs[max(glyphPos-2, 0)].x
+        let newLinePos = textPos - 1
+
+        result.add(TextRow(
+          startPos:   rowStartPos,
+          endPos:     newLinePos,
+          nextRowPos: textPos,
+          width:      runeBeforeNewLineEndX - rowStartX
+        ))
+
+        rowStartPos = textPos
+        rowStartX = newLineEndX
+        lastBreakPos = -1
+
+      else: # not a new line
+
+        # are we at the start of a new word?
+        if prevRune == Space and rune != Space:
+          lastBreakPos = textPos
+          let prevRuneEndX = glyphs[glyphPos-1].x
+          lastBreakPosStartX = prevRuneEndX
+
+        let currRuneEndX = glyphs[glyphPos].x
+
+        if currRuneEndX - rowStartX > maxWidth:
+          # break line at the last found break position
+          if lastBreakPos > 0:
+            let row = TextRow(
+              startPos:   rowStartPos,
+              endPos:     lastBreakPos-1,
+              nextRowPos: lastBreakPos,
+              width:      lastBreakPosStartX - rowStartX
+            )
+            result.add(row)
+
+            rowStartPos = row.nextRowPos
+            rowStartX = lastBreakPosStartX
+            lastBreakPos = -1
+
+          # no break position has been found (the line is basically a single
+          # long word)
+          else:
+            let prevRuneEndX = glyphs[glyphPos-1].x
+            let row = TextRow(
+              startPos:   rowStartPos,
+              endPos:     textPos-1,
+              nextRowPos: textPos,
+              width:      prevRuneEndX - rowStartX
+            )
+            result.add(row)
+
+            rowStartPos = row.nextRowPos
+            rowStartX = prevRuneEndX
+            lastBreakPos = -1
+
+    prevRune = rune
+
+    inc(textPos)
+    inc(textBytePos, rune.size)
+    inc(glyphPos)
+
 
 # vim: et:ts=2:sw=2:fdm=marker
