@@ -106,8 +106,9 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
 
   ##########################################
 
-  var txt = " "
-#  var txt = "\ni\nii\n\niii\n\n\n  does not\nwork."
+#  var txt = textAreaVal1
+#  var txt = "i\nF\nii\nFi\n\niii\n\n\ndoes not\nwork."
+  var txt = "i\nii\n\niii\n\n\ndoes not\nwork.\n"
 
   if printBreakRows:
     let rows = breakLines(txt, 300)
@@ -116,7 +117,8 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
     echo vg.textWidth("i")
     echo vg.textWidth("ii")
     echo vg.textWidth("iii")
-    echo vg.textWidth("  does not")
+    echo vg.textWidth("does not")
+    echo vg.textWidth("work.")
 
     for row in rows:
       echo row
