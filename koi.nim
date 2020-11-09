@@ -2453,33 +2453,33 @@ proc handleCommonTextEditingShortcuts(
   # Cursor movement
 
   if sc in shortcuts[tesCursorOneCharLeft]:
-    let newCursorPos = max(cursorPos - 1, 0)
-    res.cursorPos = newCursorPos
-    res.selection = NoSelection
+    if hasSelection(selection):
+      res.cursorPos = normaliseSelection(selection).startPos
+      res.selection = NoSelection
+    else:
+      res.cursorPos = max(cursorPos - 1, 0)
 
   elif sc in shortcuts[tesCursorOneCharRight]:
-    let newCursorPos = min(cursorPos + 1, text.runeLen)
-    res.cursorPos = newCursorPos
-    res.selection = NoSelection
+    if hasSelection(selection):
+      res.cursorPos = normaliseSelection(selection).endPos
+      res.selection = NoSelection
+    else:
+      res.cursorPos = min(cursorPos + 1, text.runeLen)
 
   elif sc in shortcuts[tesCursorToPreviousWord]:
-    let newCursorPos = findPrevWordStart(text, cursorPos)
-    res.cursorPos = newCursorPos
+    res.cursorPos = findPrevWordStart(text, cursorPos)
     res.selection = NoSelection
 
   elif sc in shortcuts[tesCursorToNextWord]:
-    let newCursorPos = findNextWordEnd(text, cursorPos)
-    res.cursorPos = newCursorPos
+    res.cursorPos = findNextWordEnd(text, cursorPos)
     res.selection = NoSelection
 
   elif sc in shortcuts[tesCursorToDocumentStart]:
-    let newCursorPos = 0
-    res.cursorPos = newCursorPos
+    res.cursorPos = 0
     res.selection = NoSelection
 
   elif sc in shortcuts[tesCursorToDocumentEnd]:
-    let newCursorPos = text.runeLen
-    res.cursorPos = newCursorPos
+    res.cursorPos = text.runeLen
     res.selection = NoSelection
 
   # Selection
@@ -2785,7 +2785,6 @@ proc textBreakLines*(text: string, maxWidth: float,
 
 # }}}
 # }}}
-
 # {{{ TextField
 
 type TextFieldStyle* = ref object
@@ -3107,13 +3106,11 @@ proc textField(
       else:
         # Cursor movement
         if sc in shortcuts[tesCursorToLineStart]:
-          let newCursorPos = 0
-          tf.cursorPos = newCursorPos
+          tf.cursorPos = 0
           tf.selection = NoSelection
 
         elif sc in shortcuts[tesCursorToLineEnd]:
-          let newCursorPos = text.runeLen
-          tf.cursorPos = newCursorPos
+          tf.cursorPos = text.runeLen
           tf.selection = NoSelection
 
         # Selection
