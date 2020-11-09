@@ -3,6 +3,7 @@ import math
 import lenientops
 import options
 import sets
+import sequtils
 import strformat
 import strutils
 import tables
@@ -562,175 +563,230 @@ type KeyShortcut* = object
   mods*:   set[ModifierKey]
 
 proc mkKeyShortcut*(k: Key, m: set[ModifierKey]): KeyShortcut {.inline.} =
-  KeyShortcut(key: k, mods: m)
+  # ignore the numlock mod key state for non-keypad shortcuts
+  if not (k >= keyKp0 and k <= keyKpDecimal):
+    KeyShortcut(key: k, mods: m - {mkNumLock})
+  else:
+    KeyShortcut(key: k, mods: m)
 
 # {{{ Shortcut definitions
 
 type TextEditShortcuts = enum
-  tesPrevTextField, # TODO "global" widget level shortcut
-  tesNextTextField, # TODO "global" widget level shortcut
-
-  tesCursorOneCharLeft, # common
-  tesCursorOneCharRight, # common
-  tesCursorToPreviousWord, # common
-  tesCursorToNextWord, # common
+  tesCursorOneCharLeft,
+  tesCursorOneCharRight,
+  tesCursorToPreviousWord,
+  tesCursorToNextWord,
+  tesCursorToPreviousLine,
+  tesCursorToNextLine,
   tesCursorToLineStart,
   tesCursorToLineEnd,
+  tesCursorToDocumentStart,
+  tesCursorToDocumentEnd,
 
-  tesSelectionOneCharLeft, # common
-  tesSelectionOneCharRight, # common
-  tesSelectionToPreviousWord, # common
-  tesSelectionToNextWord, # common
+  tesSelectionAll,
+  tesSelectionOneCharLeft,
+  tesSelectionOneCharRight,
+  tesSelectionToPreviousWord,
+  tesSelectionToNextWord,
   tesSelectionToLineStart,
   tesSelectionToLineEnd,
+  tesSelectionToDocumentStart,
+  tesSelectionToDocumentEnd,
 
-  tesDeleteOneCharLeft, # common
-  tesDeleteOneCharRight, # common
-  tesDeleteWordToRight, # common
-  tesDeleteWordToLeft, # common
+  tesDeleteOneCharLeft,
+  tesDeleteOneCharRight,
+  tesDeleteWordToRight,
+  tesDeleteWordToLeft,
   tesDeleteToLineStart,
   tesDeleteToLineEnd,
 
-  tesSwitchChars,
+  tesCutText,
+  tesCopyText,
+  tesPasteText,
 
-  tesCutText, # common
-  tesCopyText, # common
-  tesPasteText, # common
+  tesPrevTextField, # TODO "global" widget level shortcut
+  tesNextTextField, # TODO "global" widget level shortcut
 
-  tesAccept, # common
-  tesCancel # common
+  tesAccept,
+  tesCancel
 
 
-when defined(macosx):
-  let g_textFieldEditShortcuts = {
-    tesPrevTextField:        @[mkKeyShortcut(keyTab,       {mkShift})],
-    tesNextTextField:        @[mkKeyShortcut(keyTab,       {})],
+# {{{ Shortcuts - Windows/Linux
 
-    tesCursorOneCharLeft:    @[mkKeyShortcut(keyLeft,      {}),
-                               mkKeyShortcut(keyB,         {mkCtrl})],
+let g_textFieldEditShortcuts_WinLinux = {
 
-    tesCursorOneCharRight:   @[mkKeyShortcut(keyRight,     {}),
-                               mkKeyShortcut(keyF,         {mkCtrl})],
+  # Cursor movement
+  tesCursorOneCharLeft:       @[mkKeyShortcut(keyLeft,    {}),
+                                mkKeyShortcut(keyKp4,     {})],
 
-    tesCursorToPreviousWord: @[mkKeyShortcut(keyLeft,      {mkAlt})],
-    tesCursorToNextWord:     @[mkKeyShortcut(keyRight,     {mkAlt})],
+  tesCursorOneCharRight:      @[mkKeyShortcut(keyRight,   {}),
+                                mkKeyShortcut(keyKp6,     {})],
 
-    tesCursorToLineStart:    @[mkKeyShortcut(keyLeft,      {mkSuper}),
-                               mkKeyShortcut(keyA,         {mkCtrl}),
-                               mkKeyShortcut(keyP,         {mkCtrl}),
-                               mkKeyShortcut(keyV,         {mkShift, mkCtrl}),
-                               mkKeyShortcut(keyUp,        {})],
+  tesCursorToPreviousWord:    @[mkKeyShortcut(keyLeft,    {mkCtrl}),
+                                mkKeyShortcut(keyKp4,     {mkCtrl}),
+                                mkKeyShortcut(keySlash,   {mkCtrl})],
 
-    tesCursorToLineEnd:      @[mkKeyShortcut(keyRight,     {mkSuper}),
-                               mkKeyShortcut(keyE,         {mkCtrl}),
-                               mkKeyShortcut(keyN,         {mkCtrl}),
-                               mkKeyShortcut(keyV,         {mkCtrl}),
-                               mkKeyShortcut(Key.keyDown,  {})],
+  tesCursorToNextWord:        @[mkKeyShortcut(keyRight,   {mkCtrl}),
+                                mkKeyShortcut(keyKp6,     {mkCtrl})],
 
-    tesSelectionOneCharLeft:    @[mkKeyShortcut(keyLeft,   {mkShift})],
-    tesSelectionOneCharRight:   @[mkKeyShortcut(keyRight,  {mkShift})],
-    tesSelectionToPreviousWord: @[mkKeyShortcut(keyLeft,   {mkShift, mkAlt})],
-    tesSelectionToNextWord:     @[mkKeyShortcut(keyRight,  {mkShift, mkAlt})],
+  tesCursorToPreviousLine:    @[mkKeyShortcut(keyUp,      {}),
+                                mkKeyShortcut(keyKp8,     {})],
 
-    tesSelectionToLineStart: @[mkKeyShortcut(keyLeft,      {mkShift, mkSuper}),
-                               mkKeyShortcut(keyA,         {mkShift, mkCtrl}),
-                               mkKeyShortcut(keyUp,        {mkShift})],
+  tesCursorToNextLine:       @[mkKeyShortcut(Key.keyDown, {}),
+                               mkKeyShortcut(keyKp2,      {})],
 
-    tesSelectionToLineEnd:   @[mkKeyShortcut(keyRight,     {mkShift, mkSuper}),
-                               mkKeyShortcut(keyE,         {mkShift, mkCtrl}),
-                               mkKeyShortcut(Key.keyDown,  {mkShift})],
+  tesCursorToLineStart:       @[mkKeyShortcut(keyHome,    {}),
+                                mkKeyShortcut(keyKp7,     {})],
 
-    tesDeleteOneCharLeft:    @[mkKeyShortcut(keyBackspace, {}),
-                               mkKeyShortcut(keyH,         {mkCtrl})],
+  tesCursorToLineEnd:         @[mkKeyShortcut(keyEnd,     {}),
+                                mkKeyShortcut(keyKp1,     {})],
 
-    tesDeleteOneCharRight:   @[mkKeyShortcut(keyDelete,    {})],
+  tesCursorToDocumentStart:   @[mkKeyShortcut(keyHome,    {mkCtrl}),
+                                mkKeyShortcut(keyKp7,     {mkCtrl})],
 
-    tesDeleteWordToRight:    @[mkKeyShortcut(keyDelete,    {mkAlt}),
-                               mkKeyShortcut(keyD,         {mkCtrl})],
+  tesCursorToDocumentEnd:     @[mkKeyShortcut(keyEnd,     {mkCtrl}),
+                                mkKeyShortcut(keyKp1,     {mkCtrl})],
 
-    tesDeleteWordToLeft:     @[mkKeyShortcut(keyBackspace, {mkAlt})],
-    tesDeleteToLineStart:    @[mkKeyShortcut(keyBackspace, {mkSuper})],
+  # Selection
+  tesSelectionAll:            @[mkKeyShortcut(keyA,       {mkCtrl})],
 
-    tesDeleteToLineEnd:      @[mkKeyShortcut(keyDelete,    {mkAlt}),
-                               mkKeyShortcut(keyK,         {mkCtrl})],
+  tesSelectionOneCharLeft:    @[mkKeyShortcut(keyLeft,    {mkShift}),
+                                mkKeyShortcut(keyKp4,     {mkShift})],
 
-    tesSwitchChars:          @[mkKeyShortcut(keyT,         {mkCtrl})],
+  tesSelectionOneCharRight:   @[mkKeyShortcut(keyRight,   {mkShift}),
+                                mkKeyShortcut(keyKp6,     {mkShift})],
 
-    tesCutText:              @[mkKeyShortcut(keyX,         {mkSuper})],
-    tesCopyText:             @[mkKeyShortcut(keyC,         {mkSuper})],
-    tesPasteText:            @[mkKeyShortcut(keyV,         {mkSuper})],
+  tesSelectionToPreviousWord: @[mkKeyShortcut(keyLeft,    {mkCtrl, mkShift}),
+                                mkKeyShortcut(keykp4,     {mkCtrl, mkShift})],
 
-    tesAccept:               @[mkKeyShortcut(keyEnter,     {}),
-                               mkKeyShortcut(keyKpEnter,   {})],
+  tesSelectionToNextWord:     @[mkKeyShortcut(keyRight,   {mkCtrl, mkShift}),
+                                mkKeyShortcut(keykp6,     {mkCtrl, mkShift})],
 
-    tesCancel:               @[mkKeyShortcut(keyEscape,    {}),
-                               mkKeyShortcut(keyLeftBracket, {mkCtrl})]
-  }.toTable
+  tesSelectionToLineStart:    @[mkKeyShortcut(keyHome,    {mkShift}),
+                                mkKeyShortcut(keyKp7,     {mkShift})],
 
-else: # windows & linux
-  let g_textFieldEditShortcuts = {
-    tesPrevTextField:        @[mkKeyShortcut(keyTab,       {mkShift})],
-    tesNextTextField:        @[mkKeyShortcut(keyTab,       {})],
+  tesSelectionToLineEnd:      @[mkKeyShortcut(keyEnd,     {mkShift}),
+                                mkKeyShortcut(keyKp1,     {mkShift})],
 
-    tesCursorOneCharLeft:    @[mkKeyShortcut(keyLeft,      {}),
-                               mkKeyShortcut(keyB,         {mkCtrl})],
+  tesSelectionToDocumentStart:   @[mkKeyShortcut(keyHome, {mkCtrl, mkShift}),
+                                mkKeyShortcut(keyKp7,     {mkCtrl, mkShift})],
 
-    tesCursorOneCharRight:   @[mkKeyShortcut(keyRight,     {}),
-                               mkKeyShortcut(keyF,         {mkCtrl})],
+  tesSelectionToDocumentEnd:  @[mkKeyShortcut(keyEnd,     {mkCtrl, mkShift}),
+                                mkKeyShortcut(keyKp1,     {mkCtrl, mkShift})],
 
-    tesCursorToPreviousWord: @[mkKeyShortcut(keyLeft,      {mkAlt})],
-    tesCursorToNextWord:     @[mkKeyShortcut(keyRight,     {mkAlt})],
+  # Delete
+  tesDeleteOneCharLeft:     @[mkKeyShortcut(keyBackspace, {})],
 
-    tesCursorToLineStart:    @[mkKeyShortcut(keyLeft,      {mkCtrl}),
-                               mkKeyShortcut(keyA,         {mkCtrl}),
-                               mkKeyShortcut(keyP,         {mkCtrl}),
-                               mkKeyShortcut(keyUp,        {})],
+  tesDeleteOneCharRight:    @[mkKeyShortcut(keyDelete,    {}),
+                              mkKeyShortcut(keyKpDecimal, {})],
 
-    tesCursorToLineEnd:      @[mkKeyShortcut(keyRight,     {mkCtrl}),
-                               mkKeyShortcut(keyE,         {mkCtrl}),
-                               mkKeyShortcut(keyN,         {mkCtrl}),
-                               mkKeyShortcut(Key.keyDown,  {})],
+  tesDeleteWordToRight:     @[mkKeyShortcut(keyDelete,    {mkCtrl}),
+                              mkKeyShortcut(keykpDecimal, {mkCtrl})],
 
-    tesSelectionOneCharLeft:    @[mkKeyShortcut(keyLeft,   {mkShift})],
-    tesSelectionOneCharRight:   @[mkKeyShortcut(keyRight,  {mkShift})],
-    tesSelectionToPreviousWord: @[mkKeyShortcut(keyLeft,   {mkShift, mkAlt})],
-    tesSelectionToNextWord:     @[mkKeyShortcut(keyRight,  {mkShift, mkAlt})],
+  tesDeleteWordToLeft:      @[mkKeyShortcut(keyBackspace, {mkCtrl})],
 
-    tesSelectionToLineStart: @[mkKeyShortcut(keyLeft,      {mkShift, mkCtrl}),
-                               mkKeyShortcut(keyA,         {mkShift, mkCtrl}),
-                               mkKeyShortcut(keyUp,        {mkShift})],
+  tesDeleteToLineStart:     @[mkKeyShortcut(keyBackspace, {mkCtrl, mkShift})],
 
-    tesSelectionToLineEnd:   @[mkKeyShortcut(keyRight,     {mkShift, mkCtrl}),
-                               mkKeyShortcut(keyE,         {mkShift, mkCtrl}),
-                               mkKeyShortcut(Key.keyDown,  {mkShift})],
+  tesDeleteToLineEnd:       @[mkKeyShortcut(keyDelete,    {mkCtrl, mkShift}),
+                              mkKeyShortcut(keykpDecimal, {mkCtrl, mkShift})],
 
-    tesDeleteOneCharLeft:    @[mkKeyShortcut(keyBackspace, {}),
-                               mkKeyShortcut(keyH,         {mkCtrl})],
+  # Clipboard
+  tesCutText:                 @[mkKeyShortcut(keyX,       {mkCtrl})],
+  tesCopyText:                @[mkKeyShortcut(keyC,       {mkCtrl})],
+  tesPasteText:               @[mkKeyShortcut(keyV,       {mkCtrl})],
 
-    tesDeleteOneCharRight:   @[mkKeyShortcut(keyDelete,    {})],
+  # General
+  tesPrevTextField:           @[mkKeyShortcut(keyTab,     {mkShift})],
+  tesNextTextField:           @[mkKeyShortcut(keyTab,     {})],
 
-    tesDeleteWordToRight:    @[mkKeyShortcut(keyDelete,    {mkAlt}),
-                               mkKeyShortcut(keyD,         {mkCtrl})],
+  tesAccept:                  @[mkKeyShortcut(keyEnter,   {}),
+                                mkKeyShortcut(keyKpEnter, {})],
 
-    tesDeleteWordToLeft:     @[mkKeyShortcut(keyBackspace, {mkAlt})],
-    tesDeleteToLineStart:    @[mkKeyShortcut(keyBackspace, {mkCtrl})],
+  tesCancel:              @[mkKeyShortcut(keyEscape,      {}),
+                            mkKeyShortcut(keyLeftBracket, {mkCtrl})]
+}.toTable
 
-    tesDeleteToLineEnd:      @[mkKeyShortcut(keyDelete,    {mkAlt}),
-                               mkKeyShortcut(keyK,         {mkCtrl})],
+# }}}
+# {{{ Shortcuts - Mac
+# TODO update
+let g_textFieldEditShortcuts_Mac = {
+  tesPrevTextField:        @[mkKeyShortcut(keyTab,       {mkShift})],
+  tesNextTextField:        @[mkKeyShortcut(keyTab,       {})],
 
-    tesSwitchChars:          @[mkKeyShortcut(keyT,         {mkCtrl})],
 
-    tesCutText:              @[mkKeyShortcut(keyX,         {mkCtrl})],
-    tesCopyText:             @[mkKeyShortcut(keyC,         {mkCtrl})],
-    tesPasteText:            @[mkKeyShortcut(keyV,         {mkCtrl})],
+  tesCursorOneCharLeft:    @[mkKeyShortcut(keyLeft,      {}),
+                             mkKeyShortcut(keyB,         {mkCtrl})],
 
-    tesAccept:               @[mkKeyShortcut(keyEnter,     {}),
-                               mkKeyShortcut(keyKpEnter,   {})],
+  tesCursorOneCharRight:   @[mkKeyShortcut(keyRight,     {}),
+                             mkKeyShortcut(keyF,         {mkCtrl})],
 
-    tesCancel:               @[mkKeyShortcut(keyEscape,    {}),
-                               mkKeyShortcut(keyLeftBracket, {mkCtrl})]
-  }.toTable
+  tesCursorToPreviousWord: @[mkKeyShortcut(keyLeft,      {mkAlt})],
+  tesCursorToNextWord:     @[mkKeyShortcut(keyRight,     {mkAlt})],
 
+  tesCursorToPreviousLine,
+  tesCursorToNextLine,
+
+  tesCursorToLineStart:    @[mkKeyShortcut(keyLeft,      {mkSuper}),
+                             mkKeyShortcut(keyA,         {mkCtrl}),
+                             mkKeyShortcut(keyP,         {mkCtrl}),
+                             mkKeyShortcut(keyV,         {mkShift, mkCtrl}),
+                             mkKeyShortcut(keyUp,        {})],
+
+  tesCursorToLineEnd:      @[mkKeyShortcut(keyRight,     {mkSuper}),
+                             mkKeyShortcut(keyE,         {mkCtrl}),
+                             mkKeyShortcut(keyN,         {mkCtrl}),
+                             mkKeyShortcut(keyV,         {mkCtrl}),
+                             mkKeyShortcut(Key.keyDown,  {})],
+
+  tesCursorToDocumentStart,
+  tesCursorToDocumentEnd,
+
+
+  tesSelectionAll,
+
+  tesSelectionOneCharLeft:    @[mkKeyShortcut(keyLeft,   {mkShift})],
+  tesSelectionOneCharRight:   @[mkKeyShortcut(keyRight,  {mkShift})],
+  tesSelectionToPreviousWord: @[mkKeyShortcut(keyLeft,   {mkShift, mkAlt})],
+  tesSelectionToNextWord:     @[mkKeyShortcut(keyRight,  {mkShift, mkAlt})],
+
+  tesSelectionToLineStart: @[mkKeyShortcut(keyLeft,      {mkShift, mkSuper}),
+                             mkKeyShortcut(keyA,         {mkShift, mkCtrl}),
+                             mkKeyShortcut(keyUp,        {mkShift})],
+
+  tesSelectionToLineEnd:   @[mkKeyShortcut(keyRight,     {mkShift, mkSuper}),
+                             mkKeyShortcut(keyE,         {mkShift, mkCtrl}),
+                             mkKeyShortcut(Key.keyDown,  {mkShift})],
+
+
+  tesDeleteOneCharLeft:    @[mkKeyShortcut(keyBackspace, {}),
+                             mkKeyShortcut(keyH,         {mkCtrl})],
+
+  tesDeleteOneCharRight:   @[mkKeyShortcut(keyDelete,    {})],
+
+  tesDeleteWordToRight:    @[mkKeyShortcut(keyDelete,    {mkAlt}),
+                             mkKeyShortcut(keyD,         {mkCtrl})],
+
+  tesDeleteWordToLeft:     @[mkKeyShortcut(keyBackspace, {mkAlt})],
+  tesDeleteToLineStart:    @[mkKeyShortcut(keyBackspace, {mkSuper})],
+
+  tesDeleteToLineEnd:      @[mkKeyShortcut(keyDelete,    {mkAlt}),
+                             mkKeyShortcut(keyK,         {mkCtrl})],
+
+  tesCutText:              @[mkKeyShortcut(keyX,         {mkSuper})],
+  tesCopyText:             @[mkKeyShortcut(keyC,         {mkSuper})],
+  tesPasteText:            @[mkKeyShortcut(keyV,         {mkSuper})],
+
+  tesAccept:               @[mkKeyShortcut(keyEnter,     {}),
+                             mkKeyShortcut(keyKpEnter,   {})],
+
+  tesCancel:               @[mkKeyShortcut(keyEscape,    {}),
+                             mkKeyShortcut(keyLeftBracket, {mkCtrl})]
+}.toTable
+
+# }}}
+
+# TODO make this configurable
+let g_textFieldEditShortcuts = g_textFieldEditShortcuts_WinLinux
 
 # }}}
 
@@ -2287,7 +2343,7 @@ proc scrollBarPost() =
 # }}}
 # }}}
 
-# {{{ Common text editing functions
+# {{{ Text functions
 
 type TextEditResult = object
   text:      string
@@ -2394,6 +2450,8 @@ proc handleCommonTextEditingShortcuts(
   res.cursorPos = cursorPos
   res.selection = selection
 
+  # Cursor movement
+
   if sc in shortcuts[tesCursorOneCharLeft]:
     let newCursorPos = max(cursorPos - 1, 0)
     res.cursorPos = newCursorPos
@@ -2414,15 +2472,22 @@ proc handleCommonTextEditingShortcuts(
     res.cursorPos = newCursorPos
     res.selection = NoSelection
 
-  elif sc in shortcuts[tesCursorToLineStart]:
+  elif sc in shortcuts[tesCursorToDocumentStart]:
     let newCursorPos = 0
     res.cursorPos = newCursorPos
     res.selection = NoSelection
 
-  elif sc in shortcuts[tesCursorToLineEnd]:
+  elif sc in shortcuts[tesCursorToDocumentEnd]:
     let newCursorPos = text.runeLen
     res.cursorPos = newCursorPos
     res.selection = NoSelection
+
+  # Selection
+
+  elif sc in shortcuts[tesSelectionAll]:
+    res.selection.startPos = 0
+    res.selection.endPos = text.runeLen
+    res.cursorPos = text.runeLen
 
   elif sc in shortcuts[tesSelectionOneCharLeft]:
     let newCursorPos = max(cursorPos - 1, 0)
@@ -2444,15 +2509,17 @@ proc handleCommonTextEditingShortcuts(
     res.selection = updateSelection(selection, cursorPos, newCursorPos)
     res.cursorPos = newCursorPos
 
-  elif sc in shortcuts[tesSelectionToLineStart]:
+  elif sc in shortcuts[tesSelectionToDocumentStart]:
     let newCursorPos = 0
     res.selection = updateSelection(selection, cursorPos, newCursorPos)
     res.cursorPos = newCursorPos
 
-  elif sc in shortcuts[tesSelectionToLineEnd]:
+  elif sc in shortcuts[tesSelectionToDocumentEnd]:
     let newCursorPos = text.runeLen
     res.selection = updateSelection(selection, cursorPos, newCursorPos)
     res.cursorPos = newCursorPos
+
+  # Delete
 
   elif sc in shortcuts[tesDeleteOneCharLeft]:
     if hasSelection(selection):
@@ -2485,15 +2552,7 @@ proc handleCommonTextEditingShortcuts(
       res.text = text.runeSubStr(0, p) & text.runeSubStr(cursorPos)
       res.cursorPos = p
 
-  elif sc in shortcuts[tesDeleteToLineStart]:
-    res.text = text.runeSubStr(cursorPos)
-    res.cursorPos = 0
-
-  elif sc in shortcuts[tesDeleteToLineEnd]:
-    res.text = text.runeSubStr(0, cursorPos)
-
-  elif sc in shortcuts[tesSwitchChars]:
-    discard # TODO
+  # Clipboard
 
   elif sc in shortcuts[tesCutText]:
     if hasSelection(selection):
@@ -2516,7 +2575,217 @@ proc handleCommonTextEditingShortcuts(
   result = if eventHandled: res.some else: TextEditResult.none
 
 # }}}
+# {{{ breakLines*()
+type
+  TextRow* = object
+    startPos*: Natural
+    startBytePos*: Natural
+
+    endPos*: Natural
+    endBytePos*: Natural
+
+    nextRowPos*: int
+    nextRowBytePos*: int
+
+    width*: float
+    # TODO
+#    minX*:  cfloat
+#    maxX*:  cfloat
+
+
+const BreakingRunes = @[
+  # Breaking spaces
+  "\u0020", # space
+  "\u2000", # en quad
+  "\u2001", # em quad
+  "\u2002", # en space
+  "\u2003", # em space
+  "\u2004", # three-per-em space
+  "\u2005", # four-per-em space
+  "\u2006", # six-per-em space
+  "\u2008", # punctuation space
+  "\u2009", # thin space
+  "\u200a", # hair space
+  "\u205f", # medium mathematical space
+  "\u3000", # ideographic space
+
+  # Breaking hyphens
+  "\u002d", # hyphen-minus
+  "\u00ad", # soft hyphen (shy)
+  "\u2010", # hyphen
+  "\u2012", # figure dash
+  "\u2013", # en dash
+  "\u007c", # vertical line
+].mapIt(it.runeAt(0))
+
+
+# TODO support for start & end pos
+proc textBreakLines*(text: string, maxWidth: float,
+                     maxRows: int = -1): seq[TextRow] =
+  var glyphs: array[1024, GlyphPosition]
+  result = newSeq[TextRow]()
+
+  let textLen = text.runeLen
+
+  proc fillGlyphsBuffer(textPos, textBytePos: Natural) =
+    glyphs[0] = glyphs[^2]
+    glyphs[1] = glyphs[^1]
+    # TODO using maxX as the next start pos might not be entirely accurate
+    # we should use the x pos of the next glyph
+    discard g_nvgContext.textGlyphPositions(glyphs[1].maxX, 0, text,
+                                            startPos = textBytePos,
+                                            toOpenArray(glyphs, 2, glyphs.high))
+  const
+    NewLine = "\n".runeAt(0)
+
+  var
+    prevRune: Rune
+
+    textPos = 0       # current rune position
+    textBytePos = 0   # byte offset of the current rune
+    prevTextPos = 0
+    prevTextBytePos = 0
+
+    # glyphPos is ahead by 1 rune, so glyphs[glyphPos].x will give us the end
+    # of the current rune
+    glyphPos = 3
+
+    rowStartPos, rowStartBytePos: Natural
+    rowStartX = glyphs[0].x
+
+    lastBreakPos = -1
+    lastBreakBytePos = -1
+    lastBreakPosStartX: float
+    lastBreakPosPrev, lastBreakBytePosPrev: Natural
+
+
+  fillGlyphsBuffer(textPos, textBytePos)
+
+  for rune in text.runes:
+    if glyphPos >= glyphs.len:
+      fillGlyphsBuffer(textPos, textBytePos)
+      glyphPos = 2
+
+
+    if rune == NewLine and prevRune != NewLine:
+      discard
+
+    else:
+      if prevRune == NewLine:
+        # we're at the rune after the endline
+        let newLineEndX           = glyphs[glyphPos-1].x
+        let runeBeforeNewLineEndX = glyphs[glyphPos-2].x
+        let newLinePos = textPos - 1
+
+        let row = TextRow(
+          startPos:       rowStartPos,
+          startBytePos:   rowStartBytePos,
+          endPos:         prevTextPos,
+          endBytePos:     prevTextBytePos,
+          nextRowPos:     textPos,
+          nextRowBytePos: textBytePos,
+          width:          runeBeforeNewLineEndX - rowStartX
+        )
+        result.add(row)
+
+        rowStartPos = row.nextRowPos
+        rowStartBytePos = row.nextRowBytePos
+        rowStartX = newLineEndX
+        lastBreakPos = -1
+        lastBreakBytePos = -1
+
+      else: # not a new line
+
+        # are we at the start of a new word?
+        if prevRune in BreakingRunes and rune notin BreakingRunes:
+          lastBreakPos = textPos
+          lastBreakBytePos = textBytePos
+
+          lastBreakPosPrev = prevTextPos
+          lastBreakBytePosPrev = prevTextBytePos
+
+          let prevRuneEndX = glyphs[glyphPos-1].x
+          lastBreakPosStartX = prevRuneEndX
+
+        let currRuneEndX = glyphs[glyphPos].x
+
+        if currRuneEndX - rowStartX > maxWidth:
+          # break line at the last found break position
+          if lastBreakPos > 0:
+            let row = TextRow(
+              startPos:       rowStartPos,
+              startBytePos:   rowStartBytePos,
+              endPos:         lastBreakPosPrev,
+              endBytePos:     lastBreakBytePosPrev,
+              nextRowPos:     lastBreakPos,
+              nextRowBytePos: lastBreakBytePos,
+              width:          lastBreakPosStartX - rowStartX
+            )
+            result.add(row)
+
+            rowStartPos = row.nextRowPos
+            rowStartBytePos = row.nextRowBytePos
+            rowStartX = lastBreakPosStartX
+            lastBreakPos = -1
+            lastBreakBytePos = -1
+
+          # no break position has been found (the line is basically a single
+          # long word)
+          else:
+            let prevRuneEndX = glyphs[glyphPos-1].x
+            let row = TextRow(
+              startPos:       rowStartPos,
+              startBytePos:   rowStartBytePos,
+              endPos:         prevTextPos,
+              endBytePos:     prevTextBytePos,
+              nextRowPos:     textPos,
+              nextRowBytePos: textBytePos,
+              width:          prevRuneEndX - rowStartX
+            )
+            result.add(row)
+
+            rowStartPos = row.nextRowPos
+            rowStartBytePos = row.nextRowBytePos
+            rowStartX = prevRuneEndX
+            lastBreakPos = -1
+            lastBreakBytePos = -1
+
+    # flush last row if we're processing the last rune
+    if textPos == textLen-1:
+      if rune == NewLine:
+        let runeBeforeNewLineEndX = glyphs[glyphPos-1].x
+        result.add(TextRow(
+          startPos:       rowStartPos,
+          startBytePos:   rowStartBytePos,
+          endPos:         textPos,
+          endBytePos:     textBytePos,
+          nextRowPos:     -1,
+          nextRowBytePos: -1,
+          width:          runeBeforeNewLineEndX - rowStartX
+        ))
+      else:
+        let currRuneEndX = glyphs[glyphPos].x
+        result.add(TextRow(
+          startPos:       rowStartPos,
+          startBytePos:   rowStartBytePos,
+          endPos:         textPos,
+          endBytePos:     textBytePos,
+          nextRowPos:     -1,
+          nextRowBytePos: -1,
+          width:          currRuneEndX - rowStartX
+        ))
+
+    prevRune = rune
+    prevTextPos = textPos
+    prevTextBytePos = textBytePos
+
+    inc(textPos)
+    inc(textBytePos, rune.size)
+    inc(glyphPos)
+
 # }}}
+# }}}
+
 # {{{ TextField
 
 type TextFieldStyle* = ref object
@@ -2830,14 +3099,58 @@ proc textField(
 
       let res = handleCommonTextEditingShortcuts(sc, text,
                                                  tf.cursorPos, tf.selection)
-
       if res.isSome:
         text = res.get.text
         tf.cursorPos = res.get.cursorPos
         tf.selection = res.get.selection
 
       else:
-        if sc in shortcuts[tesPrevTextField]:
+        # Cursor movement
+        if sc in shortcuts[tesCursorToLineStart]:
+          let newCursorPos = 0
+          tf.cursorPos = newCursorPos
+          tf.selection = NoSelection
+
+        elif sc in shortcuts[tesCursorToLineEnd]:
+          let newCursorPos = text.runeLen
+          tf.cursorPos = newCursorPos
+          tf.selection = NoSelection
+
+        # Selection
+        elif sc in shortcuts[tesSelectionToLineStart]:
+          let newCursorPos = 0
+          tf.selection = updateSelection(tf.selection, tf.cursorPos,
+                                         newCursorPos)
+          tf.cursorPos = newCursorPos
+
+        elif sc in shortcuts[tesSelectionToLineEnd]:
+          let newCursorPos = text.runeLen
+          tf.selection = updateSelection(tf.selection, tf.cursorPos,
+                                         newCursorPos)
+          tf.cursorPos = newCursorPos
+
+        # Delete
+        elif sc in shortcuts[tesDeleteToLineStart]:
+          if hasSelection(tf.selection):
+            let res = deleteSelection(text, tf.selection, tf.cursorPos)
+            text = res.text
+            tf.cursorPos = res.cursorPos
+            tf.selection = res.selection
+          else:
+            text = text.runeSubStr(tf.cursorPos)
+            tf.cursorPos = 0
+
+        elif sc in shortcuts[tesDeleteToLineEnd]:
+          if hasSelection(tf.selection):
+            let res = deleteSelection(text, tf.selection, tf.cursorPos)
+            text = res.text
+            tf.cursorPos = res.cursorPos
+            tf.selection = res.selection
+          else:
+            text = text.runeSubStr(0, tf.cursorPos)
+
+        # General
+        elif sc in shortcuts[tesPrevTextField]:
           text = enforceConstraint(text, tf.originalText)
           exitEditMode()
           tf.activatePrev = true
@@ -3220,23 +3533,8 @@ proc textArea(
     else:
       if ui.mbLeftDown:
         if mouseInside(x, y, w, h):
-#[          tf.selection = NoSelection
-          tf.cursorPos = getCursorPosAtXPos(ui.mx)
-
-          if isDoubleClick():
-            tf.selection.startPos = findPrevWordStart(text, tf.cursorPos)
-            tf.selection.endPos = findNextWordEnd(text, tf.cursorPos)
-            tf.cursorPos = tf.selection.endPos
-            tf.state = tasDoubleClicked
-          else:
-            ui.x0 = ui.mx
-            tf.state = tasDragStart
-
-        # LMB pressed outside the text field exits edit mode
-        ]#
           discard
         else:
-#          text = enforceConstraint(text, tf.originalText)
           exitEditMode()
 
     # Handle text field shortcuts
@@ -3263,20 +3561,17 @@ proc textArea(
 
       else:
         if sc in shortcuts[tesPrevTextField]:
-#          text = enforceConstraint(text, ta.originalText)
           exitEditMode()
           ta.activatePrev = true
           ta.itemToActivate = ta.prevItem
           setFramesLeft()
 
         elif sc in shortcuts[tesNextTextField]:
-#          text = enforceConstraint(text, ta.originalText)
           exitEditMode()
           ta.activateNext = true
           setFramesLeft()
 
         elif sc in shortcuts[tesAccept]:
-#          text = enforceConstraint(text, ta.originalText)
           exitEditMode()
           # Note we won't process any remaining characters in the buffer
           # because exitEditMode() clears the key buffer.
@@ -3357,29 +3652,25 @@ proc textArea(
     var (_, _, lineHeight) = vg.textMetrics()
     lineHeight = lineHeight * s.textLineHeight
 
-    let rows = vg.textBreakLines(text, textBoxW)
+    let rows = textBreakLines(text, textBoxW)
 
     var
       textX = textBoxX
       textY = y + lineHeight
 
     for rowIdx, row in rows.pairs():
-      discard vg.text(textX, textY, text, row.startPos, row.endPos)
+      discard vg.text(textX, textY, text, row.startBytePos, row.endBytePos)
 
       let numGlyphs = vg.textGlyphPositions(textX, textY,
-                                            text, row.startPos, row.endPos,
+                                            text, row.startBytePos, row.endBytePos,
                                             glyphs)
-
-      let startRunePos = text.substr(0, row.startPos-1).runeLen
-      let lastRunePos  = text.substr(0, row.nextPos-2).runeLen
-
       var cursorX = float.none
       var drawCursorAtEndOfLine = false
 
-      if ta.cursorPos >= startRunePos and
-         ta.cursorPos <= lastRunePos:
+      if ta.cursorPos >= row.startPos and
+         ta.cursorPos <= row.endPos:
 
-        let n = ta.cursorPos - startRunePos
+        let n = ta.cursorPos - row.startPos
         if n < numGlyphs:
           cursorX = (glyphs[n].x.float).some
         else:
@@ -3395,7 +3686,6 @@ proc textArea(
         else:
           cursorX = textX.some
 
-
       let cursorYAdjust = lineHeight*0.3
 
       if cursorX.isSome:
@@ -3406,32 +3696,8 @@ proc textArea(
 
       textY += lineHeight
 
-#[
-        if hit:
-          let numGlyphs = vg.textGlyphPositions(textX, textY,
-                                                row.startPos, row.endPos,
-                                                glyphs)
-          var
-            caretX = if (mx < x + row.width / 2): x else: x + row.width
-            px = x
-
-          for j in 0..<nglyphs:
-            let
-              x0 = glyphs[j].x
-              x1 = if (j+1 < nglyphs): glyphs[j+1].x else: x + row.width
-              gx = x0 * 0.3 + x1 * 0.7
-
-            if mx >= px and mx < gx:
-              caretX = glyphs[j].x
-            px = gx
-
-          vg.beginPath()
-          vg.fillColor(rgb(255, 192, 0))
-          vg.rect(caretX, yy, 1, lineHeight)
-          vg.fill()
-]#
-
     vg.restore()
+
 
   if isHot(id):
     handleTooltip(id, tooltip)
@@ -4012,6 +4278,7 @@ proc init*(nvg: NVGContext) =
   g_cursorHand        = wrapper.createStandardCursor(csHand)
 
   let win = currentContext()
+  win.lockKeyMods = true
   win.keyCb  = keyCb
   win.charCb = charCb
   win.mouseButtonCb = mouseButtonCb
@@ -4137,185 +4404,5 @@ proc nvgContext*(): NVGContext =
   g_nvgContext
 
 # }}}
-
-type
-  TextRow* = object
-    startPos*: Natural
-    startBytePos*: Natural
-
-    endPos*: Natural
-    endBytePos*: Natural
-
-    nextRowPos*: int
-    nextRowBytePos*: int
-
-    width*: float
-#    minX*:  cfloat
-#    maxX*:  cfloat
-
-
-proc breakLines*(text: string, maxWidth: float, maxRows: int = -1): seq[TextRow] =
-  var glyphs: array[20, GlyphPosition]   # TODO
-  result = newSeq[TextRow]()
-
-  let textLen = text.runeLen
-
-  proc fillGlyphsBuffer(textPos, textBytePos: Natural) =
-    glyphs[0] = glyphs[^2]
-    glyphs[1] = glyphs[^1]
-    # TODO using maxX as the next start pos might not be entirely accurate
-    # we should use the x pos of the next glyph
-    discard g_nvgContext.textGlyphPositions(glyphs[1].maxX, 0, text,
-                                            startPos = textBytePos,
-                                            toOpenArray(glyphs, 2, glyphs.high))
-  const
-    NewLine = "\n".runeAt(0)
-    Space   = " ".runeAt(0)
-
-  var
-    prevRune: Rune
-
-    textPos = 0       # current rune position
-    textBytePos = 0   # byte offset of the current rune
-    prevTextPos = 0
-    prevTextBytePos = 0
-
-    # glyphPos is ahead by 1 rune, so glyphs[glyphPos].x will give us the end
-    # of the current rune
-    glyphPos = 3
-
-    rowStartPos, rowStartBytePos: Natural
-    rowStartX = glyphs[0].x
-
-    lastBreakPos = -1
-    lastBreakBytePos = -1
-    lastBreakPosStartX: float
-    lastBreakPosPrev, lastBreakBytePosPrev: Natural
-
-
-  fillGlyphsBuffer(textPos, textBytePos)
-
-  for rune in text.runes:
-    if glyphPos >= glyphs.len:
-      fillGlyphsBuffer(textPos, textBytePos)
-      glyphPos = 2
-
-
-    if rune == NewLine and prevRune != NewLine:
-      discard
-
-    else:
-      if prevRune == NewLine:
-        # we're at the rune after the endline
-        let newLineEndX           = glyphs[glyphPos-1].x
-        let runeBeforeNewLineEndX = glyphs[glyphPos-2].x
-        let newLinePos = textPos - 1
-
-        let row = TextRow(
-          startPos:       rowStartPos,
-          startBytePos:   rowStartBytePos,
-          endPos:         prevTextPos,
-          endBytePos:     prevTextBytePos,
-          nextRowPos:     textPos,
-          nextRowBytePos: textBytePos,
-          width:          runeBeforeNewLineEndX - rowStartX
-        )
-        result.add(row)
-
-        rowStartPos = row.nextRowPos
-        rowStartBytePos = row.nextRowBytePos
-        rowStartX = newLineEndX
-        lastBreakPos = -1
-        lastBreakBytePos = -1
-
-      else: # not a new line
-
-        # are we at the start of a new word?
-        if prevRune == Space and rune != Space:
-          lastBreakPos = textPos
-          lastBreakBytePos = textBytePos
-
-          lastBreakPosPrev = prevTextPos
-          lastBreakBytePosPrev = prevTextBytePos
-
-          let prevRuneEndX = glyphs[glyphPos-1].x
-          lastBreakPosStartX = prevRuneEndX
-
-        let currRuneEndX = glyphs[glyphPos].x
-
-        if currRuneEndX - rowStartX > maxWidth:
-          # break line at the last found break position
-          if lastBreakPos > 0:
-            let row = TextRow(
-              startPos:       rowStartPos,
-              startBytePos:   rowStartBytePos,
-              endPos:         lastBreakPosPrev,
-              endBytePos:     lastBreakBytePosPrev,
-              nextRowPos:     lastBreakPos,
-              nextRowBytePos: lastBreakBytePos,
-              width:          lastBreakPosStartX - rowStartX
-            )
-            result.add(row)
-
-            rowStartPos = row.nextRowPos
-            rowStartBytePos = row.nextRowBytePos
-            rowStartX = lastBreakPosStartX
-            lastBreakPos = -1
-            lastBreakBytePos = -1
-
-          # no break position has been found (the line is basically a single
-          # long word)
-          else:
-            let prevRuneEndX = glyphs[glyphPos-1].x
-            let row = TextRow(
-              startPos:       rowStartPos,
-              startBytePos:   rowStartBytePos,
-              endPos:         prevTextPos,
-              endBytePos:     prevTextBytePos,
-              nextRowPos:     textPos,
-              nextRowBytePos: textBytePos,
-              width:          prevRuneEndX - rowStartX
-            )
-            result.add(row)
-
-            rowStartPos = row.nextRowPos
-            rowStartBytePos = row.nextRowBytePos
-            rowStartX = prevRuneEndX
-            lastBreakPos = -1
-            lastBreakBytePos = -1
-
-    # flush last row if we're processing the last rune
-    if textPos == textLen-1:
-      if rune == NewLine:
-        let runeBeforeNewLineEndX = glyphs[glyphPos-1].x
-        result.add(TextRow(
-          startPos:       rowStartPos,
-          startBytePos:   rowStartBytePos,
-          endPos:         textPos,
-          endBytePos:     textBytePos,
-          nextRowPos:     -1,
-          nextRowBytePos: -1,
-          width:          runeBeforeNewLineEndX - rowStartX
-        ))
-      else:
-        let currRuneEndX = glyphs[glyphPos].x
-        result.add(TextRow(
-          startPos:       rowStartPos,
-          startBytePos:   rowStartBytePos,
-          endPos:         textPos,
-          endBytePos:     textBytePos,
-          nextRowPos:     -1,
-          nextRowBytePos: -1,
-          width:          currRuneEndX - rowStartX
-        ))
-
-    prevRune = rune
-    prevTextPos = textPos
-    prevTextBytePos = textBytePos
-
-    inc(textPos)
-    inc(textBytePos, rune.size)
-    inc(glyphPos)
-
 
 # vim: et:ts=2:sw=2:fdm=marker
