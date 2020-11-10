@@ -49,7 +49,7 @@ var
 #  textFieldVal3 = "Raw text field"
 #
   textFieldVal1 = "Some text"
-  textFieldVal2 = "Look behind you! A three-headed monkey!"
+  textFieldVal2 = "Look behind—you! A three-headed monkey!"
   textFieldVal3 = "42"
 
   textAreaVal1 = "A merry little surge of electricity piped by automatic alarm from the mood organ beside his bed awakened Rick Deckard. Surprised—it always surprised him to find himself awake without prior notice—he rose from the bed, stood up in his multicolored pajamas, and stretched.\n\nNow, in her bed, his wife Iran opened her gray, unmerry eyes, blinked, then groaned and shut her eyes again."
@@ -266,7 +266,7 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
 
   y += pad
   textFieldVal2 = koi.textField(
-    x, y, w * 1.0, h, textFieldVal2, tooltip = "Text field 2")
+    x, y, w * 3.0, h, textFieldVal2, tooltip = "Text field 2")
 
   y += pad
   textFieldVal3 = koi.rawTextField(

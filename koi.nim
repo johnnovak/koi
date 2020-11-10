@@ -25,10 +25,11 @@ type ItemId = int64
 # {{{ TextSelection
 type
   TextSelection = object
-    # Index of the start Rune in the selection, -1 if nothing is selected.
+    # Rune position of the start of the selection (inclusive),
+    # -1 if nothing is selected.
     startPos: int
 
-    # Index of the last Rune in the selection.
+    # Rune position of the end of the selection (exclusive)
     endPos:   Natural
 
 # }}}
@@ -2392,14 +2393,14 @@ proc isAlphanumeric(r: Rune): bool =
 
 proc findNextWordEnd(text: string, cursorPos: Natural): Natural =
   var p = cursorPos
-  while p < text.runeLen and     text.runeAt(p).isAlphanumeric: inc(p)
-  while p < text.runeLen and not text.runeAt(p).isAlphanumeric: inc(p)
+  while p < text.runeLen and     text.runeAtPos(p).isAlphanumeric: inc(p)
+  while p < text.runeLen and not text.runeAtPos(p).isAlphanumeric: inc(p)
   result = p
 
 proc findPrevWordStart(text: string, cursorPos: Natural): Natural =
   var p = cursorPos
-  while p > 0 and     text.runeAt(p-1).isWhiteSpace: dec(p)
-  while p > 0 and not text.runeAt(p-1).isWhiteSpace: dec(p)
+  while p > 0 and not text.runeAtPos(p-1).isAlphanumeric: dec(p)
+  while p > 0 and     text.runeAtPos(p-1).isAlphanumeric: dec(p)
   result = p
 
 proc drawCursor(vg: NVGContext, x, y1, y2: float, color: Color, width: float) =
@@ -2481,6 +2482,8 @@ proc handleCommonTextEditingShortcuts(
   elif sc in shortcuts[tesCursorToNextWord]:
     res.cursorPos = findNextWordEnd(text, cursorPos)
     res.selection = NoSelection
+    echo res
+    echo text.runeSubstr(res.cursorPos)
 
   elif sc in shortcuts[tesCursorToDocumentStart]:
     res.cursorPos = 0
@@ -3636,9 +3639,10 @@ proc textArea(
                 text.runeSubStr(currRow.startPos,
                                 ta.cursorPos - currRow.startPos)
 
-            echo fmt"beforeCurrRow: '{beforeCurrRow}'"
-            echo fmt"newCurrRow: '{newCurrRow}'"
-            echo fmt"afterCurrRow: '{afterCurrRow}'"
+          # TODO remove
+#            echo fmt"beforeCurrRow: '{beforeCurrRow}'"
+#            echo fmt"newCurrRow: '{newCurrRow}'"
+#            echo fmt"afterCurrRow: '{afterCurrRow}'"
 
             text = beforeCurrRow & newCurrRow & afterCurrRow
 
@@ -3741,10 +3745,10 @@ proc textArea(
       textY = y + lineHeight
       numGlyphs: Natural
 
-    echo "**************************************"
+#    echo "**************************************"
     for rowIdx, row in rows.pairs():
 
-      echo ""
+#      echo ""
       # Draw selection
       if editing:
         numGlyphs = vg.textGlyphPositions(textX, textY,
@@ -3752,24 +3756,29 @@ proc textArea(
                                           glyphs)
         if hasSelection(ta.selection):
           let selStartX =
-            if sel.startPos < row.startPos: textX
-            elif sel.startPos >= row.startPos and sel.startPos <= row.endPos:
+            if sel.startPos < row.startPos:
+              textX
+            elif sel.startPos >= row.startPos and
+                 sel.startPos <= row.endPos:
               glyphs[sel.startPos - row.startPos].minX
             else: -1
 
           let selEndX =
-            if sel.endPos > row.endPos: textX + textBoxW
-            elif sel.endPos >= row.startPos and sel.endPos <= row.endPos:
-              glyphs[max(sel.endPos - row.startPos - 1, 0)].maxX
+            if sel.endPos-1 > row.endPos:
+              glyphs[numGlyphs-1].maxX
+            elif sel.endPos-1 >= row.startPos and
+                 sel.endPos-1 <= row.endPos:
+              glyphs[sel.endPos-1 - row.startPos].maxX
             else: -1
 
-          echo fmt"row: {row}"
-          echo fmt"sel: {sel}"
-          echo fmt"selStartX: {selStartX}, selEndX: {selEndX}"
+#          echo fmt"row: {row}"
+#          echo fmt"sel: {sel}"
+#          echo fmt"selStartX: {selStartX}, selEndX: {selEndX}"
 
           if selStartX >= 0 and selEndX >= 0:
             vg.beginPath()
-            vg.rect(selStartX, textY - lineHeight*0.8, selEndX - selStartX, lineHeight)
+            vg.rect(selStartX, textY - lineHeight*0.8, selEndX - selStartX,
+                    lineHeight)
             vg.fillColor(s.selectionColor)
             vg.fill()
 
