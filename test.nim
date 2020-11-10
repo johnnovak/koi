@@ -119,6 +119,7 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
     echo vg.textWidth("iii")
     echo vg.textWidth("does not")
     echo vg.textWidth("work.")
+    echo vg.textWidth("blinked, then groaned and shut her eyes again") # one last line
 
     for row in rows:
       echo row

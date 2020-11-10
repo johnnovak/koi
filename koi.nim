@@ -588,6 +588,8 @@ type TextEditShortcuts = enum
   tesSelectionOneCharRight,
   tesSelectionToPreviousWord,
   tesSelectionToNextWord,
+  tesSelectionToPreviousLine,
+  tesSelectionToNextLine,
   tesSelectionToLineStart,
   tesSelectionToLineEnd,
   tesSelectionToDocumentStart,
@@ -661,6 +663,12 @@ let g_textFieldEditShortcuts_WinLinux = {
 
   tesSelectionToNextWord:     @[mkKeyShortcut(keyRight,   {mkCtrl, mkShift}),
                                 mkKeyShortcut(keykp6,     {mkCtrl, mkShift})],
+
+  tesSelectionToPreviousLine: @[mkKeyShortcut(keyUp,      {mkShift}),
+                                mkKeyShortcut(keyKp8,     {mkShift})],
+
+  tesSelectionToNextLine:    @[mkKeyShortcut(Key.keyDown, {}),
+                               mkKeyShortcut(keyKp2,      {})],
 
   tesSelectionToLineStart:    @[mkKeyShortcut(keyHome,    {mkShift}),
                                 mkKeyShortcut(keyKp7,     {mkShift})],
@@ -3127,24 +3135,21 @@ proc textField(
           tf.cursorPos = newCursorPos
 
         # Delete
-        elif sc in shortcuts[tesDeleteToLineStart]:
-          if hasSelection(tf.selection):
-            let res = deleteSelection(text, tf.selection, tf.cursorPos)
-            text = res.text
-            tf.cursorPos = res.cursorPos
-            tf.selection = res.selection
-          else:
-            text = text.runeSubStr(tf.cursorPos)
-            tf.cursorPos = 0
+        elif sc in shortcuts[tesDeleteToLineStart] or
+             sc in shortcuts[tesDeleteToLineEnd]:
 
-        elif sc in shortcuts[tesDeleteToLineEnd]:
           if hasSelection(tf.selection):
             let res = deleteSelection(text, tf.selection, tf.cursorPos)
             text = res.text
             tf.cursorPos = res.cursorPos
             tf.selection = res.selection
           else:
-            text = text.runeSubStr(0, tf.cursorPos)
+
+            if sc in shortcuts[tesDeleteToLineStart]:
+              text = text.runeSubStr(tf.cursorPos)
+              tf.cursorPos = 0
+            else:
+              text = text.runeSubStr(0, tf.cursorPos)
 
         # General
         elif sc in shortcuts[tesPrevTextField]:
@@ -3440,7 +3445,7 @@ proc textArea(
   const MaxLineLen = 1000
   assert text.runeLen <= MaxLineLen
 
-  let TextRightPad = s.textFontSize * 0.7
+  let TextRightPad = s.textFontSize
 
   let
     x = x + ui.ox
@@ -3449,7 +3454,7 @@ proc textArea(
   # The text is displayed within this rectangle (used for drawing later)
   let
     textBoxX = x + s.textPadHoriz
-    textBoxW = w - s.textPadHoriz*2 - TextRightPad
+    textBoxW = w - s.textPadHoriz*2
     textBoxY = y
     textBoxH = h
 
@@ -3557,7 +3562,88 @@ proc textArea(
         ta.selection = res.get.selection
 
       else:
-        if sc in shortcuts[tesPrevTextField]:
+        # We only need to break the text into rows when handling
+        # textarea-specific shortcuts
+        let rows = textBreakLines(text, textBoxW)
+
+        var currRow: TextRow
+        if ta.cursorPos == text.runeLen:
+          currRow = rows[^1]
+        else:
+          for row in rows:
+            if ta.cursorPos >= row.startPos and
+               ta.cursorPos <= row.endPos:
+              currRow = row
+              break
+
+        # Cursor movement
+#        if tesCursorToPreviousLine:
+
+#        elif tesCursorToNextLine:
+
+        if sc in shortcuts[tesCursorToLineStart]:
+          ta.cursorPos = currRow.startPos
+          ta.selection = NoSelection
+
+        elif sc in shortcuts[tesCursorToLineEnd]:
+          if currRow.nextRowPos > 0:
+            ta.cursorPos = currRow.endPos
+          else:
+            ta.cursorPos = text.runeLen
+          ta.selection = NoSelection
+
+        # Selection
+#        elif tesSelectionToPreviousLine:
+
+#        elif tesSelectionToNextLine:
+
+        elif sc in shortcuts[tesSelectionToLineStart]:
+          let newCursorPos = currRow.startPos
+          ta.selection = updateSelection(ta.selection, ta.cursorPos,
+                                         newCursorPos)
+          ta.cursorPos = newCursorPos
+
+        elif sc in shortcuts[tesSelectionToLineEnd]:
+          let newCursorPos = currRow.endPos
+          ta.selection = updateSelection(ta.selection, ta.cursorPos,
+                                         newCursorPos)
+          ta.cursorPos = newCursorPos
+
+        # Delete
+        elif sc in shortcuts[tesDeleteToLineStart] or
+             sc in shortcuts[tesDeleteToLineEnd]:
+
+          if hasSelection(ta.selection):
+            let res = deleteSelection(text, ta.selection, ta.cursorPos)
+            text = res.text
+            ta.cursorPos = res.cursorPos
+            ta.selection = res.selection
+          else:
+            let beforeCurrRow =
+              if currRow.startPos == 0: ""
+              else: text.runeSubStr(0, currRow.startPos)
+
+            let afterCurrRow =
+              if currRow.nextRowPos < 0: ""
+              else: text.runeSubStr(currRow.nextRowPos)
+
+            let newCurrRow =
+              if sc in shortcuts[tesDeleteToLineStart]:
+                let cursorPos = ta.cursorPos
+                ta.cursorPos = currRow.startPos
+                text.runeSubStr(cursorPos, currRow.endPos - cursorPos + 1)
+              else:
+                text.runeSubStr(currRow.startPos,
+                                ta.cursorPos - currRow.startPos)
+
+            echo fmt"beforeCurrRow: '{beforeCurrRow}'"
+            echo fmt"newCurrRow: '{newCurrRow}'"
+            echo fmt"afterCurrRow: '{afterCurrRow}'"
+
+            text = beforeCurrRow & newCurrRow & afterCurrRow
+
+        # General
+        elif sc in shortcuts[tesPrevTextField]:
           exitEditMode()
           ta.activatePrev = true
           ta.itemToActivate = ta.prevItem
@@ -3636,60 +3722,92 @@ proc textArea(
       vg.fill()
 
     # Make scissor region slightly wider because of the cursor
-    # TODO convert constants into style params?
-    vg.intersectScissor(textBoxX-3, textBoxY, textBoxW+3, textBoxH)
+    vg.intersectScissor(textBoxX, textBoxY, textBoxW + TextRightPad, textBoxH)
 
     # Draw text
     # TODO text color hover
     let textColor = if editing: s.textColorActive else: s.textColor
 
     vg.setFont(s.textFontSize, vertAlign=vaBaseline)
-    vg.fillColor(textColor)
 
     var (_, _, lineHeight) = vg.textMetrics()
     lineHeight = lineHeight * s.textLineHeight
 
     let rows = textBreakLines(text, textBoxW)
+    let sel = normaliseSelection(ta.selection)
 
     var
       textX = textBoxX
       textY = y + lineHeight
+      numGlyphs: Natural
 
+    echo "**************************************"
     for rowIdx, row in rows.pairs():
+
+      echo ""
+      # Draw selection
+      if editing:
+        numGlyphs = vg.textGlyphPositions(textX, textY,
+                                          text, row.startBytePos, row.endBytePos,
+                                          glyphs)
+        if hasSelection(ta.selection):
+          let selStartX =
+            if sel.startPos < row.startPos: textX
+            elif sel.startPos >= row.startPos and sel.startPos <= row.endPos:
+              glyphs[sel.startPos - row.startPos].minX
+            else: -1
+
+          let selEndX =
+            if sel.endPos > row.endPos: textX + textBoxW
+            elif sel.endPos >= row.startPos and sel.endPos <= row.endPos:
+              glyphs[max(sel.endPos - row.startPos - 1, 0)].maxX
+            else: -1
+
+          echo fmt"row: {row}"
+          echo fmt"sel: {sel}"
+          echo fmt"selStartX: {selStartX}, selEndX: {selEndX}"
+
+          if selStartX >= 0 and selEndX >= 0:
+            vg.beginPath()
+            vg.rect(selStartX, textY - lineHeight*0.8, selEndX - selStartX, lineHeight)
+            vg.fillColor(s.selectionColor)
+            vg.fill()
+
+      # Draw text
+      vg.fillColor(textColor)
       discard vg.text(textX, textY, text, row.startBytePos, row.endBytePos)
 
-      let numGlyphs = vg.textGlyphPositions(textX, textY,
-                                            text, row.startBytePos, row.endBytePos,
-                                            glyphs)
-      var cursorX = float.none
-      var drawCursorAtEndOfLine = false
+      # Draw cursor
+      if editing:
+        var cursorX = float.none
+        var drawCursorAtEndOfLine = false
 
-      if ta.cursorPos >= row.startPos and
-         ta.cursorPos <= row.endPos:
+        if ta.cursorPos >= row.startPos and
+           ta.cursorPos <= row.endPos:
 
-        let n = ta.cursorPos - row.startPos
-        if n < numGlyphs:
-          cursorX = (glyphs[n].x.float).some
-        else:
+          let n = ta.cursorPos - row.startPos
+          if n < numGlyphs:
+            cursorX = (glyphs[n].x.float).some
+          else:
+            drawCursorAtEndOfLine = true
+
+        elif rowIdx == rows.high and ta.cursorPos == text.runeLen:
           drawCursorAtEndOfLine = true
 
-      elif rowIdx == rows.high and ta.cursorPos == text.runeLen:
-        drawCursorAtEndOfLine = true
 
+        if drawCursorAtEndOfLine:
+          if numGlyphs > 0:
+            cursorX = (glyphs[numGlyphs-1].maxX.float).some
+          else:
+            cursorX = textX.some
 
-      if drawCursorAtEndOfLine:
-        if numGlyphs > 0:
-          cursorX = (glyphs[numGlyphs-1].maxX.float).some
-        else:
-          cursorX = textX.some
+        let cursorYAdjust = lineHeight*0.3
 
-      let cursorYAdjust = lineHeight*0.3
-
-      if cursorX.isSome:
-        drawCursor(vg, cursorX.get,
-                   textY + cursorYAdjust,
-                   textY - lineHeight + cursorYAdjust,
-                   s.cursorColor, s.cursorWidth)
+        if cursorX.isSome:
+          drawCursor(vg, cursorX.get,
+                     textY + cursorYAdjust,
+                     textY - lineHeight + cursorYAdjust,
+                     s.cursorColor, s.cursorWidth)
 
       textY += lineHeight
 

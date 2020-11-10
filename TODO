@@ -19,6 +19,26 @@ BUGS
 TODO
 ====
 
+- test all textfield shortcuts with edge cases:
+    - empty string
+    - single space
+    - 1 char, cursor at start
+    - 1 char, cursor at end
+    - >1 char, cursor at end
+
+- test all textfield shortcuts with edge cases:
+    - empty string
+    - single space
+    - single new line
+    - two new line chars
+    - 1 char, cursor at start
+    - 1 char, cursor at end
+    - >1 char, cursor at end
+    - in first row
+    - in last row
+    - at first char
+    - at last char
+
 - OS X specific shortcuts (e.g. Ctrl-A = Select All on Win)
 - value entry widget (modified slider)
 - menus
