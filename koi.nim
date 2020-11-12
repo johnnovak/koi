@@ -160,6 +160,9 @@ type
     # restored if the editing is cancelled.
     originalText:    string
 
+    # Used by the move cursor to next/previous line actions
+    lastCursorXPos:  Option[float]
+
     # State variables for tabbing back and forth between textfields
     prevItem:        ItemId
     lastActiveItem:  ItemId
@@ -564,11 +567,15 @@ type KeyShortcut* = object
   mods*:   set[ModifierKey]
 
 proc mkKeyShortcut*(k: Key, m: set[ModifierKey]): KeyShortcut {.inline.} =
-  # ignore the numlock mod key state for non-keypad shortcuts
+  # always ignore caps lock state
+  var m = m - {mkCapsLock}
+
+  # ignore numlock state mod non-keypad shortcuts
   if not (k >= keyKp0 and k <= keyKpDecimal):
-    KeyShortcut(key: k, mods: m - {mkNumLock})
-  else:
-    KeyShortcut(key: k, mods: m)
+    m =  m - {mkNumLock}
+
+  KeyShortcut(key: k, mods: m)
+
 
 # {{{ Shortcut definitions
 
@@ -668,8 +675,8 @@ let g_textFieldEditShortcuts_WinLinux = {
   tesSelectionToPreviousLine: @[mkKeyShortcut(keyUp,      {mkShift}),
                                 mkKeyShortcut(keyKp8,     {mkShift})],
 
-  tesSelectionToNextLine:    @[mkKeyShortcut(Key.keyDown, {}),
-                               mkKeyShortcut(keyKp2,      {})],
+  tesSelectionToNextLine:    @[mkKeyShortcut(Key.keyDown, {mkShift}),
+                               mkKeyShortcut(keyKp2,      {mkShift})],
 
   tesSelectionToLineStart:    @[mkKeyShortcut(keyHome,    {mkShift}),
                                 mkKeyShortcut(keyKp7,     {mkShift})],
@@ -2482,8 +2489,6 @@ proc handleCommonTextEditingShortcuts(
   elif sc in shortcuts[tesCursorToNextWord]:
     res.cursorPos = findNextWordEnd(text, cursorPos)
     res.selection = NoSelection
-    echo res
-    echo text.runeSubstr(res.cursorPos)
 
   elif sc in shortcuts[tesCursorToDocumentStart]:
     res.cursorPos = 0
@@ -3466,11 +3471,6 @@ proc textArea(
     glyphs: array[MaxLineLen, GlyphPosition]
 
 
-  proc calcGlyphPos() =
-    g_nvgContext.setFont(s.textFontSize)
-    discard g_nvgContext.textGlyphPositions(0, 0, text, glyphs)
-
-
   proc enterEditMode(id: ItemId, text: string, startX: float) =
     setActive(id)
     clearCharBuf()
@@ -3522,11 +3522,15 @@ proc textArea(
         ta.state = tasEditEntered
 
 
+  proc calcGlypPosForRow(x, y: float, row: TextRow): Natural =
+    g_nvgContext.setFont(s.textFontSize)
+    return g_nvgContext.textGlyphPositions(x, y, text,
+                                           row.startBytePos, row.endBytePos,
+                                           glyphs)
+
   # We 'fall through' to the edit state to avoid a 1-frame delay when going
   # into edit mode
   if ta.activeItem == id and ta.state >= tasEditEntered:
-    calcGlyphPos()  # required for the mouse interactions
-
     setHot(id)
     setActive(id)
     setCursorShape(csIBeam)
@@ -3556,8 +3560,16 @@ proc textArea(
 
       ui.eventHandled = true
 
-      let res = handleCommonTextEditingShortcuts(sc, text,
-                                                 ta.cursorPos, ta.selection)
+      # Only use the stored X position for consecutive prev/next line
+      # actions
+      if not (sc in shortcuts[tesCursorToPreviousLine] or
+              sc in shortcuts[tesCursorToNextLine] or
+              sc in shortcuts[tesSelectionToPreviousLine] or
+              sc in shortcuts[tesSelectionToNextLine]):
+        ta.lastCursorXPos = float.none
+
+      let res = handleCommonTextEditingShortcuts(sc, text, ta.cursorPos,
+                                                 ta.selection)
 
       if res.isSome:
         text = res.get.text
@@ -3567,38 +3579,92 @@ proc textArea(
       else:
         # We only need to break the text into rows when handling
         # textarea-specific shortcuts
+        g_nvgContext.setFont(s.textFontSize, vertAlign=vaBaseline)
         let rows = textBreakLines(text, textBoxW)
 
         var currRow: TextRow
+        var currRowIdx: Natural
+
         if ta.cursorPos == text.runeLen:
           currRow = rows[^1]
+          currRowIdx = rows.high
         else:
-          for row in rows:
+          for i, row in rows.pairs:
             if ta.cursorPos >= row.startPos and
                ta.cursorPos <= row.endPos:
               currRow = row
+              currRowIdx = i
               break
 
         # Cursor movement
-#        if tesCursorToPreviousLine:
+        proc findClosestCursorPos(row: TextRow, cx: float): Natural = 
+          result = row.endPos
+          for pos in 0..(row.endPos - row.startPos):
+            if glyphs[pos].x > cx:
+              let prevPos = max(pos-1, 0)
+              if (glyphs[pos].x - cx) < (cx - glyphs[prevPos].x):
+                return row.startPos + pos
+              else:
+                return row.startPos + prevPos
 
-#        elif tesCursorToNextLine:
+        proc setLastCursorXPos() =
+          if ta.lastCursorXPos.isNone:
+            let numGlyphs = calcGlypPosForRow(textBoxX, 0, currRow)
+            if ta.cursorPos >= text.runeLen:
+              ta.lastCursorXPos = glyphs[numGlyphs-1].maxX.float.some
+            else:
+              let pos = ta.cursorPos - currRow.startPos
+              ta.lastCursorXPos = glyphs[pos].x.float.some
 
-        if sc in shortcuts[tesCursorToLineStart]:
+        if sc in shortcuts[tesCursorToPreviousLine]:
+          if currRowIdx > 0:
+            setLastCursorXPos()
+            let prevRow = rows[currRowIdx-1]
+            discard calcGlypPosForRow(textBoxX, 0, prevRow)
+            ta.cursorPos = findClosestCursorPos(prevRow, ta.lastCursorXPos.get)
+            ta.selection = NoSelection
+
+        elif sc in shortcuts[tesCursorToNextLine]:
+          if currRowIdx < rows.high:
+            setLastCursorXPos()
+            let nextRow = rows[currRowIdx+1]
+            discard calcGlypPosForRow(textBoxX, 0, nextRow)
+            ta.cursorPos = findClosestCursorPos(nextRow, ta.lastCursorXPos.get)
+            ta.selection = NoSelection
+
+        elif sc in shortcuts[tesCursorToLineStart]:
           ta.cursorPos = currRow.startPos
           ta.selection = NoSelection
 
         elif sc in shortcuts[tesCursorToLineEnd]:
-          if currRow.nextRowPos > 0:
-            ta.cursorPos = currRow.endPos
-          else:
-            ta.cursorPos = text.runeLen
+          ta.cursorPos = if currRow.nextRowPos > 0: currRow.endPos
+                         else: text.runeLen
           ta.selection = NoSelection
 
         # Selection
-#        elif tesSelectionToPreviousLine:
+        elif sc in shortcuts[tesSelectionToPreviousLine]:
+          if currRowIdx > 0:
+            setLastCursorXPos()
+            let prevRow = rows[currRowIdx-1]
+            discard calcGlypPosForRow(textBoxX, 0, prevRow)
 
-#        elif tesSelectionToNextLine:
+            let newCursorPos = findClosestCursorPos(prevRow,
+                                                    ta.lastCursorXPos.get)
+            ta.selection = updateSelection(ta.selection, ta.cursorPos,
+                                           newCursorPos)
+            ta.cursorPos = newCursorPos
+
+        elif sc in shortcuts[tesSelectionToNextLine]:
+          if currRowIdx < rows.high:
+            setLastCursorXPos()
+            let nextRow = rows[currRowIdx+1]
+            discard calcGlypPosForRow(textBoxX, 0, nextRow)
+
+            let newCursorPos = findClosestCursorPos(nextRow,
+                                                    ta.lastCursorXPos.get)
+            ta.selection = updateSelection(ta.selection, ta.cursorPos,
+                                           newCursorPos)
+            ta.cursorPos = newCursorPos
 
         elif sc in shortcuts[tesSelectionToLineStart]:
           let newCursorPos = currRow.startPos
@@ -3607,7 +3673,9 @@ proc textArea(
           ta.cursorPos = newCursorPos
 
         elif sc in shortcuts[tesSelectionToLineEnd]:
-          let newCursorPos = currRow.endPos
+          let newCursorPos = if currRow.nextRowPos > 0: currRow.endPos
+                             else: text.runeLen
+
           ta.selection = updateSelection(ta.selection, ta.cursorPos,
                                          newCursorPos)
           ta.cursorPos = newCursorPos
@@ -3638,11 +3706,6 @@ proc textArea(
               else:
                 text.runeSubStr(currRow.startPos,
                                 ta.cursorPos - currRow.startPos)
-
-          # TODO remove
-#            echo fmt"beforeCurrRow: '{beforeCurrRow}'"
-#            echo fmt"newCurrRow: '{newCurrRow}'"
-#            echo fmt"afterCurrRow: '{afterCurrRow}'"
 
             text = beforeCurrRow & newCurrRow & afterCurrRow
 
@@ -3735,25 +3798,25 @@ proc textArea(
     vg.setFont(s.textFontSize, vertAlign=vaBaseline)
 
     var (_, _, lineHeight) = vg.textMetrics()
-    lineHeight = lineHeight * s.textLineHeight
+    lineHeight = floor(lineHeight * s.textLineHeight)
 
     let rows = textBreakLines(text, textBoxW)
     let sel = normaliseSelection(ta.selection)
 
     var
       textX = textBoxX
-      textY = y + lineHeight
+      textY = textBoxY + lineHeight
       numGlyphs: Natural
 
-#    echo "**************************************"
+
     for rowIdx, row in rows.pairs():
 
-#      echo ""
+      let cursorYAdjust = floor(lineHeight*0.55)
+
       # Draw selection
       if editing:
-        numGlyphs = vg.textGlyphPositions(textX, textY,
-                                          text, row.startBytePos, row.endBytePos,
-                                          glyphs)
+        numGlyphs = calcGlypPosForRow(textX, textY, row)
+
         if hasSelection(ta.selection):
           let selStartX =
             if sel.startPos < row.startPos:
@@ -3771,13 +3834,9 @@ proc textArea(
               glyphs[sel.endPos-1 - row.startPos].maxX
             else: -1
 
-#          echo fmt"row: {row}"
-#          echo fmt"sel: {sel}"
-#          echo fmt"selStartX: {selStartX}, selEndX: {selEndX}"
-
           if selStartX >= 0 and selEndX >= 0:
             vg.beginPath()
-            vg.rect(selStartX, textY - lineHeight*0.8, selEndX - selStartX,
+            vg.rect(selStartX, textY - cursorYAdjust, selEndX - selStartX,
                     lineHeight)
             vg.fillColor(s.selectionColor)
             vg.fill()
@@ -3810,12 +3869,10 @@ proc textArea(
           else:
             cursorX = textX.some
 
-        let cursorYAdjust = lineHeight*0.3
-
         if cursorX.isSome:
           drawCursor(vg, cursorX.get,
-                     textY + cursorYAdjust,
-                     textY - lineHeight + cursorYAdjust,
+                     textY - cursorYAdjust,
+                     textY - cursorYAdjust + lineHeight,
                      s.cursorColor, s.cursorWidth)
 
       textY += lineHeight

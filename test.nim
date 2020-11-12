@@ -104,29 +104,6 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
   vg.beginFrame(winWidth.float, winHeight.float, pxRatio)
   koi.beginFrame(winWidth.float, winHeight.float)
 
-  ##########################################
-
-  var txt = textAreaVal1
-#  var txt = "i\nF\nii\nFi\n\niii\n\n\ndoes not\nwork."
-#  var txt = "i\nii\n\niii\n\n\ndoes not\nwork."
-
-  if printBreakRows:
-    let rows = textBreakLines(txt, 300)
-    printBreakRows = false
-
-    echo vg.textWidth("i")
-    echo vg.textWidth("ii")
-    echo vg.textWidth("iii")
-    echo vg.textWidth("does not")
-    echo vg.textWidth("work.")
-    echo vg.textWidth("blinked, then groaned and shut her eyes again") # one last line
-
-    for row in rows:
-      echo row
-      echo "'", txt.runeSubStr(row.startPos, row.endPos - row.startPos + 1), "'"
-      echo ""
-
-  ############################################################
   let
     w = 110.0
     h = 22.0
@@ -266,7 +243,7 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
 
   y += pad
   textFieldVal2 = koi.textField(
-    x, y, w * 3.0, h, textFieldVal2, tooltip = "Text field 2")
+    x, y, w * 1.5, h, textFieldVal2, tooltip = "Text field 2")
 
   y += pad
   textFieldVal3 = koi.rawTextField(
