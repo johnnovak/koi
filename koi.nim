@@ -2582,8 +2582,12 @@ proc handleCommonTextEditingShortcuts(
       toClipboard(text.runeSubStr(ns.startPos, ns.endPos - ns.startPos))
 
   elif sc in shortcuts[tesPasteText]:
-    let toInsert = fromClipboard()
-    res = insertString(text, cursorPos, selection, toInsert)
+    try:
+      let toInsert = fromClipboard()
+      res = insertString(text, cursorPos, selection, toInsert)
+    except GLFWError:
+      # attempting to retrieve non-text data raises an exception
+      discard
 
   else:
     eventHandled = false
@@ -3434,6 +3438,16 @@ type
     minLen*: Natural
     maxLen*: int
 
+const DummyEmptyRow = TextRow(
+  startPos: 0,
+  startBytePos: 0,
+  endPos: 0,
+  endBytePos: 0,
+  nextRowPos: -1,
+  nextRowBytePos: -1,
+  width: 0
+)
+
 
 proc textArea(
   id:         ItemId,
@@ -3585,7 +3599,9 @@ proc textArea(
         var currRow: TextRow
         var currRowIdx: Natural
 
-        if ta.cursorPos == text.runeLen:
+        if text == "":
+          currRow = DummyEmptyRow
+        elif ta.cursorPos == text.runeLen:
           currRow = rows[^1]
           currRowIdx = rows.high
         else:
@@ -3597,8 +3613,8 @@ proc textArea(
               break
 
         # Cursor movement
-        proc findClosestCursorPos(row: TextRow, cx: float): Natural = 
-          result = row.endPos
+        proc findClosestCursorPos(row: TextRow, cx: float): Natural =
+          result = if row.nextRowPos == -1: row.endPos+1 else: row.endPos
           for pos in 0..(row.endPos - row.startPos):
             if glyphs[pos].x > cx:
               let prevPos = max(pos-1, 0)
@@ -3800,19 +3816,18 @@ proc textArea(
     var (_, _, lineHeight) = vg.textMetrics()
     lineHeight = floor(lineHeight * s.textLineHeight)
 
-    let rows = textBreakLines(text, textBoxW)
+    let rows = if text == "": @[DummyEmptyRow]
+               else: textBreakLines(text, textBoxW)
+
     let sel = normaliseSelection(ta.selection)
 
     var
       textX = textBoxX
       textY = floor(textBoxY + lineHeight * 1.1)
+      cursorYAdjust = floor(lineHeight*0.77)
       numGlyphs: Natural
 
-
     for rowIdx, row in rows.pairs():
-
-      let cursorYAdjust = floor(lineHeight*0.77)
-
       # Draw selection
       if editing:
         numGlyphs = calcGlypPosForRow(textX, textY, row)
