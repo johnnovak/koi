@@ -3523,7 +3523,7 @@ proc textArea(
 
 
   proc calcGlypPosForRow(x, y: float, row: TextRow): Natural =
-    g_nvgContext.setFont(s.textFontSize)
+    g_nvgContext.setFont(s.textFontSize, vertAlign=vaBaseline)
     return g_nvgContext.textGlyphPositions(x, y, text,
                                            row.startBytePos, row.endBytePos,
                                            glyphs)
@@ -3805,13 +3805,13 @@ proc textArea(
 
     var
       textX = textBoxX
-      textY = textBoxY + lineHeight
+      textY = floor(textBoxY + lineHeight * 1.1)
       numGlyphs: Natural
 
 
     for rowIdx, row in rows.pairs():
 
-      let cursorYAdjust = floor(lineHeight*0.55)
+      let cursorYAdjust = floor(lineHeight*0.77)
 
       # Draw selection
       if editing:
