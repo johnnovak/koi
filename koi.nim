@@ -614,6 +614,8 @@ type TextEditShortcuts = enum
   tesCopyText,
   tesPasteText,
 
+  tesInsertNewline,
+
   tesPrevTextField, # TODO "global" widget level shortcut
   tesNextTextField, # TODO "global" widget level shortcut
 
@@ -712,6 +714,8 @@ let g_textFieldEditShortcuts_WinLinux = {
   tesPasteText:               @[mkKeyShortcut(keyV,       {mkCtrl})],
 
   # General
+  tesInsertNewline:           @[mkKeyShortcut(keyEnter,   {mkShift})],
+
   tesPrevTextField:           @[mkKeyShortcut(keyTab,     {mkShift})],
   tesNextTextField:           @[mkKeyShortcut(keyTab,     {})],
 
@@ -791,6 +795,8 @@ let g_textFieldEditShortcuts_Mac = {
   tesCutText:              @[mkKeyShortcut(keyX,         {mkSuper})],
   tesCopyText:             @[mkKeyShortcut(keyC,         {mkSuper})],
   tesPasteText:            @[mkKeyShortcut(keyV,         {mkSuper})],
+
+  tesInsertNewline:        @[mkKeyShortcut(keyEnter,   {mkShift})],
 
   tesAccept:               @[mkKeyShortcut(keyEnter,     {}),
                              mkKeyShortcut(keyKpEnter,   {})],
@@ -3612,7 +3618,6 @@ proc textArea(
               currRowIdx = i
               break
 
-        # Cursor movement
         proc findClosestCursorPos(row: TextRow, cx: float): Natural =
           result = if row.nextRowPos == -1: row.endPos+1 else: row.endPos
           for pos in 0..(row.endPos - row.startPos):
@@ -3632,7 +3637,14 @@ proc textArea(
               let pos = ta.cursorPos - currRow.startPos
               ta.lastCursorXPos = glyphs[pos].x.float.some
 
-        if sc in shortcuts[tesCursorToPreviousLine]:
+        # Editing
+        if sc in shortcuts[tesInsertNewline]:
+          text = text.runeSubstr(0, ta.cursorPos) & "\n" &
+                 text.runeSubstr(ta.cursorPos) 
+          inc(ta.cursorPos)
+
+        # Cursor movement
+        elif sc in shortcuts[tesCursorToPreviousLine]:
           if currRowIdx > 0:
             setLastCursorXPos()
             let prevRow = rows[currRowIdx-1]
@@ -3818,6 +3830,10 @@ proc textArea(
 
     let rows = if text == "": @[DummyEmptyRow]
                else: textBreakLines(text, textBoxW)
+
+    echo "---------------"
+    for r in rows:
+      echo r
 
     let sel = normaliseSelection(ta.selection)
 
