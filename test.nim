@@ -53,7 +53,7 @@ var
   textFieldVal3 = "42"
 
 #  textAreaVal1 = "A merry little surge of electricity piped by automatic alarm from the mood organ beside his bed awakened Rick Deckard. Surprised—it always surprised him to find himself awake without prior notice—he rose from the bed, stood up in his multicolored pajamas, and stretched.\n\nNow, in her bed, his wife Iran opened her gray, unmerry eyes, blinked, then groaned and shut her eyes again."
-  textAreaVal1 = "And now something\n"
+  textAreaVal1 = "123\n4\n\n5\n"
   printBreakRows = true
 
 

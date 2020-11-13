@@ -2651,6 +2651,17 @@ proc textBreakLines*(text: string, maxWidth: float,
   var glyphs: array[1024, GlyphPosition]
   result = newSeq[TextRow]()
 
+  if text == "":
+    return @[TextRow(
+      startPos:       0,
+      startBytePos:   0,
+      endPos:         0,
+      endBytePos:     0,
+      nextRowPos:     -1,
+      nextRowBytePos: -1,
+      width:          0
+    )]
+
   let textLen = text.runeLen
 
   proc fillGlyphsBuffer(textPos, textBytePos: Natural) =
@@ -2780,14 +2791,27 @@ proc textBreakLines*(text: string, maxWidth: float,
     if textPos == textLen-1:
       if rune == NewLine:
         let runeBeforeNewLineEndX = glyphs[glyphPos-1].x
+
+        let lastEmptyRowStartPos = textLen
+        let lastEmptyRowStartBytePos = textBytePos+1
+
         result.add(TextRow(
           startPos:       rowStartPos,
           startBytePos:   rowStartBytePos,
           endPos:         textPos,
           endBytePos:     textBytePos,
+          nextRowPos:     lastEmptyRowStartPos,
+          nextRowBytePos: lastEmptyRowStartBytePos,
+          width:          runeBeforeNewLineEndX - rowStartX
+        ))
+        result.add(TextRow(
+          startPos:       lastEmptyRowStartPos,
+          startBytePos:   lastEmptyRowStartBytePos,
+          endPos:         lastEmptyRowStartPos,
+          endBytePos:     lastEmptyRowStartBytePos,
           nextRowPos:     -1,
           nextRowBytePos: -1,
-          width:          runeBeforeNewLineEndX - rowStartX
+          width:          0
         ))
       else:
         let currRuneEndX = glyphs[glyphPos].x
@@ -3444,16 +3468,6 @@ type
     minLen*: Natural
     maxLen*: int
 
-const DummyEmptyRow = TextRow(
-  startPos: 0,
-  startBytePos: 0,
-  endPos: 0,
-  endBytePos: 0,
-  nextRowPos: -1,
-  nextRowBytePos: -1,
-  width: 0
-)
-
 
 proc textArea(
   id:         ItemId,
@@ -3605,9 +3619,7 @@ proc textArea(
         var currRow: TextRow
         var currRowIdx: Natural
 
-        if text == "":
-          currRow = DummyEmptyRow
-        elif ta.cursorPos == text.runeLen:
+        if ta.cursorPos == text.runeLen:
           currRow = rows[^1]
           currRowIdx = rows.high
         else:
@@ -3657,7 +3669,12 @@ proc textArea(
             setLastCursorXPos()
             let nextRow = rows[currRowIdx+1]
             discard calcGlypPosForRow(textBoxX, 0, nextRow)
-            ta.cursorPos = findClosestCursorPos(nextRow, ta.lastCursorXPos.get)
+
+            ta.cursorPos = if nextRow.startPos == text.runeLen:
+                             nextRow.startPos
+                           else:
+                             findClosestCursorPos(nextRow,
+                                                  ta.lastCursorXPos.get)
             ta.selection = NoSelection
 
         elif sc in shortcuts[tesCursorToLineStart]:
@@ -3688,8 +3705,11 @@ proc textArea(
             let nextRow = rows[currRowIdx+1]
             discard calcGlypPosForRow(textBoxX, 0, nextRow)
 
-            let newCursorPos = findClosestCursorPos(nextRow,
-                                                    ta.lastCursorXPos.get)
+            let newCursorPos = if nextRow.startPos == text.runeLen:
+                                 nextRow.startPos
+                               else:
+                                 findClosestCursorPos(nextRow,
+                                                      ta.lastCursorXPos.get)
             ta.selection = updateSelection(ta.selection, ta.cursorPos,
                                            newCursorPos)
             ta.cursorPos = newCursorPos
@@ -3828,8 +3848,7 @@ proc textArea(
     var (_, _, lineHeight) = vg.textMetrics()
     lineHeight = floor(lineHeight * s.textLineHeight)
 
-    let rows = if text == "": @[DummyEmptyRow]
-               else: textBreakLines(text, textBoxW)
+    let rows = textBreakLines(text, textBoxW)
 
     echo "---------------"
     for r in rows:
@@ -3860,6 +3879,7 @@ proc textArea(
           let selEndX =
             if sel.endPos-1 > row.endPos:
               glyphs[numGlyphs-1].maxX
+              # TODO select full rows: textX + textBoxW
             elif sel.endPos-1 >= row.startPos and
                  sel.endPos-1 <= row.endPos:
               glyphs[sel.endPos-1 - row.startPos].maxX
