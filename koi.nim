@@ -1922,7 +1922,6 @@ template dropdown*(
 # }}}
 # {{{ ScrollBar
 
-# TODO these are not used currently
 type ScrollBarStyle* = ref object
   trackCornerRadius*:      float
   trackStrokeWidth*:       float
@@ -1933,6 +1932,8 @@ type ScrollBarStyle* = ref object
   trackFillColorHover*:    Color
   trackFillColorActive*:   Color
   thumbCornerRadius*:      float
+  thumbPad*:               float
+  thumbMinSize*:           float
   thumbStrokeWidth*:       float
   thumbStrokeColor*:       Color
   thumbStrokeColorHover*:  Color
@@ -1956,6 +1957,8 @@ var DefaultScrollBarStyle = ScrollBarStyle(
   trackFillColorHover    : GRAY_HI,
   trackFillColorActive   : GRAY_MID,
   thumbCornerRadius      : 5,
+  thumbPad               : 3,
+  thumbMinSize           : 10,
   thumbStrokeWidth       : 0,
   thumbStrokeColor       : black(),
   thumbStrokeColorHover  : black(),
@@ -1980,7 +1983,6 @@ proc setDefaultScrollBarStyle*(style: ScrollBarStyle) =
 # {{{ horizScrollBar
 
 # Must be kept in sync with vertScrollBar!
-
 proc horizScrollBar(id:         ItemId,
                     x, y, w, h: float,
                     startVal:   float,
@@ -2005,21 +2007,16 @@ proc horizScrollBar(id:         ItemId,
     x = x + ui.ox
     y = y + ui.oy
 
-  # TODO style params
-  const
-    ThumbPad = 3
-    ThumbMinW = 10
-
   # Calculate current thumb position
   let
     thumbSize = if thumbSize < 0: 0.000001 else: thumbSize
 
-    thumbW = max((w - ThumbPad*2) / (abs(startVal - endVal) / thumbSize),
-                 ThumbMinW)
+    thumbW = max((w - s.thumbPad*2) / (abs(startVal - endVal) / thumbSize),
+                 s.thumbMinSize)
 
-    thumbH = h - ThumbPad * 2
-    thumbMinX = x + ThumbPad
-    thumbMaxX = x + w - ThumbPad - thumbW
+    thumbH = h - s.thumbPad * 2
+    thumbMinX = x + s.thumbPad
+    thumbMaxX = x + w - s.thumbPad - thumbW
 
   proc calcThumbX(val: float): float =
     let t = invLerp(startVal, endVal, value)
@@ -2154,11 +2151,6 @@ proc horizScrollBar(id:         ItemId,
     var sw = s.trackStrokeWidth
     var (x, y, w, h) = snapToGrid(x, y, w, h, sw)
 
-    let trackColor = case drawState
-      of dsHover:  GRAY_HI
-      of dsActive: GRAY_MID
-      else:        GRAY_MID
-
     let (trackFillColor, trackStrokeColor,
          thumbFillColor, thumbStrokeColor,
          labelColor) =
@@ -2194,7 +2186,8 @@ proc horizScrollBar(id:         ItemId,
     vg.strokeWidth(sw)
 
     vg.beginPath()
-    vg.roundedRect(newThumbX, y + ThumbPad, thumbW, thumbH, s.thumbCornerRadius)
+    vg.roundedRect(newThumbX, y + s.thumbPad, thumbW, thumbH,
+                   s.thumbCornerRadius)
     vg.fill()
     vg.stroke()
 
@@ -2244,23 +2237,22 @@ proc vertScrollBar(id:         ItemId,
 
   alias(ui, g_uiState)
   alias(sb, ui.scrollBarState)
+  alias(s, style)
 
   let
     x = x + ui.ox
     y = y + ui.oy
 
-  const
-    ThumbPad = 3
-    ThumbMinH = 10
-
   # Calculate current thumb position
   let
     thumbSize = if thumbSize < 0: 0.000001 else: thumbSize
-    thumbW = w - ThumbPad * 2
-    thumbH = max((h - ThumbPad*2) / (abs(startVal - endVal) / thumbSize),
-                 ThumbMinH)
-    thumbMinY = y + ThumbPad
-    thumbMaxY = y + h - ThumbPad - thumbH
+    thumbW = w - s.thumbPad * 2
+
+    thumbH = max((h - s.thumbPad*2) / (abs(startVal - endVal) / thumbSize),
+                 s.thumbMinSize)
+
+    thumbMinY = y + s.thumbPad
+    thumbMaxY = y + h - s.thumbPad - thumbH
 
   proc calcThumbY(val: float): float =
     let t = invLerp(startVal, endVal, value)
@@ -2384,34 +2376,56 @@ proc vertScrollBar(id:         ItemId,
 
   result = newValue
 
-  # Draw track
-  let drawState = if isHot(id) and noActiveItem(): dsHover
-    elif isActive(id): dsActive
-    else: dsNormal
-
-  let trackColor = case drawState
-    of dsHover:  GRAY_HI
-    of dsActive: GRAY_MID
-    else:        GRAY_MID
-
   addDrawLayer(ui.currentLayer, vg):
+    let (bx, by, bw, bh) = (x, y, w, h)
+
+    let drawState = if isHot(id) and noActiveItem(): dsHover
+      elif isActive(id): dsActive
+      else: dsNormal
+
+    # Draw track
+    var sw = s.trackStrokeWidth
+    var (x, y, w, h) = snapToGrid(x, y, w, h, sw)
+
+    let (trackFillColor, trackStrokeColor,
+         thumbFillColor, thumbStrokeColor,
+         labelColor) =
+      case drawState
+      of dsNormal, dsDisabled:
+        (s.trackFillColor, s.trackStrokeColor,
+         s.thumbFillColor, s.thumbStrokeColor,
+         s.labelColor)
+      of dsHover:
+        (s.trackFillColorHover, s.trackStrokeColorHover,
+         s.thumbFillColorHover, s.thumbStrokeColorHover,
+         s.labelColorHover)
+      of dsActive:
+        (s.trackFillColorActive, s.trackStrokeColorActive,
+         s.thumbFillColorActive, s.thumbStrokeColorActive,
+         s.labelColorActive)
+
+    vg.fillColor(trackFillColor)
+    vg.strokeColor(trackStrokeColor)
+    vg.strokeWidth(sw)
+
     vg.beginPath()
-    vg.roundedRect(x, y, w, h, 5)
-    vg.fillColor(trackColor)
+    vg.roundedRect(x, y, w, h, s.trackCornerRadius)
     vg.fill()
+    vg.stroke()
 
     # Draw thumb
-    let thumbColor = case drawState
-      of dsHover: GRAY_LOHI
-      of dsActive:
-        if sb.state < sbsTrackClickFirst: HILITE
-        else: GRAY_LO
-      else:   GRAY_LO
+    sw = s.thumbStrokeWidth
+    (x, y, w, h) = snapToGrid(x, y, w, h, sw)
+
+    vg.fillColor(thumbFillColor)
+    vg.strokeColor(thumbStrokeColor)
+    vg.strokeWidth(sw)
 
     vg.beginPath()
-    vg.roundedRect(x + ThumbPad, newThumbY, thumbW, thumbH, 5)
-    vg.fillColor(thumbColor)
+    vg.roundedRect(x + s.thumbPad, newThumbY, thumbW, thumbH,
+                   s.thumbCornerRadius)
     vg.fill()
+    vg.stroke()
 
   if isHot(id):
     handleTooltip(id, tooltip)
