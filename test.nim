@@ -52,8 +52,8 @@ var
   textFieldVal2 = "Look behind—you! A three-headed monkey!"
   textFieldVal3 = "42"
 
-#  textAreaVal1 = "A merry little surge of electricity piped by automatic alarm from the mood organ beside his bed awakened Rick Deckard. Surprised—it always surprised him to find himself awake without prior notice—he rose from the bed, stood up in his multicolored pajamas, and stretched.\n\nNow, in her bed, his wife Iran opened her gray, unmerry eyes, blinked, then groaned and shut her eyes again."
-  textAreaVal1 = "123\n4\n\n5\n"
+  textAreaVal1 = "A merry little surge of electricity piped by automatic alarm from the mood organ beside his bed awakened Rick Deckard. Surprised—it always surprised him to find himself awake without prior notice—he rose from the bed, stood up in his multicolored pajamas, and stretched.\n\nNow, in her bed, his wife Iran opened her gray, unmerry eyes, blinked, then groaned and shut her eyes again.     A merry little surge of electricity piped by automatic alarm from the mood organ beside his bed awakened Rick Deckard. Surprised—it always surprised him to find himself awake without prior notice—he rose from the bed, stood up in his multicolored pajamas, and stretched.\n\nNow, in her bed, his wife Iran opened her gray, unmerry eyes, blinked, then groaned and shut her eyes again."
+#  textAreaVal1 = "123\n4\n\n5\n"
   printBreakRows = true
 
 
@@ -140,61 +140,70 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
   y += pad * 2
   scrollBarVal1 = koi.horizScrollBar(
     x, y, w * 1.5, h,
-    startVal = 0, endVal = 100, thumbSize = 20, clickStep = 10.0,
+    startVal = 0, endVal = 100,
+    scrollBarVal1,
     tooltip = "Horizontal ScrollBar 1",
-    scrollBarVal1)
+    thumbSize = 20, clickStep = 10.0)
 
   y += pad
   scrollBarVal2 = koi.horizScrollBar(
     x, y, w * 1.5, h ,
-    startVal = 0, endVal = 1, thumbSize = -1, clickStep = -1,
+    startVal = 0, endVal = 1,
+    scrollBarVal2,
     tooltip = "Horizontal ScrollBar 2",
-    scrollBarVal2)
+    thumbSize = -1, clickStep = -1)
 
   scrollBarVal3 = koi.vertScrollBar(
     320, 60, h, 140,
-    startVal = 0.0, endVal = 100, thumbSize = 20, clickStep = 10,
+    startVal = 0.0, endVal = 100,
+    scrollBarVal3,
     tooltip = "Vertical ScrollBar 1",
-    scrollBarVal3)
+    thumbSize = 20, clickStep = 10)
 
   scrollBarVal4 = koi.vertScrollBar(
     350, 60, h, 140,
-    startVal = 1, endVal = 0, thumbSize = -1, clickStep = -1,
+    startVal = 1, endVal = 0,
+    scrollBarVal4,
     tooltip = "Vertical ScrollBar 2",
-    scrollBarVal4)
+    thumbSize = -1, clickStep = -1)
 
   y += pad
   scrollBarVal5 = koi.horizScrollBar(
     x, y, w * 1.5, h,
-    startVal = 100, endVal = 0, thumbSize = 20, clickStep = 10.0,
+    startVal = 100, endVal = 0,
+    scrollBarVal5,
     tooltip = "Horizontal ScrollBar 3",
-    scrollBarVal5)
+    thumbSize = 20, clickStep = 10.0)
 
   # Sliders
 
   y += pad * 2
   sliderVal1 = koi.horizSlider(
     x, y, w * 1.5, h,
-    startVal = 0, endVal = 100, tooltip = "Horizontal Slider 1",
-    sliderVal1)
+    startVal = 0, endVal = 100,
+    sliderVal1,
+    tooltip = "Horizontal Slider 1")
 
   y += pad
   sliderVal2 = koi.horizSlider(
     x, y, w * 1.5, h,
-    startVal = 50, endVal = -30, tooltip = "Horizontal Slider 2",
-    sliderVal2)
+    startVal = 50, endVal = -30,
+    sliderVal2,
+    tooltip = "Horizontal Slider 2")
 
   sliderVal3 = koi.vertSlider(
     320, 460, h, 120,
-    startVal = 0, endVal = 100, tooltip = "Vertical Slider 1",
-    sliderVal3)
+    startVal = 0, endVal = 100,
+    sliderVal3,
+    tooltip = "Vertical Slider 1")
 
   koi.label(300, 590, w, h, fmt"{sliderVal3:.3f}", labelStyle)
 
   sliderVal4 = koi.vertSlider(
     400, 460, h, 120,
-    startVal = 50, endVal = -30, tooltip = "Vertical Slider 2",
-    sliderVal4)
+    startVal = 50, endVal = -30,
+    sliderVal4,
+    tooltip = "Vertical Slider 2")
 
   koi.label(380, 590, w, h, fmt"{sliderVal4:.3f}", labelStyle)
 
@@ -349,7 +358,7 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
 
 
   textAreaVal1 = koi.textArea(
-    650, 300, 300, 230, textAreaVal1, tooltip = "Text area 1")
+    650, 300, 300, 225, textAreaVal1, tooltip = "Text area 1")
 
 
   # Menu

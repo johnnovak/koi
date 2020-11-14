@@ -112,7 +112,7 @@ type
     # Text field item in edit mode, 0 if no text field is being edited.
     activeItem:      ItemId
 
-    # The text is displayed starting from the Rune with this index.
+    # The text is displayed starting from the Rune of this index.
     displayStartPos: Natural
 
     # The text will be drawn at thix X coordinate (can be smaller than the
@@ -153,8 +153,15 @@ type
     # Current text selection
     selection:       TextSelection
 
-    # Text area item in edit mode, 0 if no text area is being edited.
+    # Text area item in edit mode, 0 if no text area is being edited
     activeItem:      ItemId
+
+    # The text is displayed starting from the row of this index
+    displayStartRow: Natural
+
+    # The text will be drawn at thix Y coordinate (can be smaller than the
+    # starting Y coordinate of the textbox)
+    displayStartY:   float
 
     # The original text is stored when going into edit mode so it can be
     # restored if the editing is cancelled.
@@ -350,6 +357,7 @@ const
   SliderFineDragDivisor      = 10.0
   SliderUltraFineDragDivisor = 100.0
 
+  # TODO make it a font param for every widget
   TextVertAlignFactor = 0.55
 
   DoubleClickMaxDelay = 0.1
@@ -1251,8 +1259,8 @@ var DefaultCheckBoxStyle = CheckBoxStyle(
   iconColorActive   : GRAY_HI,
   iconFontSize      : 14.0,
   iconFontFace      : "sans-bold",
-  iconActive        : "X",
-  iconInactive      : "/"
+  iconActive        : "",
+  iconInactive      : ""
 )
 
 proc getDefaultCheckBoxStyle*(): CheckBoxStyle =
@@ -1435,8 +1443,6 @@ let DefaultRadioButtonDrawProc: RadioButtonsDrawProc =
       bw = round(x + buttonW) - bx
       bh = h - s.buttonPadVert
 
-    vg.save()
-
     vg.setFont(s.labelFontSize)
 
     vg.fillColor(fillColor)
@@ -1452,20 +1458,8 @@ let DefaultRadioButtonDrawProc: RadioButtonsDrawProc =
     vg.fill()
     vg.stroke()
 
-    let
-      textBoxX = bx + s.labelPadHoriz
-      textBoxW = bw - s.labelPadHoriz*2
-      textBoxY = y
-      textBoxH = bh
-
-    vg.intersectScissor(textBoxX, textBoxY, textBoxW, textBoxH)
-
-    vg.fillColor(labelColor)
-    let tw = vg.textWidth(label)
-    discard vg.text(bx + bw*0.5 - tw*0.5, y + bh*TextVertAlignFactor,
-                    label)
-
-    vg.restore()
+    vg.drawLabel(bx, y, bw, bh, s.labelPadHoriz, label, labelColor,
+                 s.labelFontSize, s.labelFontFace, s.labelAlign)
 
 
 proc radioButtons(
@@ -1670,12 +1664,12 @@ var DefaultDropdownStyle = DropdownStyle(
   buttonStrokeWidth         : 0,
   buttonStrokeColor         : black(),
   buttonStrokeColorHover    : black(),
-  buttonStrokeColorDown     : black(),
+  buttonStrokeColorDown     : black(), # TODO
   buttonStrokeColorActive   : black(),
   buttonStrokeColorDisabled : black(),
   buttonFillColor           : GRAY_MID,
   buttonFillColorHover      : GRAY_HI,
-  buttonFillColorDown       : GRAY_MID,
+  buttonFillColorDown       : GRAY_MID, # TODO
   buttonFillColorActive     : GRAY_MID,
   buttonFillColorDisabled   : GRAY_LO,
   labelPadHoriz             : 8,
@@ -1684,7 +1678,7 @@ var DefaultDropdownStyle = DropdownStyle(
   labelAlign                : haLeft,
   labelColor                : GRAY_LO,
   labelColorHover           : GRAY_LO,
-  labelColorDown            : GRAY_LO,
+  labelColorDown            : GRAY_LO, # TODO
   labelColorActive          : GRAY_LO,
   labelColorDisabled        : GRAY_MID,
   itemListAlign             : haCenter,
@@ -1914,17 +1908,68 @@ template dropdown*(
 
 # }}}
 # {{{ ScrollBar
+
+type ScrollBarStyle* = ref object
+  bgCornerRadius*:      float
+  bgStrokeWidth*:       float
+  bgStrokeColor*:       Color
+  bgStrokeColorHover*:  Color
+  bgStrokeColorActive*: Color
+  bgFillColor*:         Color
+  bgFillColorHover*:    Color
+  bgFillColorActive*:   Color
+  textPadHoriz*:        float
+  textPadVert*:         float
+  textFontSize*:        float
+  textFontFace*:        string
+  textColor*:           Color
+  textColorHover*:      Color
+  textColorActive*:     Color
+  cursorWidth*:         float
+  cursorColor*:         Color
+  selectionColor*:      Color
+
+var DefaultScrollBarStyle = ScrollBarStyle(
+  bgCornerRadius      : 5,
+  bgStrokeWidth       : 0,
+  bgStrokeColor       : black(),
+  bgStrokeColorHover  : black(),
+  bgStrokeColorActive : black(),
+  bgFillColor         : GRAY_MID,
+  bgFillColorHover    : GRAY_HI,
+  bgFillColorActive   : GRAY_LO,
+  textPadHoriz        : 8.0,
+  textPadVert         : 2.0,
+  textFontSize        : 14.0,
+  textFontFace        : "sans-bold",
+  textColor           : GRAY_LO,
+  textColorHover      : GRAY_LO,
+  textColorActive     : GRAY_HI,
+  cursorColor         : HILITE,
+  cursorWidth         : 1.0,
+  selectionColor      : rgb(0.5, 0.15, 0.15)
+)
+
+
+proc getDefaultScrollBarStyle*(): ScrollBarStyle =
+  DefaultScrollBarStyle.deepCopy
+
+proc setDefaultScrollBarStyle*(style: ScrollBarStyle) =
+  DefaultScrollBarStyle = style.deepCopy
+
 # {{{ horizScrollBar
 
 # Must be kept in sync with vertScrollBar!
+
 proc horizScrollBar(id:         ItemId,
                     x, y, w, h: float,
-                    startVal:   float =  0.0,
-                    endVal:     float =  1.0,
+                    startVal:   float,
+                    endVal:     float,
+                    value:      float,
+                    tooltip:    string = "",
                     thumbSize:  float = -1.0,
                     clickStep:  float = -1.0,
-                    tooltip:    string = "",
-                    value:      float): float =
+                    style:      ScrollBarStyle): float =
 
   assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
          (endVal   < startVal and value >= endVal   and value <= startVal)
@@ -2116,20 +2161,19 @@ proc horizScrollBar(id:         ItemId,
 
 
 template horizScrollBar*(x, y, w, h: float,
-                         startVal:  float =  0.0,
-                         endVal:    float =  1.0,
+                         startVal:  float,
+                         endVal:    float,
+                         value:     float,
+                         tooltip:   string = "",
                          thumbSize: float = -1.0,
                          clickStep: float = -1.0,
-                         tooltip:   string = "",
-                         value:     float): float =
+                         style:     ScrollBarStyle = DefaultScrollBarStyle): float =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  horizScrollBar(id,
-                 x, y, w, h,
-                 startVal, endVal, thumbSize, clickStep, tooltip,
-                 value)
+  horizScrollBar(id, x, y, w, h, startVal, endVal, value, tooltip, thumbSize,
+                 clickStep, style)
 
 # }}}
 # {{{ vertScrollBar
@@ -2137,12 +2181,13 @@ template horizScrollBar*(x, y, w, h: float,
 # Must be kept in sync with horizScrollBar!
 proc vertScrollBar(id:         ItemId,
                    x, y, w, h: float,
-                   startVal:   float =  0.0,
-                   endVal:     float =  1.0,
+                   startVal:   float,
+                   endVal:     float,
+                   value:      float,
+                   tooltip:    string = "",
                    thumbSize:  float = -1.0,
                    clickStep:  float = -1.0,
-                   tooltip:    string = "",
-                   value:      float): float =
+                   style:      ScrollBarStyle): float =
 
   assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
          (endVal   < startVal and value >= endVal   and value <= startVal)
@@ -2326,20 +2371,19 @@ proc vertScrollBar(id:         ItemId,
 
 
 template vertScrollBar*(x, y, w, h: float,
-                        startVal:   float =  0.0,
-                        endVal:     float =  1.0,
+                        startVal:   float,
+                        endVal:     float,
+                        value:      float,
+                        tooltip:    string = "",
                         thumbSize:  float = -1.0,
                         clickStep:  float = -1.0,
-                        tooltip:    string = "",
-                        value:      float): float =
+                        style:      ScrollBarStyle = DefaultScrollBarStyle): float =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  vertScrollBar(id,
-                x, y, w, h,
-                startVal, endVal, thumbSize, clickStep, tooltip,
-                value)
+  vertScrollBar(id, x, y, w, h, startVal, endVal, value, tooltip, thumbSize,
+                clickStep, style)
 
 # }}}
 # {{{ scrollBarPost
@@ -2869,7 +2913,7 @@ var DefaultTextFieldStyle = TextFieldStyle(
   textPadHoriz        : 8.0,
   textPadVert         : 2.0,
   textFontSize        : 14.0,
-  textFontFace        : "sans",
+  textFontFace        : "sans-bold",
   textColor           : GRAY_LO,
   textColorHover      : GRAY_LO,
   textColorActive     : GRAY_HI,
@@ -2997,6 +3041,7 @@ proc textField(
 
 
   proc enforceConstraint(text, originalText: string): string =
+    # TODO stripping should be optional
     var text = unicode.strip(text)
     result = text
     if constraint.isSome:
@@ -3436,7 +3481,7 @@ type TextAreaStyle* = object
 
 var DefaultTextAreaStyle = TextAreaStyle(
   bgCornerRadius      : 5,
-  bgStrokeWidth       : 0,
+  bgStrokeWidth       : 0, # TODO
   bgStrokeColor       : black(),
   bgStrokeColorHover  : black(),
   bgStrokeColorActive : black(),
@@ -3446,10 +3491,10 @@ var DefaultTextAreaStyle = TextAreaStyle(
   textPadHoriz        : 8.0,
   textPadVert         : 2.0,
   textFontSize        : 14.0,
-  textFontFace        : "sans",
+  textFontFace        : "sans-bold", # TODO
   textLineHeight      : 1.4,
   textColor           : GRAY_LO,
-  textColorHover      : GRAY_LO,
+  textColorHover      : GRAY_LO, # TODO
   textColorActive     : GRAY_HI,
   cursorColor         : HILITE,
   cursorWidth         : 1.0,
@@ -3497,8 +3542,8 @@ proc textArea(
   let
     textBoxX = x + s.textPadHoriz
     textBoxW = w - s.textPadHoriz*2
-    textBoxY = y
-    textBoxH = h
+    textBoxY = y + s.textPadVert
+    textBoxH = h - s.textPadVert*2
 
   var
     text = text
@@ -3527,6 +3572,8 @@ proc textArea(
     ta.state = tasDefault
     ta.activeItem = 0
     ta.cursorPos = 0
+    ta.displayStartRow = 0
+    ta.displayStartY = 0
     ta.selection = NoSelection
     ta.originalText = ""
     ta.lastActiveItem = id
@@ -3556,8 +3603,12 @@ proc textArea(
         ta.state = tasEditEntered
 
 
+  proc setFont() =
+    g_nvgContext.setFont(s.textFontSize, name=s.textFontFace,
+                         vertAlign=vaBaseline)
+
   proc calcGlypPosForRow(x, y: float, row: TextRow): Natural =
-    g_nvgContext.setFont(s.textFontSize, vertAlign=vaBaseline)
+    setFont()
     return g_nvgContext.textGlyphPositions(x, y, text,
                                            row.startBytePos, row.endBytePos,
                                            glyphs)
@@ -3613,7 +3664,7 @@ proc textArea(
       else:
         # We only need to break the text into rows when handling
         # textarea-specific shortcuts
-        g_nvgContext.setFont(s.textFontSize, vertAlign=vaBaseline)
+        setFont()
         let rows = textBreakLines(text, textBoxW)
 
         var currRow: TextRow
@@ -3652,7 +3703,7 @@ proc textArea(
         # Editing
         if sc in shortcuts[tesInsertNewline]:
           text = text.runeSubstr(0, ta.cursorPos) & "\n" &
-                 text.runeSubstr(ta.cursorPos) 
+                 text.runeSubstr(ta.cursorPos)
           inc(ta.cursorPos)
 
         # Cursor movement
@@ -3800,8 +3851,8 @@ proc textArea(
       ta.cursorPos = 0
       ta.selection = NoSelection
 
-
   result = text
+
 
   # Draw text area
   let editing = ta.activeItem == id
@@ -3839,30 +3890,42 @@ proc textArea(
     # Make scissor region slightly wider because of the cursor
     vg.intersectScissor(textBoxX, textBoxY, textBoxW + TextRightPad, textBoxH)
 
-    # Draw text
-    # TODO text color hover
-    let textColor = if editing: s.textColorActive else: s.textColor
-
-    vg.setFont(s.textFontSize, vertAlign=vaBaseline)
-
+    setFont()
     var (_, _, lineHeight) = vg.textMetrics()
     lineHeight = floor(lineHeight * s.textLineHeight)
 
     let rows = textBreakLines(text, textBoxW)
 
-    echo "---------------"
-    for r in rows:
-      echo r
+    # Update display state vars
+    let maxDisplayRows = (textBoxH / lineHeight).int
+
+    var currRow = rows.high
+    for rowIdx, row in rows.pairs():
+      if ta.cursorPos >= row.startPos and
+         ta.cursorPos <= row.endPos:
+        currRow = rowIdx
+        break
+
+    if currRow < ta.displayStartRow:
+      ta.displayStartRow = currRow
+    else:
+      let displayEndRow = min(ta.displayStartRow + maxDisplayRows-1, rows.high)
+      if currRow > displayEndRow:
+        ta.displayStartRow = max(currRow - (maxDisplayRows-1), 0)
 
     let sel = normaliseSelection(ta.selection)
 
     var
       textX = textBoxX
+      # TODO make these config params?
       textY = floor(textBoxY + lineHeight * 1.1)
       cursorYAdjust = floor(lineHeight*0.77)
       numGlyphs: Natural
 
-    for rowIdx, row in rows.pairs():
+    let displayEndRow = min(ta.displayStartRow + maxDisplayRows-1, rows.high)
+
+    for rowIdx in ta.displayStartRow..displayEndRow:
+      let row = rows[rowIdx]
       # Draw selection
       if editing:
         numGlyphs = calcGlypPosForRow(textX, textY, row)
@@ -3893,6 +3956,7 @@ proc textArea(
             vg.fill()
 
       # Draw text
+      let textColor = if editing: s.textColorActive else: s.textColor
       vg.fillColor(textColor)
       discard vg.text(textX, textY, text, row.startBytePos, row.endBytePos)
 
@@ -3964,10 +4028,10 @@ template textArea*(
 
 proc horizSlider(id:         ItemId,
                  x, y, w, h: float,
-                 startVal:   float = 0.0,
-                 endVal:     float = 1.0,
-                 tooltip:    string = "",
-                 value:      float): float =
+                 startVal:   float,
+                 endVal:     float,
+                 value:      float,
+                 tooltip:    string = ""): float =
 
   assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
          (endVal   < startVal and value >= endVal   and value <= startVal)
@@ -4127,25 +4191,23 @@ proc horizSlider(id:         ItemId,
 template horizSlider*(x, y, w, h: float,
                       startVal:   float = 0.0,
                       endVal:     float = 1.0,
-                      tooltip:    string = "",
-                      value:      float): float =
+                      value:      float,
+                      tooltip:    string = ""): float =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  horizSlider(id,
-              x, y, w, h, startVal, endVal, tooltip,
-              value)
+  horizSlider(id, x, y, w, h, startVal, endVal, value, tooltip)
 
 # }}}
 # {{{ vertSlider
 
 proc vertSlider(id:         ItemId,
                 x, y, w, h: float,
-                startVal:   float = 0.0,
-                endVal:     float = 1.0,
-                tooltip:    string = "",
-                value:      float): float =
+                startVal:   float,
+                endVal:     float,
+                value:      float,
+                tooltip:    string = ""): float =
 
   assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
          (endVal   < startVal and value >= endVal   and value <= startVal)
@@ -4246,18 +4308,15 @@ proc vertSlider(id:         ItemId,
 
 
 template vertSlider*(x, y, w, h: float,
-                     startVal:   float = 0.0,
-                     endVal:     float = 1.0,
-                     tooltip:    string = "",
-                     value:      float): float =
+                     startVal:   float,
+                     endVal:     float,
+                     value:      float,
+                     tooltip:    string = ""): float =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  vertSlider(id,
-             x, y, w, h,
-             startVal, endVal, tooltip,
-             value)
+  vertSlider(id, x, y, w, h, startVal, endVal, value, tooltip)
 
 # }}}
 # {{{ sliderPost

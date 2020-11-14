@@ -53,3 +53,4 @@ TODO
 
 - "soft asserts" (check) that print errors to stderr instead of aborting
 
+- set theme paramters globally (e.g. font, corner roundness, colours)
