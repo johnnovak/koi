@@ -1993,11 +1993,12 @@ proc horizScrollBar(id:         ItemId,
                     clickStep:  float = -1.0,
                     style:      ScrollBarStyle): float =
 
-  assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
-         (endVal   < startVal and value >= endVal   and value <= startVal)
+  # TODO only for debugging, too fragile
+#  assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
+#         (endVal   < startVal and value >= endVal   and value <= startVal)
 
-  assert thumbSize < 0.0 or thumbSize < abs(startVal - endVal)
-  assert clickStep < 0.0 or clickStep < abs(startVal - endVal)
+#  assert thumbSize < 0.0 or thumbSize < abs(startVal - endVal)
+#  assert clickStep < 0.0 or clickStep < abs(startVal - endVal)
 
   alias(ui, g_uiState)
   alias(sb, ui.scrollBarState)
@@ -2229,11 +2230,12 @@ proc vertScrollBar(id:         ItemId,
                    clickStep:  float = -1.0,
                    style:      ScrollBarStyle): float =
 
-  assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
-         (endVal   < startVal and value >= endVal   and value <= startVal)
+  # TODO only for debugging, too fragile
+#  assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
+#         (endVal   < startVal and value >= endVal   and value <= startVal)
 
-  assert thumbSize < 0.0 or thumbSize < abs(startVal - endVal)
-  assert clickStep < 0.0 or clickStep < abs(startVal - endVal)
+#  assert thumbSize < 0.0 or thumbSize < abs(startVal - endVal)
+#  assert clickStep < 0.0 or clickStep < abs(startVal - endVal)
 
   alias(ui, g_uiState)
   alias(sb, ui.scrollBarState)
@@ -3577,8 +3579,20 @@ type
     minLen*: Natural
     maxLen*: int
 
+var DefaultTextAreaScrollBarStyle = getDefaultScrollBarStyle()
+DefaultTextAreaScrollBarStyle.trackCornerRadius = 3
+DefaultTextAreaScrollBarStyle.trackFillColor = gray(0, 0)
+DefaultTextAreaScrollBarStyle.trackFillColorHover = gray(0, 0)
+DefaultTextAreaScrollBarStyle.trackFillColorActive = gray(0, 0)
+DefaultTextAreaScrollBarStyle.thumbCornerRadius = 3
+DefaultTextAreaScrollBarStyle.thumbFillColor = gray(0.4)
+DefaultTextAreaScrollBarStyle.thumbFillColorHover = gray(0.43)
+DefaultTextAreaScrollBarStyle.thumbFillColorActive = gray(0.35)
+
+var DefaultTextAreaScrollBarStyle_EditMode = DefaultTextAreaScrollBarStyle.deepCopy()
 
 var textAreaScrollBarPos: float
+
 
 proc textArea(
   id:         ItemId,
@@ -3622,7 +3636,7 @@ proc textArea(
   var (_, _, lineHeight) = vg.textMetrics()
   lineHeight = floor(lineHeight * s.textLineHeight)
 
-  let maxDisplayRows = (textBoxH / lineHeight).int
+  var maxDisplayRows = (textBoxH / lineHeight).int
 
   var
     text = text
@@ -3638,8 +3652,8 @@ proc textArea(
     ta.activeItem = id
     ta.cursorPos = text.runeLen
     ta.originalText = text
-    ta.selection.startPos = 0
-    ta.selection.endPos = ta.cursorPos
+    ta.selection.startPos = -1
+    ta.selection.endPos = 0
 
     ui.focusCaptured = true
 
@@ -3675,7 +3689,7 @@ proc textArea(
       tabActivate = true
 
     # Hit testing
-    if isHit(x, y, w, h) or activate or tabActivate:
+    if isHit(x, y, w - ScrollBarWidth, h) or activate or tabActivate:
       setHot(id)
       if (ui.mbLeftDown and noActiveItem()) or activate or tabActivate:
         enterEditMode(id, text, textBoxX)
@@ -3688,7 +3702,7 @@ proc textArea(
                                  row.startBytePos, row.endBytePos, glyphs)
 
   # TODO suboptimal to do this on every frame?
-  let rows = textBreakLines(text, textBoxW)
+  var rows = textBreakLines(text, textBoxW)
 
   # We 'fall through' to the edit state to avoid a 1-frame delay when going
   # into edit mode
@@ -3941,33 +3955,64 @@ proc textArea(
       ta.cursorPos = 0
       ta.selection = NoSelection
 
+    # Recalculate lines after an edit -- necessary for the scrollbar to work
+    # correctly
+    rows = textBreakLines(text, textBoxW)
+
     setFramesLeft()
 
   result = text
 
-  # Draw text area
   let editing = ta.activeItem == id
 
-  let drawState = if isHot(id) and noActiveItem(): dsHover
-    elif editing: dsActive
-    else: dsNormal
+  # Update state vars
+  maxDisplayRows = (textBoxH / lineHeight).int
 
-  let (fillColor, strokeColor) = case drawState
-    of dsHover:  (s.bgFillColorHover,  s.bgStrokeColorHover)
-    of dsActive: (s.bgFillColorActive, s.bgStrokeColorActive)
-    else:        (s.bgFillColor,       s.bgStrokeColor)
+  var currRow = rows.high
+  for rowIdx, row in rows.pairs():
+    if ta.cursorPos >= row.startPos and
+       ta.cursorPos <= row.endPos:
+      currRow = rowIdx
+      break
 
-  ################
-  textAreaScrollBarPos = koi.vertScrollBar(
+  if editing:
+    if currRow < ta.displayStartRow:
+      ta.displayStartRow = currRow.float
+    else:
+      let displayEndRow = min(ta.displayStartRow.int + maxDisplayRows-1,
+                              rows.high)
+      if currRow > displayEndRow:
+        ta.displayStartRow = max(currRow - (maxDisplayRows-1), 0).float
+
+    let maxDisplayStartRow = max(rows.len.int - maxDisplayRows, 0)
+    ta.displayStartRow = min(ta.displayStartRow.int, maxDisplayStartRow).float
+
+  # Scrollbar
+  let sbStyle = if editing: DefaultTextAreaScrollBarStyle_EditMode
+                else:       DefaultTextAreaScrollBarStyle
+
+  let endVal = max(rows.len.float - maxDisplayRows, ta.displayStartRow)
+  let thumbSize = maxDisplayRows.float *
+                  ((rows.len.float - maxDisplayRows) / rows.len)
+
+  ta.displayStartRow = koi.vertScrollBar(
     x+w - ScrollBarWidth, y, ScrollBarWidth, h,
-    startVal = 0, endVal = rows.len.float - maxDisplayRows,
+    startVal=0, endVal=endVal,
     ta.displayStartRow,
-    thumbSize = maxDisplayRows.float * ((rows.len.float - maxDisplayRows) / rows.len.float) , clickStep = 10)
+    thumbSize=thumbSize, clickStep=2, style=sbStyle)
 
-  ################
 
   addDrawLayer(ui.currentLayer-1, vg):
     vg.save()
+
+    let drawState = if isHot(id) and noActiveItem(): dsHover
+      elif editing: dsActive
+      else: dsNormal
+
+    let (fillColor, strokeColor) = case drawState
+      of dsHover:  (s.bgFillColorHover,  s.bgStrokeColorHover)
+      of dsActive: (s.bgFillColorActive, s.bgStrokeColorActive)
+      else:        (s.bgFillColor,       s.bgStrokeColor)
 
     # Draw text field background
     if drawWidget:
@@ -3990,23 +4035,7 @@ proc textArea(
 
     setFont()
     let rows = textBreakLines(text, textBoxW)
-
-    # Update display state vars
     let maxDisplayRows = (textBoxH / lineHeight).int
-
-    var currRow = rows.high
-    for rowIdx, row in rows.pairs():
-      if ta.cursorPos >= row.startPos and
-         ta.cursorPos <= row.endPos:
-        currRow = rowIdx
-        break
-
-    if currRow < ta.displayStartRow:
-      ta.displayStartRow = currRow.float
-    else:
-      let displayEndRow = min(ta.displayStartRow.int + maxDisplayRows-1, rows.high)
-      if currRow > displayEndRow:
-        ta.displayStartRow = max(currRow - (maxDisplayRows-1), 0).float
 
     let sel = normaliseSelection(ta.selection)
 
