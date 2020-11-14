@@ -157,7 +157,7 @@ type
     activeItem:      ItemId
 
     # The text is displayed starting from the row of this index
-    displayStartRow: Natural
+    displayStartRow: float
 
     # The text will be drawn at thix Y coordinate (can be smaller than the
     # starting Y coordinate of the textbox)
@@ -1208,6 +1208,7 @@ proc button(id:         ItemId,
       vg.fillColor(fillColor)
       vg.strokeColor(strokeColor)
       vg.strokeWidth(sw)
+
       vg.beginPath()
       vg.roundedRect(x, y, w, h, s.buttonCornerRadius)
       vg.fill()
@@ -1923,44 +1924,50 @@ template dropdown*(
 
 # TODO these are not used currently
 type ScrollBarStyle* = ref object
-  bgCornerRadius*:      float
-  bgStrokeWidth*:       float
-  bgStrokeColor*:       Color
-  bgStrokeColorHover*:  Color
-  bgStrokeColorActive*: Color
-  bgFillColor*:         Color
-  bgFillColorHover*:    Color
-  bgFillColorActive*:   Color
-  textPadHoriz*:        float
-  textPadVert*:         float
-  textFontSize*:        float
-  textFontFace*:        string
-  textColor*:           Color
-  textColorHover*:      Color
-  textColorActive*:     Color
-  cursorWidth*:         float
-  cursorColor*:         Color
-  selectionColor*:      Color
+  trackCornerRadius*:      float
+  trackStrokeWidth*:       float
+  trackStrokeColor*:       Color
+  trackStrokeColorHover*:  Color
+  trackStrokeColorActive*: Color
+  trackFillColor*:         Color
+  trackFillColorHover*:    Color
+  trackFillColorActive*:   Color
+  thumbCornerRadius*:      float
+  thumbStrokeWidth*:       float
+  thumbStrokeColor*:       Color
+  thumbStrokeColorHover*:  Color
+  thumbStrokeColorActive*: Color
+  thumbFillColor*:         Color
+  thumbFillColorHover*:    Color
+  thumbFillColorActive*:   Color
+  labelFontSize*:          float
+  labelFontFace*:          string
+  labelColor*:             Color
+  labelColorHover*:        Color
+  labelColorActive*:       Color
 
 var DefaultScrollBarStyle = ScrollBarStyle(
-  bgCornerRadius      : 5,
-  bgStrokeWidth       : 0,
-  bgStrokeColor       : black(),
-  bgStrokeColorHover  : black(),
-  bgStrokeColorActive : black(),
-  bgFillColor         : GRAY_MID,
-  bgFillColorHover    : GRAY_HI,
-  bgFillColorActive   : GRAY_LO,
-  textPadHoriz        : 8.0,
-  textPadVert         : 2.0,
-  textFontSize        : 14.0,
-  textFontFace        : "sans-bold",
-  textColor           : GRAY_LO,
-  textColorHover      : GRAY_LO,
-  textColorActive     : GRAY_HI,
-  cursorColor         : HILITE,
-  cursorWidth         : 1.0,
-  selectionColor      : rgb(0.5, 0.15, 0.15)
+  trackCornerRadius      : 5,
+  trackStrokeWidth       : 0,
+  trackStrokeColor       : black(),
+  trackStrokeColorHover  : black(),
+  trackStrokeColorActive : black(),
+  trackFillColor         : GRAY_MID,
+  trackFillColorHover    : GRAY_HI,
+  trackFillColorActive   : GRAY_MID,
+  thumbCornerRadius      : 5,
+  thumbStrokeWidth       : 0,
+  thumbStrokeColor       : black(),
+  thumbStrokeColorHover  : black(),
+  thumbStrokeColorActive : black(),
+  thumbFillColor         : GRAY_LO,
+  thumbFillColorHover    : GRAY_LOHI,
+  thumbFillColorActive   : HILITE,
+  labelFontSize          : 14.0,
+  labelFontFace          : "sans-bold",
+  labelColor             : white(),
+  labelColorHover        : white(),
+  labelColorActive       : white()
 )
 
 
@@ -1992,6 +1999,7 @@ proc horizScrollBar(id:         ItemId,
 
   alias(ui, g_uiState)
   alias(sb, ui.scrollBarState)
+  alias(s, style)
 
   let
     x = x + ui.ox
@@ -2135,40 +2143,65 @@ proc horizScrollBar(id:         ItemId,
 
   result = newValue
 
-  # Draw track
-  let drawState = if isHot(id) and noActiveItem(): dsHover
-    elif isActive(id): dsActive
-    else: dsNormal
-
-  let trackColor = case drawState
-    of dsHover:  GRAY_HI
-    of dsActive: GRAY_MID
-    else:        GRAY_MID
-
   addDrawLayer(ui.currentLayer, vg):
+    let (bx, by, bw, bh) = (x, y, w, h)
+
+    let drawState = if isHot(id) and noActiveItem(): dsHover
+      elif isActive(id): dsActive
+      else: dsNormal
+
+    # Draw track
+    var sw = s.trackStrokeWidth
+    var (x, y, w, h) = snapToGrid(x, y, w, h, sw)
+
+    let trackColor = case drawState
+      of dsHover:  GRAY_HI
+      of dsActive: GRAY_MID
+      else:        GRAY_MID
+
+    let (trackFillColor, trackStrokeColor,
+         thumbFillColor, thumbStrokeColor,
+         labelColor) =
+      case drawState
+      of dsNormal, dsDisabled:
+        (s.trackFillColor, s.trackStrokeColor,
+         s.thumbFillColor, s.thumbStrokeColor,
+         s.labelColor)
+      of dsHover:
+        (s.trackFillColorHover, s.trackStrokeColorHover,
+         s.thumbFillColorHover, s.thumbStrokeColorHover,
+         s.labelColorHover)
+      of dsActive:
+        (s.trackFillColorActive, s.trackStrokeColorActive,
+         s.thumbFillColorActive, s.thumbStrokeColorActive,
+         s.labelColorActive)
+
+    vg.fillColor(trackFillColor)
+    vg.strokeColor(trackStrokeColor)
+    vg.strokeWidth(sw)
+
     vg.beginPath()
-    vg.roundedRect(x, y, w, h, 5)
-    vg.fillColor(trackColor)
+    vg.roundedRect(x, y, w, h, s.trackCornerRadius)
     vg.fill()
+    vg.stroke()
 
     # Draw thumb
-    let thumbColor = case drawState
-      of dsHover: GRAY_LOHI
-      of dsActive:
-        if sb.state < sbsTrackClickFirst: HILITE
-        else: GRAY_LO
-      else:   GRAY_LO
+    sw = s.thumbStrokeWidth
+    (x, y, w, h) = snapToGrid(x, y, w, h, sw)
+
+    vg.fillColor(thumbFillColor)
+    vg.strokeColor(thumbStrokeColor)
+    vg.strokeWidth(sw)
 
     vg.beginPath()
-    vg.roundedRect(newThumbX, y + ThumbPad, thumbW, thumbH, 5)
-    vg.fillColor(thumbColor)
+    vg.roundedRect(newThumbX, y + ThumbPad, thumbW, thumbH, s.thumbCornerRadius)
     vg.fill()
+    vg.stroke()
 
-    vg.setFont(14.0)
-    vg.fillColor(white())
     let valueString = fmt"{newValue:.3f}"
-    let tw = vg.textWidth(valueString)
-    discard vg.text(x + w*0.5 - tw*0.5, y + h*TextVertAlignFactor, valueString)
+
+    vg.drawLabel(bx, by, bw, bh, 0, valueString, labelColor,
+                 s.labelFontSize, s.labelFontFace, haCenter)
 
   if isHot(id):
     handleTooltip(id, tooltip)
@@ -3032,7 +3065,7 @@ proc textField(
         tf.state = tfsEditLMBPressed
 
 
-  proc setFont() = 
+  proc setFont() =
     g_nvgContext.setFont(s.textFontSize, name=s.textFontFace)
 
   proc calcGlyphPos() =
@@ -3531,6 +3564,8 @@ type
     maxLen*: int
 
 
+var textAreaScrollBarPos: float
+
 proc textArea(
   id:         ItemId,
   x, y, w, h: float,
@@ -3552,6 +3587,9 @@ proc textArea(
 
   let TextRightPad = s.textFontSize
 
+  # TODO style param
+  let ScrollBarWidth = 12.0
+
   let
     x = x + ui.ox
     y = y + ui.oy
@@ -3559,7 +3597,7 @@ proc textArea(
   # The text is displayed within this rectangle (used for drawing later)
   let
     textBoxX = x + s.textPadHoriz
-    textBoxW = w - s.textPadHoriz*2
+    textBoxW = w - s.textPadHoriz - ScrollBarWidth
     textBoxY = y + s.textPadVert
     textBoxH = h - s.textPadVert*2
 
@@ -3635,6 +3673,9 @@ proc textArea(
     return vg.textGlyphPositions(x, y, text,
                                  row.startBytePos, row.endBytePos, glyphs)
 
+  # TODO suboptimal to do this on every frame?
+  let rows = textBreakLines(text, textBoxW)
+
   # We 'fall through' to the edit state to avoid a 1-frame delay when going
   # into edit mode
   if ta.activeItem == id and ta.state >= tasEditEntered:
@@ -3690,10 +3731,6 @@ proc textArea(
         ta.selection = res.get.selection
 
       else:
-        # We only need to break the text into rows when handling
-        # textarea-specific shortcuts
-        let rows = textBreakLines(text, textBoxW)
-
         var currRow: TextRow
         var currRowIdx: Natural
 
@@ -3890,8 +3927,9 @@ proc textArea(
       ta.cursorPos = 0
       ta.selection = NoSelection
 
-  result = text
+    setFramesLeft()
 
+  result = text
 
   # Draw text area
   let editing = ta.activeItem == id
@@ -3905,9 +3943,16 @@ proc textArea(
     of dsActive: (s.bgFillColorActive, s.bgStrokeColorActive)
     else:        (s.bgFillColor,       s.bgStrokeColor)
 
-  let layer = if editing: TopLayer-3 else: ui.currentLayer
+  ################
+  textAreaScrollBarPos = koi.vertScrollBar(
+    x+w - ScrollBarWidth, y, ScrollBarWidth, h,
+    startVal = 0, endVal = rows.len.float - maxDisplayRows,
+    ta.displayStartRow,
+    thumbSize = maxDisplayRows.float * ((rows.len.float - maxDisplayRows) / rows.len.float) , clickStep = 10)
 
-  addDrawLayer(layer, vg):
+  ################
+
+  addDrawLayer(ui.currentLayer-1, vg):
     vg.save()
 
     # Draw text field background
@@ -3943,11 +3988,11 @@ proc textArea(
         break
 
     if currRow < ta.displayStartRow:
-      ta.displayStartRow = currRow
+      ta.displayStartRow = currRow.float
     else:
-      let displayEndRow = min(ta.displayStartRow + maxDisplayRows-1, rows.high)
+      let displayEndRow = min(ta.displayStartRow.int + maxDisplayRows-1, rows.high)
       if currRow > displayEndRow:
-        ta.displayStartRow = max(currRow - (maxDisplayRows-1), 0)
+        ta.displayStartRow = max(currRow - (maxDisplayRows-1), 0).float
 
     let sel = normaliseSelection(ta.selection)
 
@@ -3958,9 +4003,9 @@ proc textArea(
       cursorYAdjust = floor(lineHeight*0.77)
       numGlyphs: Natural
 
-    let displayEndRow = min(ta.displayStartRow + maxDisplayRows-1, rows.high)
+    let displayEndRow = min(ta.displayStartRow.int + maxDisplayRows-1, rows.high)
 
-    for rowIdx in ta.displayStartRow..displayEndRow:
+    for rowIdx in ta.displayStartRow.int..displayEndRow:
       let row = rows[rowIdx]
       # Draw selection
       if editing:
@@ -4175,7 +4220,8 @@ proc horizSlider(id:         ItemId,
 
         # The edit field is drawn on the top of everything else; we'll need
         # to remove it so we can draw the slider correctly
-        g_drawLayers.removeLastAdded()
+        # TODO why was this needed???
+#        g_drawLayers.removeLastAdded()
 
       else:
         # Reset hot & active to the current item so we won't confuse the
