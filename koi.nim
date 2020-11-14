@@ -1909,6 +1909,7 @@ template dropdown*(
 # }}}
 # {{{ ScrollBar
 
+# TODO these are not used currently
 type ScrollBarStyle* = ref object
   bgCornerRadius*:      float
   bgStrokeWidth*:       float
@@ -1984,6 +1985,7 @@ proc horizScrollBar(id:         ItemId,
     x = x + ui.ox
     y = y + ui.oy
 
+  # TODO style params
   const
     ThumbPad = 3
     ThumbMinW = 10
@@ -2416,7 +2418,7 @@ type TextEditResult = object
   cursorPos: Natural
   selection: TextSelection
 
-const NoSelection =TextSelection(startPos: -1, endPos: 0)
+const NoSelection = TextSelection(startPos: -1, endPos: 0)
 
 
 proc hasSelection(sel: TextSelection): bool =
@@ -2903,7 +2905,7 @@ type TextFieldStyle* = ref object
 
 var DefaultTextFieldStyle = TextFieldStyle(
   bgCornerRadius      : 5,
-  bgStrokeWidth       : 0,
+  bgStrokeWidth       : 0, # TODO
   bgStrokeColor       : black(),
   bgStrokeColorHover  : black(),
   bgStrokeColorActive : black(),
@@ -2915,7 +2917,7 @@ var DefaultTextFieldStyle = TextFieldStyle(
   textFontSize        : 14.0,
   textFontFace        : "sans-bold",
   textColor           : GRAY_LO,
-  textColorHover      : GRAY_LO,
+  textColorHover      : GRAY_LO, # TODO
   textColorActive     : GRAY_HI,
   cursorColor         : HILITE,
   cursorWidth         : 1.0,
@@ -3018,8 +3020,11 @@ proc textField(
         tf.state = tfsEditLMBPressed
 
 
+  proc setFont() = 
+    g_nvgContext.setFont(s.textFontSize, name=s.textFontFace)
+
   proc calcGlyphPos() =
-    g_nvgContext.setFont(s.textFontSize)
+    setFont()
     discard g_nvgContext.textGlyphPositions(0, 0, text, glyphs)
 
 
@@ -3407,7 +3412,7 @@ proc textField(
     # TODO text color hover
     let textColor = if editing: s.textColorActive else: s.textColor
 
-    vg.setFont(s.textFontSize)
+    setFont()
     vg.fillColor(textColor)
     discard vg.text(textX, textY, text)
 
@@ -4024,6 +4029,9 @@ template textArea*(
 # }}}
 
 # {{{ Slider
+
+# TODO add slider style
+
 # {{{ horizSlider
 
 proc horizSlider(id:         ItemId,
