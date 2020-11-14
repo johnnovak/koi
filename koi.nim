@@ -591,24 +591,28 @@ type TextEditShortcuts = enum
   tesCursorOneCharRight,
   tesCursorToPreviousWord,
   tesCursorToNextWord,
-  tesCursorToPreviousLine,
-  tesCursorToNextLine,
   tesCursorToLineStart,
   tesCursorToLineEnd,
   tesCursorToDocumentStart,
   tesCursorToDocumentEnd,
+  tesCursorToPreviousLine,
+  tesCursorToNextLine,
+  tesCursorPageUp,
+  tesCursorPageDown,
 
   tesSelectionAll,
   tesSelectionOneCharLeft,
   tesSelectionOneCharRight,
   tesSelectionToPreviousWord,
   tesSelectionToNextWord,
-  tesSelectionToPreviousLine,
-  tesSelectionToNextLine,
   tesSelectionToLineStart,
   tesSelectionToLineEnd,
   tesSelectionToDocumentStart,
   tesSelectionToDocumentEnd,
+  tesSelectionToPreviousLine,
+  tesSelectionToNextLine,
+  tesSelectionPageUp,
+  tesSelectionPageDown,
 
   tesDeleteOneCharLeft,
   tesDeleteOneCharRight,
@@ -648,12 +652,6 @@ let g_textFieldEditShortcuts_WinLinux = {
   tesCursorToNextWord:        @[mkKeyShortcut(keyRight,   {mkCtrl}),
                                 mkKeyShortcut(keyKp6,     {mkCtrl})],
 
-  tesCursorToPreviousLine:    @[mkKeyShortcut(keyUp,      {}),
-                                mkKeyShortcut(keyKp8,     {})],
-
-  tesCursorToNextLine:       @[mkKeyShortcut(Key.keyDown, {}),
-                               mkKeyShortcut(keyKp2,      {})],
-
   tesCursorToLineStart:       @[mkKeyShortcut(keyHome,    {}),
                                 mkKeyShortcut(keyKp7,     {})],
 
@@ -665,6 +663,18 @@ let g_textFieldEditShortcuts_WinLinux = {
 
   tesCursorToDocumentEnd:     @[mkKeyShortcut(keyEnd,     {mkCtrl}),
                                 mkKeyShortcut(keyKp1,     {mkCtrl})],
+
+  tesCursorToPreviousLine:    @[mkKeyShortcut(keyUp,      {}),
+                                mkKeyShortcut(keyKp8,     {})],
+
+  tesCursorToNextLine:       @[mkKeyShortcut(Key.keyDown, {}),
+                               mkKeyShortcut(keyKp2,      {})],
+
+  tesCursorPageUp:            @[mkKeyShortcut(keyPageUp,  {}),
+                                mkKeyShortcut(keyKp9,     {})],
+
+  tesCursorPageDown:         @[mkKeyShortcut(keyPageDown, {}),
+                               mkKeyShortcut(keyKp3,      {})],
 
   # Selection
   tesSelectionAll:            @[mkKeyShortcut(keyA,       {mkCtrl})],
@@ -681,12 +691,6 @@ let g_textFieldEditShortcuts_WinLinux = {
   tesSelectionToNextWord:     @[mkKeyShortcut(keyRight,   {mkCtrl, mkShift}),
                                 mkKeyShortcut(keykp6,     {mkCtrl, mkShift})],
 
-  tesSelectionToPreviousLine: @[mkKeyShortcut(keyUp,      {mkShift}),
-                                mkKeyShortcut(keyKp8,     {mkShift})],
-
-  tesSelectionToNextLine:    @[mkKeyShortcut(Key.keyDown, {mkShift}),
-                               mkKeyShortcut(keyKp2,      {mkShift})],
-
   tesSelectionToLineStart:    @[mkKeyShortcut(keyHome,    {mkShift}),
                                 mkKeyShortcut(keyKp7,     {mkShift})],
 
@@ -698,6 +702,18 @@ let g_textFieldEditShortcuts_WinLinux = {
 
   tesSelectionToDocumentEnd:  @[mkKeyShortcut(keyEnd,     {mkCtrl, mkShift}),
                                 mkKeyShortcut(keyKp1,     {mkCtrl, mkShift})],
+
+  tesSelectionToPreviousLine: @[mkKeyShortcut(keyUp,      {mkShift}),
+                                mkKeyShortcut(keyKp8,     {mkShift})],
+
+  tesSelectionToNextLine:    @[mkKeyShortcut(Key.keyDown, {mkShift}),
+                               mkKeyShortcut(keyKp2,      {mkShift})],
+
+  tesSelectionPageUp:        @[mkKeyShortcut(keyPageUp,   {mkShift}),
+                               mkKeyShortcut(keyKp9,      {mkShift})],
+
+  tesSelectionPageDown:      @[mkKeyShortcut(keyPageDown, {mkShift}),
+                               mkKeyShortcut(keyKp3,      {mkShift})],
 
   # Delete
   tesDeleteOneCharLeft:     @[mkKeyShortcut(keyBackspace, {})],
@@ -721,7 +737,8 @@ let g_textFieldEditShortcuts_WinLinux = {
   tesPasteText:               @[mkKeyShortcut(keyV,       {mkCtrl})],
 
   # General
-  tesInsertNewline:           @[mkKeyShortcut(keyEnter,   {mkShift})],
+  tesInsertNewline:           @[mkKeyShortcut(keyEnter,   {mkShift}),
+                                mkKeyShortcut(keyKpEnter, {mkShift})],
 
   tesPrevTextField:           @[mkKeyShortcut(keyTab,     {mkShift})],
   tesNextTextField:           @[mkKeyShortcut(keyTab,     {})],
@@ -3525,6 +3542,7 @@ proc textArea(
   style:      TextAreaStyle = DefaultTextAreaStyle
 ): string =
 
+  alias(vg, g_nvgContext)
   alias(ui, g_uiState)
   alias(ta, ui.textAreaState)
   alias(s, style)
@@ -3544,6 +3562,15 @@ proc textArea(
     textBoxW = w - s.textPadHoriz*2
     textBoxY = y + s.textPadVert
     textBoxH = h - s.textPadVert*2
+
+  proc setFont() =
+    vg.setFont(s.textFontSize, name=s.textFontFace, vertAlign=vaBaseline)
+
+  setFont()
+  var (_, _, lineHeight) = vg.textMetrics()
+  lineHeight = floor(lineHeight * s.textLineHeight)
+
+  let maxDisplayRows = (textBoxH / lineHeight).int
 
   var
     text = text
@@ -3603,15 +3630,10 @@ proc textArea(
         ta.state = tasEditEntered
 
 
-  proc setFont() =
-    g_nvgContext.setFont(s.textFontSize, name=s.textFontFace,
-                         vertAlign=vaBaseline)
-
   proc calcGlypPosForRow(x, y: float, row: TextRow): Natural =
     setFont()
-    return g_nvgContext.textGlyphPositions(x, y, text,
-                                           row.startBytePos, row.endBytePos,
-                                           glyphs)
+    return vg.textGlyphPositions(x, y, text,
+                                 row.startBytePos, row.endBytePos, glyphs)
 
   # We 'fall through' to the edit state to avoid a 1-frame delay when going
   # into edit mode
@@ -3649,8 +3671,14 @@ proc textArea(
       # actions
       if not (sc in shortcuts[tesCursorToPreviousLine] or
               sc in shortcuts[tesCursorToNextLine] or
+              sc in shortcuts[tesCursorPageUp] or
+              sc in shortcuts[tesCursorPageDown] or
+
               sc in shortcuts[tesSelectionToPreviousLine] or
-              sc in shortcuts[tesSelectionToNextLine]):
+              sc in shortcuts[tesSelectionToNextLine] or
+              sc in shortcuts[tesSelectionPageUp] or
+              sc in shortcuts[tesSelectionPageDown]):
+
         ta.lastCursorXPos = float.none
 
       let res = handleCommonTextEditingShortcuts(sc, text, ta.cursorPos,
@@ -3664,7 +3692,6 @@ proc textArea(
       else:
         # We only need to break the text into rows when handling
         # textarea-specific shortcuts
-        setFont()
         let rows = textBreakLines(text, textBoxW)
 
         var currRow: TextRow
@@ -3707,27 +3734,6 @@ proc textArea(
           inc(ta.cursorPos)
 
         # Cursor movement
-        elif sc in shortcuts[tesCursorToPreviousLine]:
-          if currRowIdx > 0:
-            setLastCursorXPos()
-            let prevRow = rows[currRowIdx-1]
-            discard calcGlypPosForRow(textBoxX, 0, prevRow)
-            ta.cursorPos = findClosestCursorPos(prevRow, ta.lastCursorXPos.get)
-            ta.selection = NoSelection
-
-        elif sc in shortcuts[tesCursorToNextLine]:
-          if currRowIdx < rows.high:
-            setLastCursorXPos()
-            let nextRow = rows[currRowIdx+1]
-            discard calcGlypPosForRow(textBoxX, 0, nextRow)
-
-            ta.cursorPos = if nextRow.startPos == text.runeLen:
-                             nextRow.startPos
-                           else:
-                             findClosestCursorPos(nextRow,
-                                                  ta.lastCursorXPos.get)
-            ta.selection = NoSelection
-
         elif sc in shortcuts[tesCursorToLineStart]:
           ta.cursorPos = currRow.startPos
           ta.selection = NoSelection
@@ -3738,33 +3744,6 @@ proc textArea(
           ta.selection = NoSelection
 
         # Selection
-        elif sc in shortcuts[tesSelectionToPreviousLine]:
-          if currRowIdx > 0:
-            setLastCursorXPos()
-            let prevRow = rows[currRowIdx-1]
-            discard calcGlypPosForRow(textBoxX, 0, prevRow)
-
-            let newCursorPos = findClosestCursorPos(prevRow,
-                                                    ta.lastCursorXPos.get)
-            ta.selection = updateSelection(ta.selection, ta.cursorPos,
-                                           newCursorPos)
-            ta.cursorPos = newCursorPos
-
-        elif sc in shortcuts[tesSelectionToNextLine]:
-          if currRowIdx < rows.high:
-            setLastCursorXPos()
-            let nextRow = rows[currRowIdx+1]
-            discard calcGlypPosForRow(textBoxX, 0, nextRow)
-
-            let newCursorPos = if nextRow.startPos == text.runeLen:
-                                 nextRow.startPos
-                               else:
-                                 findClosestCursorPos(nextRow,
-                                                      ta.lastCursorXPos.get)
-            ta.selection = updateSelection(ta.selection, ta.cursorPos,
-                                           newCursorPos)
-            ta.cursorPos = newCursorPos
-
         elif sc in shortcuts[tesSelectionToLineStart]:
           let newCursorPos = currRow.startPos
           ta.selection = updateSelection(ta.selection, ta.cursorPos,
@@ -3778,6 +3757,66 @@ proc textArea(
           ta.selection = updateSelection(ta.selection, ta.cursorPos,
                                          newCursorPos)
           ta.cursorPos = newCursorPos
+
+        # Cursor movement & selection
+        elif sc in shortcuts[tesCursorToPreviousLine] or
+             sc in shortcuts[tesCursorPageUp] or
+             sc in shortcuts[tesSelectionToPreviousLine] or
+             sc in shortcuts[tesSelectionPageUp]:
+
+          if currRowIdx > 0:
+            setLastCursorXPos()
+
+            let targetRowIdx = if sc in shortcuts[tesCursorPageUp] or
+                                  sc in shortcuts[tesSelectionPageUp]:
+              max(currRowIdx.int - maxDisplayRows, 0)
+            else: currRowIdx-1
+
+            let targetRow = rows[targetRowIdx]
+            discard calcGlypPosForRow(textBoxX, 0, targetRow)
+            let newCursorPos = findClosestCursorPos(targetRow,
+                                                    ta.lastCursorXPos.get)
+
+            if sc in shortcuts[tesSelectionToPreviousLine] or
+               sc in shortcuts[tesSelectionPageUp]:
+              ta.selection = updateSelection(ta.selection, ta.cursorPos,
+                                             newCursorPos)
+              ta.cursorPos = newCursorPos
+            else:
+              ta.cursorPos = newCursorPos
+              ta.selection = NoSelection
+
+
+        elif sc in shortcuts[tesCursorToNextLine] or
+             sc in shortcuts[tesCursorPageDown] or
+             sc in shortcuts[tesSelectionToNextLine] or
+             sc in shortcuts[tesSelectionPageDown]:
+
+          if currRowIdx < rows.high:
+            setLastCursorXPos()
+
+            let targetRowIdx = if sc in shortcuts[tesCursorPageDown] or
+                                  sc in shortcuts[tesSelectionPageDown]:
+              min(currRowIdx + maxDisplayRows, rows.high)
+            else: currRowIdx+1
+
+            let targetRow = rows[targetRowIdx]
+            discard calcGlypPosForRow(textBoxX, 0, targetRow)
+
+            let newCursorPos = if targetRow.startPos == text.runeLen:
+                                 targetRow.startPos
+                               else:
+                                 findClosestCursorPos(targetRow,
+                                                      ta.lastCursorXPos.get)
+
+            if sc in shortcuts[tesSelectionToNextLine] or
+               sc in shortcuts[tesSelectionPageDown]:
+              ta.selection = updateSelection(ta.selection, ta.cursorPos,
+                                             newCursorPos)
+              ta.cursorPos = newCursorPos
+            else:
+              ta.cursorPos = newCursorPos
+              ta.selection = NoSelection
 
         # Delete
         elif sc in shortcuts[tesDeleteToLineStart] or
@@ -3891,9 +3930,6 @@ proc textArea(
     vg.intersectScissor(textBoxX, textBoxY, textBoxW + TextRightPad, textBoxH)
 
     setFont()
-    var (_, _, lineHeight) = vg.textMetrics()
-    lineHeight = floor(lineHeight * s.textLineHeight)
-
     let rows = textBreakLines(text, textBoxW)
 
     # Update display state vars
