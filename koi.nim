@@ -342,6 +342,7 @@ var
 # }}}
 # {{{ Configuration
 
+# TODO these could become settable global parameters
 const
   TooltipShowDelay       = 0.4
   TooltipFadeOutDelay    = 0.1
@@ -503,7 +504,6 @@ proc isActive*(id: ItemId): bool =
 proc setActive*(id: ItemId) =
   g_uiState.activeItem = id
 
-# TODO remove
 proc isHotAndActive*(id: ItemId): bool =
   isHot(id) and isActive(id)
 
@@ -524,7 +524,6 @@ proc isHit*(x, y, w, h: float): bool =
   let hit = not ui.focusCaptured and
             (ui.insideDialog or not ui.isDialogOpen) and
             mouseInside(x, y, w, h)
-
   # TODO
   # Draw another frame after the current frame (some widgets need one extra
   # frame to refresh properly after finishing the interaction with them).
@@ -624,8 +623,8 @@ type TextEditShortcuts = enum
 
   tesInsertNewline,
 
-  tesPrevTextField, # TODO "global" widget level shortcut
-  tesNextTextField, # TODO "global" widget level shortcut
+  tesPrevTextField,
+  tesNextTextField,
 
   tesAccept,
   tesCancel
@@ -822,8 +821,6 @@ let g_textFieldEditShortcuts = g_textFieldEditShortcuts_WinLinux
 
 const CharBufSize = 256
 var
-  # TODO do we need locking around this stuff? written in the callback, read
-  # from the UI code
   g_charBuf: array[CharBufSize, Rune]
   g_charBufIdx: Natural
 
@@ -842,8 +839,6 @@ proc consumeCharBuf(): string =
   clearCharBuf()
 
 
-# TODO do we need locking around this stuff? written in the callback, read
-# from the UI code
 const EventBufSize = 64
 var g_eventBuf = initRingBuffer[Event](EventBufSize)
 
@@ -1314,7 +1309,7 @@ proc checkBox(id:      ItemId,
         of dsActive:
           (s.fillColorDown, s.strokeColorDown, s.iconColorDown)
         of dsDisabled:
-          # TODO
+          # TODO disabled colours
           (s.fillColorDown, s.strokeColorDown, s.iconColorDown)
 
     vg.fillColor(fillColor)
@@ -3377,8 +3372,8 @@ proc textField(
       vg.fill()
 
     # Make scissor region slightly wider because of the cursor
-    # TODO convert constants into style params?
-    vg.intersectScissor(textBoxX-3, textBoxY, textBoxW+3, textBoxH)
+    let xPad = 3
+    vg.intersectScissor(textBoxX-xPad, textBoxY, textBoxW+xPad, textBoxH)
 
     # Scroll content into view & draw cursor when editing
     if editing:
@@ -3397,8 +3392,8 @@ proc textField(
                                        glyphs[tf.displayStartPos].x
 
         vg.beginPath()
-        # TODO convert constants into style params?
-        vg.rect(selStartX, y+2, selEndX - selStartX, h-4)
+        let selYPad = 2
+        vg.rect(selStartX, y+selYPad, selEndX - selStartX, h-selYPad*2)
         vg.fillColor(s.selectionColor)
         vg.fill()
 
@@ -3945,11 +3940,10 @@ proc textArea(
             else: -1
 
           let selEndX =
-            if sel.endPos-1 > row.endPos:
-              glyphs[numGlyphs-1].maxX
-              # TODO select full rows: textX + textBoxW
+            if sel.endPos-1 >= row.endPos:
+              textX + textBoxW
             elif sel.endPos-1 >= row.startPos and
-                 sel.endPos-1 <= row.endPos:
+                 sel.endPos-1 < row.endPos:
               glyphs[sel.endPos-1 - row.startPos].maxX
             else: -1
 
