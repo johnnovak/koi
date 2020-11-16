@@ -2,10 +2,11 @@ import lenientops
 import strformat
 import unicode
 
-import glad/gl
+import koi/glad/gl
 import glfw
 from glfw/wrapper import showWindow
 import nanovg
+
 import koi
 
 
@@ -87,21 +88,7 @@ proc loadData(vg: NVGContext) =
     quit "Could not add font italic.\n"
 
 
-proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
-  let
-    (winWidth, winHeight) = win.size
-    (fbWidth, fbHeight) = win.framebufferSize
-    pxRatio = fbWidth / winWidth
-
-  # Update and render
-  glViewport(0, 0, fbWidth, fbHeight)
-
-  glClearColor(0.3, 0.3, 0.3, 1.0)
-
-  glClear(GL_COLOR_BUFFER_BIT or
-          GL_DEPTH_BUFFER_BIT or
-          GL_STENCIL_BUFFER_BIT)
-
+proc renderUI(winWidth, winHeight, pxRatio: float) =
   vg.beginFrame(winWidth.float, winHeight.float, pxRatio)
   koi.beginFrame(winWidth.float, winHeight.float)
 
@@ -138,7 +125,7 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
   # ScrollBars
 
   y += pad * 2
-  scrollBarVal1 = koi.horizScrollBar(
+  koi.horizScrollBar(
     x, y, w * 1.5, h,
     startVal = 0, endVal = 100,
     scrollBarVal1,
@@ -146,21 +133,21 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
     thumbSize = 20, clickStep = 10.0)
 
   y += pad
-  scrollBarVal2 = koi.horizScrollBar(
+  koi.horizScrollBar(
     x, y, w * 1.5, h ,
     startVal = 0, endVal = 1,
     scrollBarVal2,
     tooltip = "Horizontal ScrollBar 2",
     thumbSize = -1, clickStep = -1)
 
-  scrollBarVal3 = koi.vertScrollBar(
+  koi.vertScrollBar(
     320, 60, h, 140,
     startVal = 0.0, endVal = 100,
     scrollBarVal3,
     tooltip = "Vertical ScrollBar 1",
     thumbSize = 20, clickStep = 10)
 
-  scrollBarVal4 = koi.vertScrollBar(
+  koi.vertScrollBar(
     350, 60, h, 140,
     startVal = 1, endVal = 0,
     scrollBarVal4,
@@ -168,7 +155,7 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
     thumbSize = -1, clickStep = -1)
 
   y += pad
-  scrollBarVal5 = koi.horizScrollBar(
+  koi.horizScrollBar(
     x, y, w * 1.5, h,
     startVal = 100, endVal = 0,
     scrollBarVal5,
@@ -178,20 +165,20 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
   # Sliders
 
   y += pad * 2
-  sliderVal1 = koi.horizSlider(
+  koi.horizSlider(
     x, y, w * 1.5, h,
     startVal = 0, endVal = 100,
     sliderVal1,
     tooltip = "Horizontal Slider 1")
 
   y += pad
-  sliderVal2 = koi.horizSlider(
+  koi.horizSlider(
     x, y, w * 1.5, h,
     startVal = 50, endVal = -30,
     sliderVal2,
     tooltip = "Horizontal Slider 2")
 
-  sliderVal3 = koi.vertSlider(
+  koi.vertSlider(
     320, 460, h, 120,
     startVal = 0, endVal = 100,
     sliderVal3,
@@ -199,7 +186,7 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
 
   koi.label(300, 590, w, h, fmt"{sliderVal3:.3f}", labelStyle)
 
-  sliderVal4 = koi.vertSlider(
+  koi.vertSlider(
     400, 460, h, 120,
     startVal = 50, endVal = -30,
     sliderVal4,
@@ -209,38 +196,38 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
 
   # Dropdowns
   y += pad * 2
-  dropdownVal1 = koi.dropdown(
+  koi.dropdown(
     x, y, w, h,
     items = @["Orange", "Banana", "Blueberry", "Apricot", "Apple"],
     dropdownVal1,
     tooltip = "Select a fruit")
 
-  dropdownVal2 = koi.dropdown(
+  koi.dropdown(
     280, y, w, h,
     items = @["Red", "Green", "Blue", "Yellow", "Purple (with little yellow dots)"],
     dropdownVal2,
     tooltip = "Select a colour")
 
-  dropdownVal3 = koi.dropdown(
+  koi.dropdown(
     430, y, w, h,
     items = @["This", "Dropdown", "Is", "Disabled"],
     dropdownVal3,
     tooltip = "Disabled dropdown",
     disabled = true)
 
-  dropdownTopRight = koi.dropdown(
+  koi.dropdown(
     winWidth.float - (w+10), 20, w, h,
     items = @["Red", "Green", "Blue", "Yellow", "Purple (with little yellow dots)"],
     dropdownTopRight,
     tooltip = "Select a colour")
 
-  dropdownBottomRight = koi.dropdown(
+  koi.dropdown(
     winWidth.float - (w+10), winHeight.float - 40, w, h,
     items = @["Red", "Green", "Blue", "Yellow", "Purple (with little yellow dots)"],
     dropdownBottomRight,
     tooltip = "Select a colour")
 
-  dropdownBottomLeft = koi.dropdown(
+  koi.dropdown(
     10, winHeight.float - 40, w, h,
     items = @["Red", "Green", "Blue", "Yellow", "Purple (with little yellow dots)"],
     dropdownBottomLeft,
@@ -248,35 +235,35 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
 
   # Text fields
   y += pad * 2
-  textFieldVal1 = koi.textField(
+  koi.textField(
     x, y, w * 1.0, h, textFieldVal1, tooltip = "Text field 1")
 
   y += pad
-  textFieldVal2 = koi.textField(
+  koi.textField(
     x, y, w * 1.5, h, textFieldVal2, tooltip = "Text field 2")
 
   y += pad
-  textFieldVal3 = koi.rawTextField(
+  koi.rawTextField(
     x, y, w * 1.0, h, textFieldVal3, tooltip = "Text field 3")
 
   # Checkboxes
   y += pad * 2
-  checkBoxVal1 = koi.checkBox(
+  koi.checkBox(
     x, y, h, checkBoxVal1, tooltip = "CheckBox 1")
 
-  checkBoxVal2 = koi.checkBox(
+  koi.checkBox(
     x + 30, y, h, checkBoxVal2, tooltip = "CheckBox 2")
 
   # Radio buttons (horiz)
   y += pad * 2
-  radioButtonsVal1 = koi.radioButtons(
+  koi.radioButtons(
     x, y, 150, h+2,
     labels = @["PNG", "JPG", "OpenEXR"],
     radioButtonsVal1,
     tooltips = @["Save PNG image", "Save JPG image", "Save EXR image"])
 
   y += pad
-  radioButtonsVal2 = koi.radioButtons(
+  koi.radioButtons(
     x, y, 220, h+2,
     labels = @["One", "Two", "The Third Option"],
     radioButtonsVal2,
@@ -311,7 +298,7 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
         vg.strokeWidth(2)
         vg.stroke()
 
-  radioButtonsVal3 = koi.radioButtons(
+  koi.radioButtons(
     500, 100, 150, 30,
     labels = @["1", "2", "3", "4"],
     radioButtonsVal3,
@@ -319,7 +306,7 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
     drawProc=radioButtonsDrawProc.some
   )
 
-  radioButtonsVal4 = koi.radioButtons(
+  koi.radioButtons(
     500, 160, 30, 30,
     labels = @["1", "2", "3", "4"],
     radioButtonsVal4,
@@ -328,7 +315,7 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
     drawProc=radioButtonsDrawProc.some
   )
 
-  radioButtonsVal5 = koi.radioButtons(
+  koi.radioButtons(
     500, 220, 30, 30,
     labels = @["1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B"],
     radioButtonsVal5,
@@ -338,7 +325,7 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
   )
 
   # Radio buttons (vert)
-  radioButtonsVal6 = koi.radioButtons(
+  koi.radioButtons(
     700, 100, 30, 30,
     labels = @["1", "2", "3", "4"],
     radioButtonsVal6,
@@ -347,7 +334,7 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
     drawProc=radioButtonsDrawProc.some
   )
 
-  radioButtonsVal7 = koi.radioButtons(
+  koi.radioButtons(
     770, 100, 30, 30,
     labels = @["1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B",],
     radioButtonsVal7,
@@ -357,7 +344,7 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
   )
 
 
-  textAreaVal1 = koi.textArea(
+  koi.textArea(
     650, 300, 300, 225, textAreaVal1, tooltip = "Text area 1")
 
 
@@ -442,6 +429,24 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
 
   koi.endFrame()
   vg.endFrame()
+
+
+proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
+  let
+    (winWidth, winHeight) = win.size
+    (fbWidth, fbHeight) = win.framebufferSize
+    pxRatio = fbWidth / winWidth
+
+  # Update and render
+  glViewport(0, 0, fbWidth, fbHeight)
+
+  glClearColor(0.3, 0.3, 0.3, 1.0)
+
+  glClear(GL_COLOR_BUFFER_BIT or
+          GL_DEPTH_BUFFER_BIT or
+          GL_STENCIL_BUFFER_BIT)
+
+  renderUI(winWidth.float, winHeight.float, pxRatio)
 
   glfw.swapBuffers(win)
 

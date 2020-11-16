@@ -16,6 +16,9 @@ BUGS
 - text: cursor should be hidden in selection mode
 - capslock handling
 
+- dropdown: quickly click and move pointer down -> value select (put small
+  delay in there, wait a few frames at least)
+
 
 TODO
 ====

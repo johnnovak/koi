@@ -1,9 +1,9 @@
 import hashes
-import math
 import lenientops
+import math
 import options
-import sets
 import sequtils
+import sets
 import strformat
 import strutils
 import tables
@@ -13,8 +13,9 @@ import glfw
 from glfw/wrapper import setCursor, createStandardCursor, CursorShape
 import nanovg
 
-import ringbuffer
-import utils
+import koi/ringbuffer
+import koi/utils
+import koi/undomanager
 
 export CursorShape
 
@@ -194,10 +195,10 @@ type
 
 # }}}
 
-# {{{ DrawState
+# {{{ WidgetState
 
-type DrawState* = enum
-  dsNormal, dsHover, dsActive, dsDisabled
+type WidgetState* = enum
+  wsNormal, wsHover, wsActive, wsDisabled
 
 # }}}
 
@@ -220,7 +221,6 @@ type
 
     mods*:      set[ModifierKey]
 
-
   UIState = object
     # General state
     # *************
@@ -232,9 +232,6 @@ type
     # Frames left to render
     framesLeft:     Natural
 
-    # Origin offset, used for relative coordinate handling in dialogs
-    ox, oy:         float
-
     # Widgets will be drawn on this layer by default
     currentLayer:   Natural
 
@@ -244,6 +241,8 @@ type
     # Set if a widget has captured the focus (e.g. a textfield in edit mode) so
     # all other UI interactions (hovers, tooltips, etc.) should be disabled.
     focusCaptured:  bool
+
+    drawStateStack: seq[DrawState]
 
     # Mouse state
     # -----------
@@ -309,11 +308,42 @@ type
 
     # Dialog state
     # **********************
-    # Only true when we're in a dialog (this is needed so widgets outside
-    # of the dialog won't register any events).
+    # True if a dialog is currently open.
     isDialogOpen:   bool
+
+    # Only true when we're in a dialog. This is needed so widgets outside
+    # of the dialog won't register any events.
     insideDialog:   bool
 
+    # Auto-layout
+    # ***********
+    autoLayoutParams:  AutoLayoutParams
+    autoLayoutState:   AutoLayoutStateVars
+
+
+  DrawState = object
+    # Origin offset, used for relative coordinate handling (e.g in dialogs)
+    ox, oy: float
+
+
+  AutoLayoutParams* = object
+    rowWidth*:         float
+    labelWidth*:       float
+    itemsPerRow*:      Natural
+    rowPad*:           float
+    rowGroupPad*:      float
+    defaultRowHeight*: float
+
+  AutoLayoutStateVars = object
+    x, y:              float
+    currColIndex:      Natural
+    nextItemWidth:     float
+    nextItemHeight:    float
+    insideGroup:       bool
+    panelX:            float
+    panelY:            float
+    panelWidth:        float
+    panelHeight:       float
 
 # }}}
 # }}}
@@ -565,6 +595,19 @@ proc shiftDown*(): bool = keyDown(keyLeftShift)   or keyDown(keyRightShift)
 proc altDown*():   bool = keyDown(keyLeftAlt)     or keyDown(keyRightAlt)
 proc ctrlDown*():  bool = keyDown(keyLeftControl) or keyDown(keyRightControl)
 proc superDown*(): bool = keyDown(keyLeftSuper)   or keyDown(keyRightSuper)
+
+proc pushDrawState*(ds: DrawState) =
+  alias(ui, g_uiState)
+  ui.drawStateStack.add(ds)
+
+proc popDrawState*() =
+  alias(ui, g_uiState)
+  if ui.drawStateStack.len > 1:
+    discard ui.drawStateStack.pop()
+
+proc drawState(): DrawState =
+  alias(ui, g_uiState)
+  ui.drawStateStack[^1]
 
 # }}}
 # {{{ Keyboard handling
@@ -1057,9 +1100,75 @@ proc tooltipPost() =
 # }}}
 # }}}
 
+# {{{ initAutoLayout()
+proc initAutoLayout() =
+  alias(ui, g_uiState)
+  alias(a,  ui.autoLayoutState)
+  alias(ap, ui.autoLayoutParams)
+
+  a = AutoLayoutStateVars.default
+  a.nextItemWidth  = ap.labelWidth
+  a.nextItemHeight = ap.defaultRowHeight
+
+# }}}
+# {{{ setAutoLayoutParams*()
+#
+const DefaultAutoLayoutParams = AutoLayoutParams(
+  rowWidth:         300.0,
+  labelWidth:       180.0,
+  itemsPerRow:      2,
+  rowPad:           22.0,
+  rowGroupPad:      8.0,
+  defaultRowHeight: 22.0
+)
+
+proc setAutoLayoutParams*(params: AutoLayoutParams) =
+  alias(ui, g_uiState)
+  ui.autoLayoutParams = params
+  initAutoLayout()
+
+# }}}
+# {{{ beginGroup*()
+proc beginGroup*() =
+  alias(a, g_uiState.autoLayoutState)
+  a.insideGroup = true
+
+# }}}
+# {{{ endGroup*()
+proc endGroup*() =
+  alias(a, g_uiState.autoLayoutState)
+  alias(ap, g_uiState.autoLayoutParams)
+
+  a.y += max(ap.rowPad - ap.rowGroupPad, 0)
+  a.insideGroup = false
+
+# }}}
+# {{{ handleAutoLayout()
+proc handleAutoLayout() =
+  alias(a, g_uiState.autoLayoutState)
+  alias(ap, g_uiState.autoLayoutParams)
+
+  inc(a.currColIndex)
+
+  if a.currColIndex == ap.itemsPerRow:
+    a.currColIndex = 0
+    a.nextItemWidth = ap.labelWidth
+    a.x = 0
+    a.y += ap.defaultRowHeight + (if a.insideGroup: ap.rowGroupPad
+                                  else: ap.rowPad)
+
+  # TODO this only works for the default 2-column layout
+  else:
+    a.x = ap.labelWidth
+    a.nextItemWidth = ap.rowWidth - ap.labelWidth
+    a.nextItemHeight = ap.defaultRowHeight
+
+# }}}
+
 # {{{ Label
 
 type LabelStyle* = ref object
+  # TODO label prefix?
   multiLine*:  bool
   fontSize*:   float
   fontFace*:   string
@@ -1073,7 +1182,7 @@ var DefaultLabelStyle = LabelStyle(
   fontFace   : "sans-bold",
   align      : haCenter,
   lineHeight : 1.4,
-  color      : GRAY_LO
+  color      : GRAY_HI
 )
 
 proc getDefaultLabelStyle*(): LabelStyle =
@@ -1090,8 +1199,10 @@ proc textLabel(id:         ItemId,
   alias(ui, g_uiState)
   alias(s, style)
 
-  let x = x + ui.ox
-  let y = y + ui.oy
+  let
+    ds = drawState()
+    x = x + ds.ox
+    y = y + ds.oy
 
   addDrawLayer(ui.currentLayer, vg):
     vg.drawLabel(x, y, w, h, padHoriz = 0, label, s.color,
@@ -1106,6 +1217,22 @@ template label*(x, y, w, h: float,
   let id = generateId(i.filename, i.line, "")
 
   textLabel(id, x, y, w, h, label, style)
+
+
+template label*(label: string,
+                style: LabelStyle = DefaultLabelStyle) =
+
+  alias(ui, g_uiState)
+  alias(a, ui.autoLayoutState)
+
+  let
+    i = instantiationInfo(fullPaths=true)
+    id = generateId(i.filename, i.line, "")
+    ds = drawState()
+
+  textLabel(id, a.x, a.y, a.nextItemWidth, a.nextItemHeight, label, style)
+
+  handleAutoLayout()
 
 # }}}
 # {{{ Button
@@ -1170,8 +1297,10 @@ proc button(id:         ItemId,
   alias(ui, g_uiState)
   alias(s, style)
 
-  let x = x + ui.ox
-  let y = y + ui.oy
+  let
+    ds = drawState()
+    x = x + ds.ox
+    y = y + ds.oy
 
   # Hit testing
   if isHit(x, y, w, h):
@@ -1187,20 +1316,20 @@ proc button(id:         ItemId,
     let sw = s.buttonStrokeWidth
     let (x, y, w, h) = snapToGrid(x, y, w, h, sw)
 
-    let drawState = if disabled: dsDisabled
-      elif isHot(id) and noActiveItem(): dsHover
-      elif isHotAndActive(id): dsActive
-      else: dsNormal
+    let state = if disabled: wsDisabled
+      elif isHot(id) and noActiveItem(): wsHover
+      elif isHotAndActive(id): wsActive
+      else: wsNormal
 
     let (fillColor, strokeColor, labelColor) =
-      case drawState
-      of dsNormal:
+      case state
+      of wsNormal:
         (s.buttonFillColor, s.buttonStrokeColor, s.labelColor)
-      of dsHover:
+      of wsHover:
         (s.buttonFillColorHover, s.buttonStrokeColorHover, s.labelColorHover)
-      of dsActive:
+      of wsActive:
         (s.buttonFillColorDown, s.buttonStrokeColorDown, s.labelColorDown)
-      of dsDisabled:
+      of wsDisabled:
         (s.buttonFillColorDisabled, s.buttonStrokeColorDisabled,
          s.labelColorDisabled)
 
@@ -1283,17 +1412,21 @@ proc setDefaultCheckBoxStyle*(style: CheckBoxStyle) =
   DefaultCheckBoxStyle = style.deepCopy
 
 
-proc checkBox(id:      ItemId,
-              x, y, w: float,
-              active:  bool,
-              tooltip: string,
-              style:   CheckBoxStyle): bool =
+proc checkBox(id:         ItemId,
+              x, y, w:    float,
+              active_out: var bool,
+              tooltip:    string,
+              style:      CheckBoxStyle) =
+
+  var active = active_out
 
   alias(ui, g_uiState)
   alias(s, style)
 
-  let x = x + ui.ox
-  let y = y + ui.oy
+  let
+    ds = drawState()
+    x = x + ds.ox
+    y = y + ds.oy
 
   # Hit testing
   if isHit(x, y, w, w):
@@ -1302,31 +1435,31 @@ proc checkBox(id:      ItemId,
       setActive(id)
 
   # LMB released over active widget means it was clicked
-  let active = if not ui.mbLeftDown and isHotAndActive(id): not active
-               else: active
+  active = if not ui.mbLeftDown and isHotAndActive(id): not active
+           else: active
 
-  result = active
+  active_out = active
 
   addDrawLayer(ui.currentLayer, vg):
     let sw = s.strokeWidth
     let (x, y, w, _) = snapToGrid(x, y, w, w, sw)
 
-    let drawState = if isHot(id) and noActiveItem(): dsHover
-      elif isHotAndActive(id): dsActive
-      else: dsNormal
+    let state = if isHot(id) and noActiveItem(): wsHover
+      elif isHotAndActive(id): wsActive
+      else: wsNormal
 
     var (fillColor, strokeColor, iconColor) =
       if active:
         (s.fillColorActive, s.strokeColorActive, s.iconColorActive)
       else:
-        case drawState
-        of dsNormal:
+        case state
+        of wsNormal:
           (s.fillColor, s.strokeColor, s.iconColor)
-        of dsHover:
+        of wsHover:
           (s.fillColorHover, s.strokeColorHover, s.iconColorHover)
-        of dsActive:
+        of wsActive:
           (s.fillColorDown, s.strokeColorDown, s.iconColorDown)
-        of dsDisabled:
+        of wsDisabled:
           # TODO disabled colours
           (s.fillColorDown, s.strokeColorDown, s.iconColorDown)
 
@@ -1348,14 +1481,31 @@ proc checkBox(id:      ItemId,
 
 
 template checkBox*(x, y, w: float,
-                   active:  bool,
+                   active:  var bool,
                    tooltip: string = "",
-                   style:   CheckBoxStyle = DefaultCheckBoxStyle): bool =
+                   style:   CheckBoxStyle = DefaultCheckBoxStyle) =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
   checkbox(id, x, y, w, active, tooltip, style)
+
+
+template checkBox*(active:  var bool,
+                   tooltip: string = "",
+                   style:   CheckBoxStyle = DefaultCheckBoxStyle) =
+
+  alias(ui, g_uiState)
+  alias(a, ui.autoLayoutState)
+
+  let i = instantiationInfo(fullPaths=true)
+  let id = generateId(i.filename, i.line, "")
+
+  let ds = drawState()
+
+  checkbox(id, a.x, a.y, a.nextItemHeight, active, tooltip, style)
+
+  handleAutoLayout()
 
 # }}}
 # {{{ RadioButtons
@@ -1433,7 +1583,7 @@ type
 
 let DefaultRadioButtonDrawProc: RadioButtonsDrawProc =
   proc (vg: NVGContext, buttonIdx: Natural, label: string,
-        hover, active, down, first, last: bool,
+        hover, active, down, first, last: bool,  # TODO use enum for state?
         x, y, w, h: float, style: RadioButtonsStyle) =
 
     alias(s, style)
@@ -1475,26 +1625,30 @@ let DefaultRadioButtonDrawProc: RadioButtonsDrawProc =
                  s.labelFontSize, s.labelFontFace, s.labelAlign)
 
 
-proc radioButtons(
-  id:           ItemId,
-  x, y, w, h:   float,
-  labels:       seq[string],
-  activeButton: Natural,
-  tooltips:     seq[string],
-  layout:       RadioButtonsLayout = RadioButtonsLayout(kind: rblHoriz),
-  drawProc:     Option[RadioButtonsDrawProc] = RadioButtonsDrawProc.none,
-  style:        RadioButtonsStyle = DefaultRadioButtonsStyle
-): Natural =
+proc radioButtons[T](
+  id:               ItemId,
+  x, y, w, h:       float,
+  labels:           seq[string],
+  activeButton_out: var T,
+  tooltips:         seq[string],
+  layout:           RadioButtonsLayout = RadioButtonsLayout(kind: rblHoriz),
+  drawProc:         Option[RadioButtonsDrawProc] = RadioButtonsDrawProc.none,
+  style:            RadioButtonsStyle = DefaultRadioButtonsStyle
+) =
 
-  assert activeButton >= 0 and activeButton <= labels.high
+  var activeButton = activeButton_out
+
+  assert activeButton.ord >= 0 and activeButton.ord <= labels.high
   assert tooltips.len == 0 or tooltips.len == labels.len
 
   alias(ui, g_uiState)
 
-  let numButtons = labels.len
+  let
+    ds = drawState()
+    x = x + ds.ox
+    y = y + ds.oy
 
-  let x = x + ui.ox
-  let y = y + ui.oy
+  let numButtons = labels.len
 
   # Hit testing
   var hotButton = -1
@@ -1544,20 +1698,20 @@ proc radioButtons(
   # LMB released over active widget means it was clicked
   if not ui.mbLeftDown and isHotAndActive(id) and
      ui.radioButtonsActiveItem == hotButton:
-    result = hotButton
-  else:
-    result = activeButton
+    activeButton = T(hotButton)
+
+  activeButton_out = activeButton
 
   # Draw radio buttons
   proc buttonDrawState(i: Natural): (bool, bool, bool) =
-    let drawState = if isHot(id) and noActiveItem(): dsHover
-      elif isHotAndActive(id): dsActive
-      else: dsNormal
+    let state = if isHot(id) and noActiveItem(): wsHover
+      elif isHotAndActive(id): wsActive
+      else: wsNormal
 
-    let hover = drawState == dsHover and hotButton == i
-    let active = activeButton == i
-    let down = drawState == dsActive and hotButton == i and
-                  ui.radioButtonsActiveItem == i
+    let hover = state == wsHover and hotButton == i
+    let active = activeButton.ord == i
+    let down = state == wsActive and hotButton == i and
+               ui.radioButtonsActiveItem == i
 
     result = (hover, active, down)
 
@@ -1617,15 +1771,31 @@ proc radioButtons(
     handleTooltip(id, tt)
 
 
-template radioButtons*(
+template radioButtons*[T](
   x, y, w, h:   float,
   labels:       seq[string],
-  activeButton: Natural,
+  activeButton: var T,
   tooltips:     seq[string] = @[],
   layout:       RadioButtonsLayout = RadioButtonsLayout(kind: rblHoriz),
   drawProc:     Option[RadioButtonsDrawProc] = RadioButtonsDrawProc.none,
   style:        RadioButtonsStyle = DefaultRadioButtonsStyle
-): Natural =
+) =
+
+  let i = instantiationInfo(fullPaths=true)
+  let id = generateId(i.filename, i.line, "")
+
+  radioButtons(id, x, y, w, h, labels, activeButton, tooltips,
+               layout, drawProc, style)
+
+
+template radioButtons*[T](
+  labels:       seq[string],
+  activeButton: var T,
+  tooltips:     seq[string] = @[],
+  layout:       RadioButtonsLayout = RadioButtonsLayout(kind: rblHoriz),
+  drawProc:     Option[RadioButtonsDrawProc] = RadioButtonsDrawProc.none,
+  style:        RadioButtonsStyle = DefaultRadioButtonsStyle
+) =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
@@ -1717,23 +1887,27 @@ proc setDefaultDropdownStyle*(style: DropdownStyle) =
   DefaultDropdownStyle = style.deepCopy
 
 
-proc dropdown(id:           ItemId,
-              x, y, w, h:   float,
-              items:        seq[string],
-              selectedItem: Natural,
-              tooltip:      string,
-              disabled:     bool,
-              style:        DropdownStyle): Natural =
+proc dropdown[T](id:               ItemId,
+                 x, y, w, h:       float,
+                 items:            seq[string],
+                 selectedItem_out: var T,
+                 tooltip:          string,
+                 disabled:         bool,
+                 style:            DropdownStyle) =
+
+  var selectedItem = selectedItem_out
 
   assert items.len > 0
-  assert selectedItem <= items.high
+  assert selectedItem.ord <= items.high
 
   alias(ui, g_uiState)
   alias(ds, ui.dropdownState)
   alias(s, style)
 
-  let x = x + ui.ox
-  let y = y + ui.oy
+  let
+    drawState = drawState()
+    x = x + drawState.ox
+    y = y + drawState.oy
 
   var
     itemListX, itemListY, itemListW, itemListH: float
@@ -1742,8 +1916,6 @@ proc dropdown(id:           ItemId,
   let
     numItems = items.len
     itemHeight = h  # TODO just temporarily
-
-  result = selectedItem
 
   proc closeDropdown() =
     ds.state = dsClosed
@@ -1820,37 +1992,39 @@ proc dropdown(id:           ItemId,
     if ds.state == dsOpenLMBPressed:
       if not ui.mbLeftDown:
         if hoverItem >= 0:
-          result = hoverItem
+          selectedItem = T(hoverItem)
           closeDropdown()
         else:
           ds.state = dsOpen
     else:
       if ui.mbLeftDown:
         if hoverItem >= 0:
-          result = hoverItem
+          selectedItem = (hoverItem)
           closeDropdown()
         elif insideButton:
           closeDropdown()
+
+  selectedItem_out = selectedItem
 
   # Dropdown button
   addDrawLayer(ui.currentLayer, vg):
     let sw = s.buttonStrokeWidth
     let (x, y, w, h) = snapToGrid(x, y, w, h, sw)
 
-    let drawState =
-      if disabled: dsDisabled
-      elif isHot(id) and noActiveItem(): dsHover
-      elif isHotAndActive(id): dsActive
-      else: dsNormal
+    let state =
+      if disabled: wsDisabled
+      elif isHot(id) and noActiveItem(): wsHover
+      elif isHotAndActive(id): wsActive
+      else: wsNormal
 
-    let (fillColor, strokeColor, textColor) = case drawState
-      of dsNormal:
+    let (fillColor, strokeColor, textColor) = case state
+      of wsNormal:
         (s.buttonFillColor, s.buttonStrokeColor, s.labelColor)
-      of dsHover:
+      of wsHover:
         (s.buttonFillColorHover, s.buttonStrokeColorHover, s.labelColorHover)
-      of dsActive:
+      of wsActive:
         (s.buttonFillColorActive, s.buttonStrokeColorActive, s.labelColorActive)
-      of dsDisabled:
+      of wsDisabled:
         (s.buttonFillColorDisabled, s.buttonStrokeColorDisabled,
          s.labelColorDisabled)
 
@@ -1912,12 +2086,28 @@ template dropdown*(
   tooltip:      string = "",
   disabled:     bool = false,
   style:        DropdownStyle = DefaultDropdownStyle
-): Natural =
+) =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
   dropdown(id, x, y, w, h, items, selectedItem, tooltip, disabled, style)
+
+
+template dropdown*(
+  items:        seq[string],
+  selectedItem: Natural,
+  tooltip:      string = "",
+  disabled:     bool = false,
+  style:        DropdownStyle = DefaultDropdownStyle
+) =
+
+  let i = instantiationInfo(fullPaths=true)
+  let id = generateId(i.filename, i.line, "")
+
+  dropdown(id, 0, 0, 0, 0, items, selectedItem, tooltip, disabled, style)
+
+  handleAutoLayout()
 
 # }}}
 # {{{ ScrollBar
@@ -1987,11 +2177,11 @@ proc horizScrollBar(id:         ItemId,
                     x, y, w, h: float,
                     startVal:   float,
                     endVal:     float,
-                    value:      float,
+                    value_out:  var float,
                     tooltip:    string = "",
                     thumbSize:  float = -1.0,
                     clickStep:  float = -1.0,
-                    style:      ScrollBarStyle): float =
+                    style:      ScrollBarStyle) =
 
   # TODO only for debugging, too fragile
 #  assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
@@ -2000,13 +2190,16 @@ proc horizScrollBar(id:         ItemId,
 #  assert thumbSize < 0.0 or thumbSize < abs(startVal - endVal)
 #  assert clickStep < 0.0 or clickStep < abs(startVal - endVal)
 
+  var value = value_out
+
   alias(ui, g_uiState)
   alias(sb, ui.scrollBarState)
   alias(s, style)
 
   let
-    x = x + ui.ox
-    y = y + ui.oy
+    ds = drawState()
+    x = x + ds.ox
+    y = y + ds.oy
 
   # Calculate current thumb position
   let
@@ -2020,7 +2213,7 @@ proc horizScrollBar(id:         ItemId,
     thumbMaxX = x + w - s.thumbPad - thumbW
 
   proc calcThumbX(val: float): float =
-    let t = invLerp(startVal, endVal, value)
+    let t = invLerp(startVal, endVal, val)
     lerp(thumbMinX, thumbMaxX, t)
 
   let thumbX = calcThumbX(value)
@@ -2042,12 +2235,13 @@ proc horizScrollBar(id:         ItemId,
     let t = invLerp(thumbMinX, thumbMaxX, newThumbX)
     lerp(startVal, endVal, t)
 
-  proc calcNewValueTrackClick(): float =
+  proc calcNewValueTrackClick(newValue: float): float =
     let clickStep = if clickStep < 0: abs(startVal - endVal) * 0.1
                     else: clickStep
 
     let (s, e) = if startVal < endVal: (startVal, endVal)
                  else: (endVal, startVal)
+    # TODO newValue is captured, isn't this a bug?
     clamp(newValue + sb.clickDir * clickStep, s, e)
 
   if isActive(id):
@@ -2107,7 +2301,7 @@ proc horizScrollBar(id:         ItemId,
         ui.x0 = ui.dragX
 
     of sbsTrackClickFirst:
-      newValue = calcNewValueTrackClick()
+      newValue = calcNewValueTrackClick(newValue)
       newThumbX = calcThumbX(newValue)
 
       sb.state = sbsTrackClickDelay
@@ -2122,7 +2316,7 @@ proc horizScrollBar(id:         ItemId,
     of sbsTrackClickRepeat:
       if isHot(id):
         if getTime() - ui.t0 > ScrollBarTrackClickRepeatTimeout:
-          newValue = calcNewValueTrackClick()
+          newValue = calcNewValueTrackClick(newValue)
           newThumbX = calcThumbX(newValue)
 
           if sb.clickDir * sgn(endVal - startVal).float > 0:
@@ -2139,14 +2333,15 @@ proc horizScrollBar(id:         ItemId,
         ui.t0 = getTime()
       setFramesLeft()
 
-  result = newValue
+  value_out = newValue
 
+  # Draw scrollbar
   addDrawLayer(ui.currentLayer, vg):
     let (bx, by, bw, bh) = (x, y, w, h)
 
-    let drawState = if isHot(id) and noActiveItem(): dsHover
-      elif isActive(id): dsActive
-      else: dsNormal
+    let state = if isHot(id) and noActiveItem(): wsHover
+      elif isActive(id): wsActive
+      else: wsNormal
 
     # Draw track
     var sw = s.trackStrokeWidth
@@ -2155,16 +2350,16 @@ proc horizScrollBar(id:         ItemId,
     let (trackFillColor, trackStrokeColor,
          thumbFillColor, thumbStrokeColor,
          labelColor) =
-      case drawState
-      of dsNormal, dsDisabled:
+      case state
+      of wsNormal, wsDisabled:
         (s.trackFillColor, s.trackStrokeColor,
          s.thumbFillColor, s.thumbStrokeColor,
          s.labelColor)
-      of dsHover:
+      of wsHover:
         (s.trackFillColorHover, s.trackStrokeColorHover,
          s.thumbFillColorHover, s.thumbStrokeColorHover,
          s.labelColorHover)
-      of dsActive:
+      of wsActive:
         (s.trackFillColorActive, s.trackStrokeColorActive,
          s.thumbFillColorActive, s.thumbStrokeColorActive,
          s.labelColorActive)
@@ -2204,11 +2399,11 @@ proc horizScrollBar(id:         ItemId,
 template horizScrollBar*(x, y, w, h: float,
                          startVal:  float,
                          endVal:    float,
-                         value:     float,
+                         value:     var float,
                          tooltip:   string = "",
                          thumbSize: float = -1.0,
                          clickStep: float = -1.0,
-                         style:     ScrollBarStyle = DefaultScrollBarStyle): float =
+                         style:     ScrollBarStyle = DefaultScrollBarStyle) =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
@@ -2224,11 +2419,11 @@ proc vertScrollBar(id:         ItemId,
                    x, y, w, h: float,
                    startVal:   float,
                    endVal:     float,
-                   value:      float,
+                   value_out:  var float,
                    tooltip:    string = "",
                    thumbSize:  float = -1.0,
                    clickStep:  float = -1.0,
-                   style:      ScrollBarStyle): float =
+                   style:      ScrollBarStyle) =
 
   # TODO only for debugging, too fragile
 #  assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
@@ -2237,13 +2432,16 @@ proc vertScrollBar(id:         ItemId,
 #  assert thumbSize < 0.0 or thumbSize < abs(startVal - endVal)
 #  assert clickStep < 0.0 or clickStep < abs(startVal - endVal)
 
+  var value = value_out
+
   alias(ui, g_uiState)
   alias(sb, ui.scrollBarState)
   alias(s, style)
 
   let
-    x = x + ui.ox
-    y = y + ui.oy
+    ds = drawState()
+    x = x + ds.ox
+    y = y + ds.oy
 
   # Calculate current thumb position
   let
@@ -2256,7 +2454,7 @@ proc vertScrollBar(id:         ItemId,
     thumbMinY = y + s.thumbPad
     thumbMaxY = y + h - s.thumbPad - thumbH
 
-  proc calcThumbY(val: float): float =
+  proc calcThumbY(value: float): float =
     let t = invLerp(startVal, endVal, value)
     lerp(thumbMinY, thumbMaxY, t)
 
@@ -2376,14 +2574,17 @@ proc vertScrollBar(id:         ItemId,
         ui.t0 = getTime()
       setFramesLeft()
 
-  result = newValue
+  value_out = newValue
 
+  # Draw scrollbar
   addDrawLayer(ui.currentLayer, vg):
+    let value = newValue
+
     let (bx, by, bw, bh) = (x, y, w, h)
 
-    let drawState = if isHot(id) and noActiveItem(): dsHover
-      elif isActive(id): dsActive
-      else: dsNormal
+    let state = if isHot(id) and noActiveItem(): wsHover
+      elif isActive(id): wsActive
+      else: wsNormal
 
     # Draw track
     var sw = s.trackStrokeWidth
@@ -2392,16 +2593,16 @@ proc vertScrollBar(id:         ItemId,
     let (trackFillColor, trackStrokeColor,
          thumbFillColor, thumbStrokeColor,
          labelColor) =
-      case drawState
-      of dsNormal, dsDisabled:
+      case state
+      of wsNormal, wsDisabled:
         (s.trackFillColor, s.trackStrokeColor,
          s.thumbFillColor, s.thumbStrokeColor,
          s.labelColor)
-      of dsHover:
+      of wsHover:
         (s.trackFillColorHover, s.trackStrokeColorHover,
          s.thumbFillColorHover, s.thumbStrokeColorHover,
          s.labelColorHover)
-      of dsActive:
+      of wsActive:
         (s.trackFillColorActive, s.trackStrokeColorActive,
          s.thumbFillColorActive, s.thumbStrokeColorActive,
          s.labelColorActive)
@@ -2436,11 +2637,11 @@ proc vertScrollBar(id:         ItemId,
 template vertScrollBar*(x, y, w, h: float,
                         startVal:   float,
                         endVal:     float,
-                        value:      float,
+                        value:      var float,
                         tooltip:    string = "",
                         thumbSize:  float = -1.0,
                         clickStep:  float = -1.0,
-                        style:      ScrollBarStyle = DefaultScrollBarStyle): float =
+                        style:      ScrollBarStyle = DefaultScrollBarStyle) =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
@@ -3029,15 +3230,17 @@ type
 proc textField(
   id:         ItemId,
   x, y, w, h: float,
-  text:       string,
+  text_out:   var string,
   tooltip:    string = "",
   activate:   bool = false,
   drawWidget: bool = false,
   constraint: Option[TextFieldConstraint] = TextFieldConstraint.none,
   style:      TextFieldStyle = DefaultTextFieldStyle
-): string =
+) =
 
   const MaxTextLen = 5000
+
+  var text = text_out
 
   assert text.runeLen <= MaxTextLen
 
@@ -3046,8 +3249,9 @@ proc textField(
   alias(s, style)
 
   let
-    x = x + ui.ox
-    y = y + ui.oy
+    ds = drawState()
+    x = x + ds.ox
+    y = y + ds.oy
 
   # The text is displayed within this rectangle (used for drawing later)
   let
@@ -3056,9 +3260,7 @@ proc textField(
     textBoxY = y
     textBoxH = h
 
-  var
-    text = text
-    glyphs: array[MaxTextLen, GlyphPosition]
+  var glyphs: array[MaxTextLen, GlyphPosition]
 
   var tabActivate = false
 
@@ -3397,23 +3599,22 @@ proc textField(
           tf.displayStartX = textBoxX
           tf.displayStartPos = min(tf.displayStartPos, p)
 
-  result = text
-
+  text_out = text
 
   # Draw text field
   let editing = tf.activeItem == id
 
-  let drawState = if isHot(id) and noActiveItem(): dsHover
-    elif editing: dsActive
-    else: dsNormal
+  let state = if isHot(id) and noActiveItem(): wsHover
+    elif editing: wsActive
+    else: wsNormal
 
   var
     textX = textBoxX
     textY = y + h*TextVertAlignFactor
 
-  let (fillColor, strokeColor) = case drawState
-    of dsHover:  (s.bgFillColorHover,  s.bgStrokeColorHover)
-    of dsActive: (s.bgFillColorActive, s.bgStrokeColorActive)
+  let (fillColor, strokeColor) = case state
+    of wsHover:  (s.bgFillColorHover,  s.bgStrokeColorHover)
+    of wsActive: (s.bgFillColorActive, s.bgStrokeColorActive)
     else:        (s.bgFillColor,       s.bgStrokeColor)
 
   let layer = if editing: TopLayer-3 else: ui.currentLayer
@@ -3491,12 +3692,12 @@ proc textField(
 
 template rawTextField*(
   x, y, w, h: float,
-  text:       string,
+  text:       var string,
   tooltip:    string = "",
   activate:   bool = false,
   constraint: Option[TextFieldConstraint] = TextFieldConstraint.none,
   style:      TextFieldStyle = DefaultTextFieldStyle
-): string =
+) =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
@@ -3507,12 +3708,12 @@ template rawTextField*(
 
 template textField*(
   x, y, w, h: float,
-  text:       string,
+  text:       var string,
   tooltip:    string = "",
   activate:   bool = false,
   constraint: Option[TextFieldConstraint] = TextFieldConstraint.none,
   style:      TextFieldStyle = DefaultTextFieldStyle
-): string =
+) =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
@@ -3520,6 +3721,22 @@ template textField*(
   textField(id, x, y, w, h, text, tooltip, activate, drawWidget = true,
             constraint, style)
 
+
+template textField*(
+  text:       var string,
+  tooltip:    string = "",
+  activate:   bool = false,
+  constraint: Option[TextFieldConstraint] = TextFieldConstraint.none,
+  style:      TextFieldStyle = DefaultTextFieldStyle
+) =
+
+  let i = instantiationInfo(fullPaths=true)
+  let id = generateId(i.filename, i.line, "")
+
+  textField(id, 0, 0, 0, 0, text, tooltip, activate, drawWidget = true,
+            constraint, style)
+
+  handleAutoLayout()
 
 # }}}
 # {{{ TextArea
@@ -3585,9 +3802,9 @@ DefaultTextAreaScrollBarStyle.trackFillColor = gray(0, 0)
 DefaultTextAreaScrollBarStyle.trackFillColorHover = gray(0, 0)
 DefaultTextAreaScrollBarStyle.trackFillColorActive = gray(0, 0)
 DefaultTextAreaScrollBarStyle.thumbCornerRadius = 3
-DefaultTextAreaScrollBarStyle.thumbFillColor = gray(0.4)
-DefaultTextAreaScrollBarStyle.thumbFillColorHover = gray(0.43)
-DefaultTextAreaScrollBarStyle.thumbFillColorActive = gray(0.35)
+DefaultTextAreaScrollBarStyle.thumbFillColor = gray(0, 0.4)
+DefaultTextAreaScrollBarStyle.thumbFillColorHover = gray(0, 0.43)
+DefaultTextAreaScrollBarStyle.thumbFillColorActive = gray(0, 0.35)
 
 var DefaultTextAreaScrollBarStyle_EditMode = DefaultTextAreaScrollBarStyle.deepCopy()
 
@@ -3597,18 +3814,20 @@ var textAreaScrollBarPos: float
 proc textArea(
   id:         ItemId,
   x, y, w, h: float,
-  text:       string,
+  text_out:   var string,
   tooltip:    string = "",
   activate:   bool = false,
   drawWidget: bool = false,
   constraint: Option[TextAreaConstraint] = TextAreaConstraint.none,
   style:      TextAreaStyle = DefaultTextAreaStyle
-): string =
+) =
 
   alias(vg, g_nvgContext)
   alias(ui, g_uiState)
   alias(ta, ui.textAreaState)
   alias(s, style)
+
+  var text = text_out
 
   const MaxLineLen = 1000
   assert text.runeLen <= MaxLineLen
@@ -3619,8 +3838,9 @@ proc textArea(
   let ScrollBarWidth = 12.0
 
   let
-    x = x + ui.ox
-    y = y + ui.oy
+    ds = drawState()
+    x = x + ds.ox
+    y = y + ds.oy
 
   # The text is displayed within this rectangle (used for drawing later)
   let
@@ -3638,9 +3858,7 @@ proc textArea(
 
   var maxDisplayRows = (textBoxH / lineHeight).int
 
-  var
-    text = text
-    glyphs: array[MaxLineLen, GlyphPosition]
+  var glyphs: array[MaxLineLen, GlyphPosition]
 
 
   proc enterEditMode(id: ItemId, text: string, startX: float) =
@@ -3961,7 +4179,6 @@ proc textArea(
 
     setFramesLeft()
 
-  result = text
 
   let editing = ta.activeItem == id
 
@@ -3995,23 +4212,26 @@ proc textArea(
   let thumbSize = maxDisplayRows.float *
                   ((rows.len.float - maxDisplayRows) / rows.len)
 
-  ta.displayStartRow = koi.vertScrollBar(
-    x+w - ScrollBarWidth, y, ScrollBarWidth, h,
+  koi.vertScrollBar(
+    x+w - ScrollBarWidth - ds.ox, y - ds.oy,
+    ScrollBarWidth, h,
     startVal=0, endVal=endVal,
     ta.displayStartRow,
     thumbSize=thumbSize, clickStep=2, style=sbStyle)
+
+  text_out = text
 
 
   addDrawLayer(ui.currentLayer-1, vg):
     vg.save()
 
-    let drawState = if isHot(id) and noActiveItem(): dsHover
-      elif editing: dsActive
-      else: dsNormal
+    let state = if isHot(id) and noActiveItem(): wsHover
+      elif editing: wsActive
+      else: wsNormal
 
-    let (fillColor, strokeColor) = case drawState
-      of dsHover:  (s.bgFillColorHover,  s.bgStrokeColorHover)
-      of dsActive: (s.bgFillColorActive, s.bgStrokeColorActive)
+    let (fillColor, strokeColor) = case state
+      of wsHover:  (s.bgFillColorHover,  s.bgStrokeColorHover)
+      of wsActive: (s.bgFillColorActive, s.bgStrokeColorActive)
       else:        (s.bgFillColor,       s.bgStrokeColor)
 
     # Draw text field background
@@ -4130,12 +4350,12 @@ proc textArea(
 
 template textArea*(
   x, y, w, h: float,
-  text:       string,
+  text:       var string,
   tooltip:    string = "",
   activate:   bool = false,
   constraint: Option[TextAreaConstraint] = TextAreaConstraint.none,
   style:      TextAreaStyle = DefaultTextAreaStyle
-): string =
+) =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
@@ -4156,8 +4376,10 @@ proc horizSlider(id:         ItemId,
                  x, y, w, h: float,
                  startVal:   float,
                  endVal:     float,
-                 value:      float,
-                 tooltip:    string = ""): float =
+                 value_out:  var float,
+                 tooltip:    string = "") =
+
+  var value = value_out
 
   assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
          (endVal   < startVal and value >= endVal   and value <= startVal)
@@ -4166,8 +4388,9 @@ proc horizSlider(id:         ItemId,
   alias(ss, ui.sliderState)
 
   let
-    x = x + ui.ox
-    y = y + ui.oy
+    ds = drawState()
+    x = x + ds.ox
+    y = y + ds.oy
 
   const SliderPad = 3
 
@@ -4193,7 +4416,6 @@ proc horizSlider(id:         ItemId,
   # New position & value calculation
   var
     newPosX = posX
-    value = value
 
   if isActive(id):
     case ss.state:
@@ -4243,8 +4465,8 @@ proc horizSlider(id:         ItemId,
       setActive(ss.textFieldId)
 
       # TODO couldn't we do activate=true here and simplify the code?
-      ss.valueText = koi.textField(ss.textFieldId, x, y, w, h,
-                                   ss.valueText, drawWidget = false)
+      koi.textField(ss.textFieldId, x, y, w, h, ss.valueText,
+                    drawWidget = false)
 
       if ui.textFieldState.state == tfsDefault:
         value = try:
@@ -4272,16 +4494,15 @@ proc horizSlider(id:         ItemId,
         setActive(id)
         setHot(id)
 
-
-  result = value
+  value_out = value
 
   # Draw slider track
-  let drawState = if isHot(id) and noActiveItem(): dsHover
-    elif isActive(id): dsActive
-    else: dsNormal
+  let state = if isHot(id) and noActiveItem(): wsHover
+    elif isActive(id): wsActive
+    else: wsNormal
 
-  let fillColor = case drawState
-    of dsHover: GRAY_HI
+  let fillColor = case state
+    of wsHover: GRAY_HI
     else:       GRAY_MID
 
   addDrawLayer(ui.currentLayer, vg):
@@ -4293,9 +4514,9 @@ proc horizSlider(id:         ItemId,
 
     if not (ss.editModeItem == id and ss.state == ssEditValue):
       # Draw slider value bar
-      let sliderColor = case drawState
-        of dsHover:  GRAY_LOHI
-        of dsActive: HILITE
+      let sliderColor = case state
+        of wsHover:  GRAY_LOHI
+        of wsActive: HILITE
         else:        GRAY_LO
 
       vg.beginPath()
@@ -4319,7 +4540,7 @@ template horizSlider*(x, y, w, h: float,
                       startVal:   float = 0.0,
                       endVal:     float = 1.0,
                       value:      float,
-                      tooltip:    string = ""): float =
+                      tooltip:    string = "") =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
@@ -4333,8 +4554,10 @@ proc vertSlider(id:         ItemId,
                 x, y, w, h: float,
                 startVal:   float,
                 endVal:     float,
-                value:      float,
-                tooltip:    string = ""): float =
+                value_out:  var float,
+                tooltip:    string = "") =
+
+  var value = value_out
 
   assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
          (endVal   < startVal and value >= endVal   and value <= startVal)
@@ -4343,8 +4566,9 @@ proc vertSlider(id:         ItemId,
   alias(ss, ui.sliderState)
 
   let
-    x = x + ui.ox
-    y = y + ui.oy
+    ds = drawState()
+    x = x + ds.ox
+    y = y + ds.oy
 
   const SliderPad = 3
 
@@ -4354,7 +4578,7 @@ proc vertSlider(id:         ItemId,
 
   # Calculate current slider position
   proc calcPosY(val: float): float =
-    let t = invLerp(startVal, endVal, value)
+    let t = invLerp(startVal, endVal, val)
     lerp(posMinY, posMaxY, t)
 
   let posY = calcPosY(value)
@@ -4366,9 +4590,7 @@ proc vertSlider(id:         ItemId,
       setActive(id)
 
   # New position & value calculation
-  var
-    newPosY = posY
-    newValue = value
+  var newPosY = posY
 
   if isActive(id):
     case ss.state:
@@ -4395,21 +4617,21 @@ proc vertSlider(id:         ItemId,
 
       newPosY = clamp(posY + dy, posMaxY, posMinY)
       let t = invLerp(posMinY, posMaxY, newPosY)
-      newValue = lerp(startVal, endVal, t)
+      value = lerp(startVal, endVal, t)
       ui.y0 = ui.my
 
     of ssEditValue:
       discard
 
-  result = newValue
+  value_out = value
 
   # Draw slider track
-  let drawState = if isHot(id) and noActiveItem(): dsHover
-    elif isActive(id): dsActive
-    else: dsNormal
+  let state = if isHot(id) and noActiveItem(): wsHover
+    elif isActive(id): wsActive
+    else: wsNormal
 
-  let fillColor = case drawState
-    of dsHover: GRAY_HI
+  let fillColor = case state
+    of wsHover: GRAY_HI
     else:       GRAY_MID
 
   addDrawLayer(ui.currentLayer, vg):
@@ -4419,9 +4641,9 @@ proc vertSlider(id:         ItemId,
     vg.fill()
 
     # Draw slider
-    let sliderColor = case drawState
-      of dsHover:  GRAY_LOHI
-      of dsActive: HILITE
+    let sliderColor = case state
+      of wsHover:  GRAY_LOHI
+      of wsActive: HILITE
       else:        GRAY_LO
 
     vg.beginPath()
@@ -4437,8 +4659,8 @@ proc vertSlider(id:         ItemId,
 template vertSlider*(x, y, w, h: float,
                      startVal:   float,
                      endVal:     float,
-                     value:      float,
-                     tooltip:    string = ""): float =
+                     value:      var float,
+                     tooltip:    string = "") =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
@@ -4495,6 +4717,9 @@ proc setDefaultDialogStyle*(style: DialogStyle) =
   DefaultDialogStyle = style.deepCopy
 
 
+
+const DialogLayerOffset = 3
+
 proc beginDialog*(w, h: float, title: string,
                   style: DialogStyle = DefaultDialogStyle) =
 
@@ -4505,9 +4730,7 @@ proc beginDialog*(w, h: float, title: string,
     x = floor((ui.winWidth - w) / 2)
     y = floor((ui.winHeight - h) / 2)
 
-  inc(ui.currentLayer, 2)   # TODO
-
-  addDrawLayer(ui.currentLayer, vg):
+  addDrawLayer(ui.currentLayer+1, vg):
     const TitleBarHeight = 30.0
 
     # Outer border
@@ -4549,18 +4772,21 @@ proc beginDialog*(w, h: float, title: string,
     vg.fillColor(s.titleBarTextColor)
     discard vg.text(x+10.0, y + TitleBarHeight * TextVertAlignFactor, title)
 
-  ui.ox = x
-  ui.oy = y
+  inc(ui.currentLayer, DialogLayerOffset)
+
+  pushDrawState(
+    DrawState(ox: x, oy: y)
+  )
+
   ui.insideDialog = true
   ui.isDialogOpen = true
 
 
 proc endDialog*() =
   alias(ui, g_uiState)
-  ui.ox = 0
-  ui.oy = 0
+  popDrawState()
   ui.insideDialog = false
-  dec(ui.currentLayer, 2 )  # TODO
+  dec(ui.currentLayer, DialogLayerOffset)
 
 
 proc closeDialog*() =
@@ -4570,8 +4796,78 @@ proc closeDialog*() =
 
 
 # }}}
+
+# {{{ sectionHeader*()
+proc sectionHeader*(label: string, expanded: var bool): bool =
+  alias(ui, g_uiState)
+  result = true
+
+# }}}
+#
+# {{{ ScrollPanel
+# TODO
+var scrollPaneSbVal: float
+
+# {{{ beginScrollPanel*()
+proc beginScrollPanel*(x, y, w, h: float) =
+  alias(ui, g_uiState)
+  alias(vg, g_nvgContext)
+
+  let
+    ds = drawState()
+    ox = ds.ox + x
+    oy = ds.oy + y
+
+  addDrawLayer(ui.currentLayer, vg):
+    vg.save()
+    vg.intersectScissor(ox, oy, w+1, h+1)
+
+    vg.strokeWidth(1)
+    vg.strokeColor(black())
+
+    vg.beginPath()
+    vg.rect(x+0.5, y+0.5, w, h)
+    vg.stroke()
+
+  alias(a, ui.autoLayoutState)
+  a.panelX = x
+  a.panelY = y
+  a.panelWidth = w
+  a.panelHeight = h
+
+  pushDrawState(
+    DrawState(ox: ox, oy: oy - scrollPaneSbVal)
+  )
+
+# }}}
+# {{{ endScrollPanel*()
+
+proc endScrollPanel*() =
+  alias(ui, g_uiState)
+  alias(vg, g_nvgContext)
+  alias(a, ui.autoLayoutState)
+
+  addDrawLayer(ui.currentLayer, vg):
+    vg.restore()
+
+  let visibleHeight = a.panelHeight
+  let totalHeight = a.y
+  let thumbSize = visibleHeight * ((totalHeight - visibleHeight) / totalHeight)
+
+  popDrawState()
+
+  koi.vertScrollBar(
+    x=(a.panelX + a.panelWidth), y=(a.panelY), w=16.0, h=visibleHeight,
+    startVal=0, endVal=(totalHeight - visibleHeight),
+    scrollPaneSbVal,
+    thumbSize=thumbSize, clickStep=20)
+
+# }}}
+
+# }}}
+
 #[
-# {{{ Menus
+# {{{ Menu
 # {{{ menuBar
 
 proc menuBar(id:         ItemId,
@@ -4607,13 +4903,13 @@ proc menuBar(id:         ItemId,
 #    result = true
 
   # Draw menu bar
-  let drawState = if isHot(id) and noActiveItem(): dsHover
-    elif isHotAndActive(id): dsActive
-    else: dsNormal
+  let state = if isHot(id) and noActiveItem(): wsHover
+    elif isHotAndActive(id): wsActive
+    else: wsNormal
 
-  let fillColor = case drawState
-    of dsHover:  GRAY_HI
-    of dsActive: HILITE
+  let fillColor = case state
+    of wsHover:  GRAY_HI
+    of wsActive: HILITE
     else:        GRAY_MID
 
   addDrawLayer(ui.currentLayer, vg):
@@ -4719,8 +5015,12 @@ proc beginFrame*(winWidth, winHeight: float) =
 
   alias(ui, g_uiState)
 
-  ui.ox = 0
-  ui.oy = 0
+  ui.drawStateStack = @[
+    DrawState(ox: 0, oy: 0)
+  ]
+
+  ui.insideDialog = false
+
   ui.currentLayer = DefaultLayer
 
   ui.winWidth = winWidth
@@ -4768,6 +5068,10 @@ proc beginFrame*(winWidth, winHeight: float) =
 
   # Reset hot item
   ui.hotItem = 0
+
+  # Layout
+  ui.autoLayoutParams = DefaultAutoLayoutParams
+  initAutoLayout()
 
   g_drawLayers.init()
 
