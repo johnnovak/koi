@@ -5028,7 +5028,7 @@ proc endScrollPanel*() =
     if not mouseScrollBufEmpty():
       for i in 0..<g_mouseScrollBufIdx:
         let ev = g_mouseScrollBuf[i]
-        scrollPaneSbVal -= ev.oy * 30
+        scrollPaneSbVal -= ev.oy * 10
       clearMouseScrollBuf()
       renderNextFrame()
 
