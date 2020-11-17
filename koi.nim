@@ -345,6 +345,7 @@ type
     panelY:            float
     panelWidth:        float
     panelHeight:       float
+    lastContentHeight: float
 
 # }}}
 # }}}
@@ -948,6 +949,32 @@ proc mouseButtonCb(win: Window, button: MouseButton, pressed: bool,
       mods: modKeys
     )
   )
+
+
+type MouseScrollEvent = object
+  ox, oy: float
+  mx, my: float
+
+const MouseScrollBufSize = 256
+var
+  g_mouseScrollBuf: array[MouseScrollBufSize, MouseScrollEvent]
+  g_mouseScrollBufIdx: Natural
+
+proc mouseScrollCb(win: Window, offset: tuple[x, y: float64]) =
+  if g_mouseScrollBufIdx <= g_mouseScrollBuf.high:
+    let cursor = win.cursorPos
+    g_mouseScrollBuf[g_mouseScrollBufIdx] = MouseScrollEvent(
+      ox: offset.x,
+      oy: offset.y,
+      mx: cursor.x,
+      my: cursor.y
+    )
+    inc(g_mouseScrollBufIdx)
+
+proc clearMouseScrollBuf() = g_mouseScrollBufIdx = 0
+
+proc mouseScrollBufEmpty(): bool = g_mouseScrollBufIdx == 0
+
 
 proc showCursor*() =
   glfw.currentContext().cursorMode = cmNormal
@@ -2043,6 +2070,7 @@ proc dropdown[T](id:               ItemId,
     ds.activeItem = 0
     ui.focusCaptured = false
     renderNextFrame()
+    # TODO do we need this here?
     clearCharBuf()
     clearEventBuf()
 
@@ -3319,6 +3347,7 @@ proc textFieldEnterEditMode(id: ItemId, text: string, startX: float) =
   alias(tf, ui.textFieldState)
 
   setActive(id)
+  # TODO clear at the end of each frame?
   clearCharBuf()
   clearEventBuf()
 
@@ -3984,6 +4013,7 @@ proc textArea(
 
   proc enterEditMode(id: ItemId, text: string, startX: float) =
     setActive(id)
+    # TODO clear at the end of each frame?
     clearCharBuf()
     clearEventBuf()
 
@@ -4811,6 +4841,23 @@ proc sliderPost() =
 # }}}
 # }}}
 
+# {{{ Color
+
+template color*(color:  var Color,
+                tooltip: string = "") =
+
+  alias(ui, g_uiState)
+  alias(a, ui.autoLayoutState)
+
+  let i = instantiationInfo(fullPaths=true)
+  let id = generateId(i.filename, i.line, "")
+
+  # TODO
+
+  handleAutoLayout()
+
+# }}}
+
 # {{{ Dialog
 
 type DialogStyle* = ref object
@@ -4939,12 +4986,12 @@ proc beginScrollPanel*(x, y, w, h: float) =
     vg.save()
     vg.intersectScissor(ox, oy, w+1, h+1)
 
-    vg.strokeWidth(1)
-    vg.strokeColor(black())
+#    vg.strokeWidth(1)
+#    vg.strokeColor(black())
 
-    vg.beginPath()
-    vg.rect(x+0.5, y+0.5, w, h)
-    vg.stroke()
+#    vg.beginPath()
+#    vg.rect(x+0.5, y+0.5, w, h)
+#    vg.stroke()
 
   alias(a, ui.autoLayoutState)
   a.panelX = x
@@ -4970,15 +5017,22 @@ proc endScrollPanel*() =
   popDrawState()
 
   let visibleHeight = a.panelHeight
-  let totalHeight = a.yNoPad
+  let contentHeight = a.yNoPad
 
-  if totalHeight > visibleHeight:
-    let thumbSize = visibleHeight * ((totalHeight - visibleHeight) / totalHeight)
-    let endVal = totalHeight - visibleHeight
+  if contentHeight > visibleHeight:
+    let thumbSize = visibleHeight *
+                    ((contentHeight - visibleHeight) / contentHeight)
 
-    if scrollPaneSbVal > endVal:
-      scrollPaneSbVal = endVal
+    let endVal = contentHeight - visibleHeight
+
+    if not mouseScrollBufEmpty():
+      for i in 0..<g_mouseScrollBufIdx:
+        let ev = g_mouseScrollBuf[i]
+        scrollPaneSbVal -= ev.oy * 30
+      clearMouseScrollBuf()
       renderNextFrame()
+
+    scrollPaneSbVal = scrollPaneSbVal.clamp(0, endVal)
 
     koi.vertScrollBar(
       x=(a.panelX + a.panelWidth), y=(a.panelY), w=16.0, h=visibleHeight,
@@ -4986,9 +5040,12 @@ proc endScrollPanel*() =
       scrollPaneSbVal,
       thumbSize=thumbSize, clickStep=20)
   else:
-    if scrollPaneSbVal != 0:
-      scrollPaneSbVal = 0
+    scrollPaneSbVal = 0
+
+  if contentHeight != a.lastContentHeight:
       renderNextFrame()
+
+  a.lastContentHeight = contentHeight
 
 # }}}
 
@@ -5124,6 +5181,7 @@ proc init*(nvg: NVGContext) =
   win.keyCb  = keyCb
   win.charCb = charCb
   win.mouseButtonCb = mouseButtonCb
+  win.scrollCb = mouseScrollCb
 
   glfw.swapInterval(1)
 
@@ -5242,6 +5300,8 @@ proc endFrame*() =
 
   if ui.framesLeft > 0:
     dec(ui.framesLeft)
+
+  clearMouseScrollBuf()
 
 # }}}
 # {{{ shouldRenderNextFrame*()

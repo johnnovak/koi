@@ -9,6 +9,8 @@ import nanovg
 
 import koi
 
+import ../gridmonger/src/theme
+
 
 # Global NanoVG context
 var vg: NVGContext
@@ -16,16 +18,16 @@ var vg: NVGContext
 
 ### UI DATA ##################################################################
 var
-  section1 = true
-  section2 = true
+  sectionGeneral = true
+  sectionWidget = true
+  sectionTextField = true
+  sectionDialog = true
+  sectionTitleBar = true
+  sectionStatusBar = true
+  sectionLevelDropdown = true
+  sectionAboutButton = true
 
-  checkBoxVal1 = true
-  checkBoxVal2 = false
-  checkBoxVal3 = false
-  checkBoxVal4 = true
-
-  dropdownVal1 = 0
-  dropdownVal2 = 1
+var currTheme = new ThemeStyle
 
 ##############################################################################
 
@@ -63,8 +65,9 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
 
   ############################################################################
 
-  koi.beginScrollPanel(x=100, y=100, w=250, h=200)
+  koi.beginScrollPanel(x=100, y=100, w=250, h=600)
 
+#[
   if koi.sectionHeader("First section", section1):
     koi.beginGroup()
     koi.label("CheckBox 1")
@@ -105,6 +108,218 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
     koi.label("CheckBox 2")
     koi.checkBox(checkBoxVal2, tooltip = "Checkbox 2")
     koi.endGroup()
+]#
+
+
+  if koi.sectionHeader("General", sectionGeneral):
+    koi.beginGroup()
+    koi.label("Background")
+    koi.color(currTheme.general.backgroundColor)
+
+    koi.label("Highlight")
+    koi.color(currTheme.general.highlightColor)
+    koi.endGroup()
+
+  if koi.sectionHeader("Widget", sectionWidget):
+    koi.beginGroup()
+    koi.label("Background")
+    koi.color(currTheme.widget.bgColor)
+
+    koi.label("Background hover")
+    koi.color(currTheme.widget.bgColorHover)
+
+    koi.label("Background disabled")
+    koi.color(currTheme.widget.bgColorDisabled)
+
+    koi.beginGroup()
+    koi.label("Text")
+    koi.color(currTheme.widget.textColor)
+
+    koi.label("Text disabled")
+    koi.color(currTheme.widget.textColorDisabled)
+    koi.endGroup()
+
+  if koi.sectionHeader("Text field", sectionTextField):
+    koi.beginGroup()
+    koi.label("Background active")
+    koi.color(currTheme.textField.bgColorActive)
+
+    koi.label("Text active")
+    koi.color(currTheme.textField.textColorActive)
+
+    koi.label("Cursor")
+    koi.color(currTheme.textField.cursorColor)
+
+    koi.label("Selection")
+    koi.color(currTheme.textField.selectionColor)
+    koi.endGroup()
+
+  if koi.sectionHeader("Dialog", sectionDialog):
+    koi.beginGroup()
+    koi.label("Title bar background")
+    koi.color(currTheme.dialog.titleBarBgColor)
+
+    koi.label("Title bar text")
+    koi.color(currTheme.dialog.titleBarTextColor)
+
+    koi.label("Background")
+    koi.color(currTheme.dialog.backgroundColor)
+
+    koi.label("Text")
+    koi.color(currTheme.dialog.textColor)
+
+    koi.label("Warning text")
+    koi.color(currTheme.dialog.warningTextColor)
+    koi.endGroup()
+
+  if koi.sectionHeader("Title bar", sectionTitleBar):
+    koi.beginGroup()
+    koi.label("Background")
+    koi.color(currTheme.titleBar.backgroundColor)
+
+    koi.label("Background unfocused")
+    koi.color(currTheme.titleBar.bgColorUnfocused)
+
+    koi.label("Text")
+    koi.color(currTheme.titleBar.textColor)
+
+    koi.label("Text unfocused")
+    koi.color(currTheme.titleBar.textColorUnfocused)
+
+    koi.beginGroup()
+    koi.label("Modified flag")
+    koi.color(currTheme.titleBar.modifiedFlagColor)
+
+    koi.label("Button")
+    koi.color(currTheme.titleBar.buttonColor)
+
+    koi.label("Button hover")
+    koi.color(currTheme.titleBar.buttonColorHover)
+
+    koi.label("Button down")
+    koi.color(currTheme.titleBar.buttonColorDown)
+    koi.endGroup()
+
+  if koi.sectionHeader("Status bar", sectionStatusBar):
+    koi.beginGroup()
+    koi.label("Background")
+    koi.color(currTheme.statusBar.backgroundColor)
+
+    koi.label("Text")
+    koi.color(currTheme.statusBar.textColor)
+
+    koi.label("Command background")
+    koi.color(currTheme.statusBar.commandBgColor)
+
+    koi.label("Command")
+    koi.color(currTheme.statusBar.commandColor)
+
+    koi.label("Coordinates")
+    koi.color(currTheme.statusBar.coordsColor)
+    koi.endGroup()
+
+  if koi.sectionHeader("Level dropdown", sectionLevelDropdown):
+    koi.beginGroup()
+    koi.label("Button")
+    koi.color(currTheme.levelDropdown.buttonColor)
+
+    koi.label("Button hover")
+    koi.color(currTheme.levelDropdown.buttonColorHover)
+
+    koi.label("Text")
+    koi.color(currTheme.levelDropdown.textColor)
+
+    koi.beginGroup()
+    koi.label("Item list")
+    koi.color(currTheme.levelDropdown.itemListColor)
+
+    koi.label("Item")
+    koi.color(currTheme.levelDropdown.itemColor)
+
+    koi.label("Item hover")
+    koi.color(currTheme.levelDropdown.itemColorHover)
+    koi.endGroup()
+
+  if koi.sectionHeader("About button", sectionAboutButton):
+    koi.beginGroup()
+    koi.label("Color")
+    koi.color(currTheme.aboutButton.color)
+
+    koi.label("Hover")
+    koi.color(currTheme.aboutButton.colorHover)
+
+    koi.label("Active")
+    koi.color(currTheme.aboutButton.colorActive)
+    koi.endGroup()
+
+#-----------------------------------------------------------------------------
+
+#[
+  if koi.sectionHeader("Level", section):
+    backgroundColor         = "rgb(90, 90, 130)"
+    drawColor               = "rgb(40, 40, 65)"
+    lightDrawColor          = "rgba(140, 140, 185, 170)"
+    lineWidth               = lwNormal
+
+    floorColor1             = "rgb(230, 230, 240)"
+    floorColor2             = "rgba(51, 92, 162, 66)"
+    floorColor3             = "rgba(61, 139, 231, 80)"
+    floorColor4             = "rgba(108, 57, 172, 66)"
+    floorColor5             = "rgba(137, 95, 233, 76)"
+    floorColor6             = "rgba(151, 0, 97, 66)"
+    floorColor7             = "rgba(217, 40, 158, 72)"
+    floorColor8             = "rgba(48, 141, 154, 55)"
+    floorColor9             = "rgba(54, 184, 166, 73)"
+
+    bgHatch                 = off
+
+    coordsColor             = "gray(1.0, 0.4)"
+    coordsHighlightColor    = "rgb(255, 190, 0)"
+
+    cursorColor             = "rgb(255, 190, 0)"
+    cursorGuideColor        = "rgba(255, 180, 111, 60)"
+
+    gridStyleBackground     = gsSolid
+    gridColorBackground     = "rgba(50, 50, 55, 0)"
+    gridStyleFloor          = gsSolid
+    gridColorFloor          = "rgba(50, 50, 55, 70)"
+
+    outlineStyle            = osNone
+
+    innerShadow             = off
+    outerShadow             = off
+
+    selectionColor          = "rgba(1.0, 0.5, 0.5, 0.4)"
+    pastePreviewColor       = "rgba(0.2, 0.6, 1.0, 0.4)"
+
+    noteMarkerColor         = "rgba(64, 78, 127, 230)"
+    noteCommentColor        = "rgba(1.0, 0.2, 0.0, 0.8)"
+    noteIndexColor          = "gray(0.9)"
+    noteIndexBgColor1       = "rgb(245, 98, 141)"
+    noteIndexBgColor2       = "rgb(163, 137, 215)"
+    noteIndexBgColor3       = "rgb(102, 162, 220)"
+    noteIndexBgColor4       = "rgb(151, 151, 160)"
+
+    noteTooltipBgColor      = "rgb(30, 30, 50)"
+    noteTooltipTextColor    = "gray(0.98)"
+
+    linkMarkerColor         = "rgba(120, 50, 140, 170)"
+
+    #-----------------------------------------------------------------------------
+
+    [notesPane]
+      if koi.sectionHeader("", section):
+    textColor               = "gray(1.0, 0.93)"
+    indexColor              = "gray(1.0, 0.93)"
+    indexBgColor1           = "rgb(245, 98, 141)"
+    indexBgColor2           = "rgb(163, 137, 215)"
+    indexBgColor3           = "rgb(92, 152, 210)"
+    indexBgColor4           = "rgb(131, 131, 140)"
+
+    [toolbarPane]
+    buttonBgColor           = "rgb(210, 210, 220)"
+    buttonBgColorHover      = "rgb(255, 255, 255)"
+]#
 
   koi.endScrollPanel()
 
