@@ -336,6 +336,7 @@ type
 
   AutoLayoutStateVars = object
     x, y:              float
+    yNoPad:            float
     currColIndex:      Natural
     nextItemWidth:     float
     nextItemHeight:    float
@@ -509,12 +510,17 @@ template generateId(id: string): ItemId =
   assert h > 0
   h
 
-template generateId*(filename: string, line: int, id: string): ItemId =
-  generateId(filename & ":" & $line & ":" & id)
+# TODO quite hacky...
+var g_lastIdString: string
 
-proc setFramesLeft*(i: Natural = 2) =
+template generateId*(filename: string, line: int, id: string): ItemId =
+  let idString = filename & ":" & $line & ":" & id
+  g_lastIdString = idString
+  generateId(idString)
+
+proc renderNextFrame*() =
   alias(ui, g_uiState)
-  ui.framesLeft = 2
+  inc(ui.framesLeft)
 
 proc mouseInside*(x, y, w, h: float): bool =
   alias(ui, g_uiState)
@@ -1005,7 +1011,7 @@ proc handleTooltip(id: ItemId, tooltip: string) =
       let cursorMoved = ui.mx != ui.lastmx or ui.my != ui.lastmy
       if cursorMoved:
         tt.t0 = getTime()
-      setFramesLeft()
+      renderNextFrame()
 
     # Hide the tooltip immediately if the LMB is pressed inside the widget
     if ui.mbLeftDown and hasActiveItem():
@@ -1017,13 +1023,13 @@ proc handleTooltip(id: ItemId, tooltip: string) =
          ui.lastHotItem != id:
       tt.state = tsShowDelay
       tt.t0 = getTime()
-      setFramesLeft()
+      renderNextFrame()
 
     elif tt.state >= tsShow:
       tt.state = tsShow
       tt.t0 = getTime()
       tt.text = tooltip
-      setFramesLeft()
+      renderNextFrame()
 
 # }}}
 # {{{ drawTooltip
@@ -1092,13 +1098,15 @@ proc tooltipPost() =
 
   # Make sure to keep drawing until the tooltip animation cycle is over
   if tt.state > tsOff:
-    setFramesLeft()
+    renderNextFrame()
 
   if tt.state == tsShow:
     ui.framesLeft = 0
 
 # }}}
 # }}}
+
+# {{{ Layout handling
 
 # {{{ initAutoLayout()
 proc initAutoLayout() =
@@ -1144,25 +1152,30 @@ proc endGroup*() =
 
 # }}}
 # {{{ handleAutoLayout()
-proc handleAutoLayout() =
+proc handleAutoLayout(height: float = -1, forceNextRow: bool = false) =
   alias(a, g_uiState.autoLayoutState)
   alias(ap, g_uiState.autoLayoutParams)
 
   inc(a.currColIndex)
 
-  if a.currColIndex == ap.itemsPerRow:
+  let h = if height >= 0: height else: ap.defaultRowHeight
+
+  if a.currColIndex == ap.itemsPerRow or forceNextRow:
     a.currColIndex = 0
     a.nextItemWidth = ap.labelWidth
     a.x = 0
-    a.y += ap.defaultRowHeight + (if a.insideGroup: ap.rowGroupPad
-                                  else: ap.rowPad)
+
+    a.y += h
+    a.yNoPad = a.y
+    a.y += (if a.insideGroup: ap.rowGroupPad else: ap.rowPad)
 
   # TODO this only works for the default 2-column layout
   else:
     a.x = ap.labelWidth
     a.nextItemWidth = ap.rowWidth - ap.labelWidth
-    a.nextItemHeight = ap.defaultRowHeight
+    a.nextItemHeight = h
 
+# }}}
 # }}}
 
 # {{{ Label
@@ -1180,7 +1193,7 @@ var DefaultLabelStyle = LabelStyle(
   multiLine  : false,
   fontSize   : 14.0,
   fontFace   : "sans-bold",
-  align      : haCenter,
+  align      : haLeft,
   lineHeight : 1.4,
   color      : GRAY_HI
 )
@@ -1228,7 +1241,6 @@ template label*(label: string,
   let
     i = instantiationInfo(fullPaths=true)
     id = generateId(i.filename, i.line, "")
-    ds = drawState()
 
   textLabel(id, a.x, a.y, a.nextItemWidth, a.nextItemHeight, label, style)
 
@@ -1501,11 +1513,120 @@ template checkBox*(active:  var bool,
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  let ds = drawState()
-
   checkbox(id, a.x, a.y, a.nextItemHeight, active, tooltip, style)
 
   handleAutoLayout()
+
+# }}}
+# {{{ SectionHeader
+
+# TODO
+type SectionHeaderStyle* = ref object
+  buttonCornerRadius*:        float
+  buttonStrokeWidth*:         float
+  buttonStrokeColor*:         Color
+  buttonStrokeColorHover*:    Color
+  buttonStrokeColorDown*:     Color
+  buttonStrokeColorDisabled*: Color
+  buttonFillColor*:           Color
+  buttonFillColorHover*:      Color
+  buttonFillColorDown*:       Color
+  buttonFillColorDisabled*:   Color
+  labelPadHoriz*:             float
+  labelFontSize*:             float
+  labelFontFace*:             string
+  labelOnly*:                 bool
+  labelAlign*:                HorizontalAlign
+  labelColor*:                Color
+  labelColorHover*:           Color
+  labelColorDown*:            Color
+  labelColorDisabled*:        Color
+
+var DefaultSectionHeaderStyle = SectionHeaderStyle(
+  buttonCornerRadius        : 5,
+  buttonStrokeWidth         : 0,
+  buttonStrokeColor         : black(),
+  buttonStrokeColorHover    : black(),
+  buttonStrokeColorDown     : black(),
+  buttonStrokeColorDisabled : black(),
+  buttonFillColor           : gray(0.6),
+  buttonFillColorHover      : GRAY_HI,
+  buttonFillColorDown       : HILITE,
+  buttonFillColorDisabled   : GRAY_LO,
+  labelPadHoriz             : 8,
+  labelFontSize             : 14.0,
+  labelFontFace             : "sans-bold",
+  labelOnly                 : false,
+  labelAlign                : haCenter,
+  labelColor                : GRAY_LO,
+  labelColorHover           : GRAY_LO,
+  labelColorDown            : GRAY_LO,
+  labelColorDisabled        : GRAY_MID
+)
+
+proc getDefaultSectionHeaderStyle*(): SectionHeaderStyle =
+  DefaultSectionHeaderStyle.deepCopy
+
+proc setDefaultSectionHeaderStyle*(style: SectionHeaderStyle) =
+  DefaultSectionHeaderStyle = style.deepCopy
+
+
+let SectionHeaderCheckboxStyle = getDefaultCheckBoxStyle()
+
+proc sectionHeader(id:           ItemId,
+                   x, y, w, h:   float,
+                   label:        string,
+                   expanded_out: var bool,
+                   tooltip:      string,
+                   style:        SectionHeaderStyle): bool =
+
+  alias(ui, g_uiState)
+  alias(s, style)
+
+  let buttonWidth = h
+
+  let cbId = generateId(g_lastIdString & ":checkBox")
+  checkBox(cbId, x, y, buttonWidth, expanded_out, tooltip,
+           SectionHeaderCheckboxStyle)
+
+  textLabel(cbId, x+buttonWidth, y, w-buttonWidth, h, label, DefaultLabelStyle)
+
+  result = expanded_out
+
+
+template sectionHeader*(
+  x, y, w, h: float,
+  label:      string,
+  expanded:   var bool,
+  tooltip:    string = "",
+  style:      SectionHeaderStyle = DefaultSectionHeaderStyle
+): bool =
+
+  let i = instantiationInfo(fullPaths=true)
+  let id = generateId(i.filename, i.line, "")
+
+  sectionHeader(id, x, y, w, h, label, expanded, tooltip, style)
+  expanded
+
+
+template sectionHeader*(
+  label:    string,
+  expanded: var bool,
+  tooltip:  string = "",
+  style:    SectionHeaderStyle = DefaultSectionHeaderStyle
+): bool =
+
+  alias(ui, g_uiState)
+  alias(a, ui.autoLayoutState)
+
+  let i = instantiationInfo(fullPaths=true)
+  let id = generateId(i.filename, i.line, label)
+
+  let result = sectionHeader(id, a.x, a.y, a.panelWidth, a.nextItemHeight,
+                             label, expanded, tooltip, style)
+
+  handleAutoLayout(forceNextRow=true)
+  result
 
 # }}}
 # {{{ RadioButtons
@@ -1921,7 +2042,7 @@ proc dropdown[T](id:               ItemId,
     ds.state = dsClosed
     ds.activeItem = 0
     ui.focusCaptured = false
-    setFramesLeft()
+    renderNextFrame()
     clearCharBuf()
     clearEventBuf()
 
@@ -2273,7 +2394,7 @@ proc horizScrollBar(id:         ItemId,
 
         ui.x0 = clamp(ui.mx, thumbMinX, thumbMaxX + thumbW)
 
-      setFramesLeft()
+      renderNextFrame()
 
     of sbsDragHidden:
       # Technically, the cursor can move outside the widget when it's disabled
@@ -2306,12 +2427,12 @@ proc horizScrollBar(id:         ItemId,
 
       sb.state = sbsTrackClickDelay
       ui.t0 = getTime()
-      setFramesLeft()
+      renderNextFrame()
 
     of sbsTrackClickDelay:
       if getTime() - ui.t0 > ScrollBarTrackClickRepeatDelay:
         sb.state = sbsTrackClickRepeat
-      setFramesLeft()
+      renderNextFrame()
 
     of sbsTrackClickRepeat:
       if isHot(id):
@@ -2331,7 +2452,7 @@ proc horizScrollBar(id:         ItemId,
           ui.t0 = getTime()
       else:
         ui.t0 = getTime()
-      setFramesLeft()
+      renderNextFrame()
 
   value_out = newValue
 
@@ -2514,7 +2635,7 @@ proc vertScrollBar(id:         ItemId,
 
         ui.y0 = clamp(ui.my, thumbMinY, thumbMaxY + thumbH)
 
-      setFramesLeft()
+      renderNextFrame()
 
     of sbsDragHidden:
       # Technically, the cursor can move outside the widget when it's disabled
@@ -2547,12 +2668,12 @@ proc vertScrollBar(id:         ItemId,
 
       sb.state = sbsTrackClickDelay
       ui.t0 = getTime()
-      setFramesLeft()
+      renderNextFrame()
 
     of sbsTrackClickDelay:
       if getTime() - ui.t0 > ScrollBarTrackClickRepeatDelay:
         sb.state = sbsTrackClickRepeat
-      setFramesLeft()
+      renderNextFrame()
 
     of sbsTrackClickRepeat:
       if isHot(id):
@@ -2572,7 +2693,7 @@ proc vertScrollBar(id:         ItemId,
           ui.t0 = getTime()
       else:
         ui.t0 = getTime()
-      setFramesLeft()
+      renderNextFrame()
 
   value_out = newValue
 
@@ -3397,7 +3518,7 @@ proc textField(
             tf.state = tfsDragScroll
         else:
           tf.state = tfsDragStart
-        setFramesLeft()
+        renderNextFrame()
       else:
         tf.state = tfsEdit
 
@@ -3415,7 +3536,7 @@ proc textField(
         tf.cursorPos = newCursorPos
         ui.t0 = getTime()
         tf.state = tfsDragDelay
-        setFramesLeft()
+        renderNextFrame()
       else:
         tf.state = tfsEdit
 
@@ -3512,13 +3633,13 @@ proc textField(
           exitEditMode()
           tf.activatePrev = true
           tf.itemToActivate = tf.prevItem
-          setFramesLeft()
+          renderNextFrame()
 
         elif sc in shortcuts[tesNextTextField]:
           text = enforceConstraint(text, tf.originalText)
           exitEditMode()
           tf.activateNext = true
-          setFramesLeft()
+          renderNextFrame()
 
         elif sc in shortcuts[tesAccept]:
           text = enforceConstraint(text, tf.originalText)
@@ -4135,12 +4256,12 @@ proc textArea(
           exitEditMode()
           ta.activatePrev = true
           ta.itemToActivate = ta.prevItem
-          setFramesLeft()
+          renderNextFrame()
 
         elif sc in shortcuts[tesNextTextField]:
           exitEditMode()
           ta.activateNext = true
-          setFramesLeft()
+          renderNextFrame()
 
         elif sc in shortcuts[tesAccept]:
           exitEditMode()
@@ -4177,7 +4298,7 @@ proc textArea(
     # correctly
     rows = textBreakLines(text, textBoxW)
 
-    setFramesLeft()
+    renderNextFrame()
 
 
   let editing = ta.activeItem == id
@@ -4212,7 +4333,10 @@ proc textArea(
   let thumbSize = maxDisplayRows.float *
                   ((rows.len.float - maxDisplayRows) / rows.len)
 
-  koi.vertScrollBar(
+  let sbId = generateId(g_lastIdString & ":scrollBar")
+
+  vertScrollBar(
+    sbId,
     x+w - ScrollBarWidth - ds.ox, y - ds.oy,
     ScrollBarWidth, h,
     startVal=0, endVal=endVal,
@@ -4792,18 +4916,11 @@ proc endDialog*() =
 proc closeDialog*() =
   alias(ui, g_uiState)
   ui.isDialogOpen = false
-  setFramesLeft()
+  renderNextFrame()
 
 
 # }}}
 
-# {{{ sectionHeader*()
-proc sectionHeader*(label: string, expanded: var bool): bool =
-  alias(ui, g_uiState)
-  result = true
-
-# }}}
-#
 # {{{ ScrollPanel
 # TODO
 var scrollPaneSbVal: float
@@ -4850,17 +4967,28 @@ proc endScrollPanel*() =
   addDrawLayer(ui.currentLayer, vg):
     vg.restore()
 
-  let visibleHeight = a.panelHeight
-  let totalHeight = a.y
-  let thumbSize = visibleHeight * ((totalHeight - visibleHeight) / totalHeight)
-
   popDrawState()
 
-  koi.vertScrollBar(
-    x=(a.panelX + a.panelWidth), y=(a.panelY), w=16.0, h=visibleHeight,
-    startVal=0, endVal=(totalHeight - visibleHeight),
-    scrollPaneSbVal,
-    thumbSize=thumbSize, clickStep=20)
+  let visibleHeight = a.panelHeight
+  let totalHeight = a.yNoPad
+
+  if totalHeight > visibleHeight:
+    let thumbSize = visibleHeight * ((totalHeight - visibleHeight) / totalHeight)
+    let endVal = totalHeight - visibleHeight
+
+    if scrollPaneSbVal > endVal:
+      scrollPaneSbVal = endVal
+      renderNextFrame()
+
+    koi.vertScrollBar(
+      x=(a.panelX + a.panelWidth), y=(a.panelY), w=16.0, h=visibleHeight,
+      startVal=0, endVal=endVal,
+      scrollPaneSbVal,
+      thumbSize=thumbSize, clickStep=20)
+  else:
+    if scrollPaneSbVal != 0:
+      scrollPaneSbVal = 0
+      renderNextFrame()
 
 # }}}
 
@@ -5064,7 +5192,7 @@ proc beginFrame*(winWidth, winHeight: float) =
     # events can become "out of sync" with the char buffer. So we need to keep
     # processing one more frame while there are still events in the buffer to
     # prevent that from happening.
-    if g_eventBuf.canRead(): setFramesLeft()
+    if g_eventBuf.canRead(): renderNextFrame()
 
   # Reset hot item
   ui.hotItem = 0

@@ -63,51 +63,46 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
 
   ############################################################################
 
-  var labelStyle = getDefaultLabelStyle()
-  labelStyle.align = haLeft
-
   koi.beginScrollPanel(x=100, y=100, w=250, h=200)
-
-#  koi.setAutoLayout(rowWidth=250, labelWidth=150)
 
   if koi.sectionHeader("First section", section1):
     koi.beginGroup()
-    koi.label("CheckBox 1", labelStyle)
+    koi.label("CheckBox 1")
     koi.checkBox(checkBoxVal1, tooltip = "Checkbox 1")
 
-    koi.label("CheckBox 2", labelStyle)
+    koi.label("CheckBox 2")
     koi.checkBox(checkBoxVal2, tooltip = "Checkbox 2")
 
-    koi.label("CheckBox 3", labelStyle)
+    koi.label("CheckBox 3")
     koi.checkBox(checkBoxVal3, tooltip = "Checkbox 3")
 
-    koi.label("CheckBox 4", labelStyle)
+    koi.label("CheckBox 4")
     koi.checkBox(checkBoxVal4, tooltip = "Checkbox 4")
     koi.endGroup()
 
     koi.beginGroup()
-    koi.label("Dropdown 1", labelStyle)
+    koi.label("Dropdown 1")
     koi.dropdown(items = @["Orange", "Banana", "Blueberry", "Apricot", "Apple"],
                  dropdownVal1,
                  tooltip = "Select a fruit")
 
-    koi.label("Dropdown 2", labelStyle)
+    koi.label("Dropdown 2")
     koi.dropdown(items = @["One", "Two", "Three"],
                  dropdownVal2,
                  tooltip = "Select a number")
     koi.endGroup()
 
   if koi.sectionHeader("Second section", section2):
-    koi.label("Dropdown 1", labelStyle)
+    koi.label("Dropdown 1")
     koi.dropdown(items = @["Orange", "Banana", "Blueberry", "Apricot", "Apple"],
                  dropdownVal1,
                  tooltip = "Select a fruit")
 
     koi.beginGroup()
-    koi.label("CheckBox 1", labelStyle)
+    koi.label("CheckBox 1")
     koi.checkBox(checkBoxVal1, tooltip = "Checkbox 1")
 
-    koi.label("CheckBox 2", labelStyle)
+    koi.label("CheckBox 2")
     koi.checkBox(checkBoxVal2, tooltip = "Checkbox 2")
     koi.endGroup()
 

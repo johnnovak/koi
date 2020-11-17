@@ -3,18 +3,17 @@ BUGS
 
 - maybe keep dropdown open in LMBPressed mode even if the cursor goes
   outside of the selection box
-- scrollbar: click-repeat bug -
+
+- scrollbar:
+  - click-repeat bug -
     click & hold, wait until track is under the cursor, then click & hold
     at the opposite side of the track without leaving the widget
-- scrollbar: click-hold doesn't work if the tooltip appeared
+  - click-hold doesn't work if the tooltip appeared
 
 - textfield:
   - move cursor past the right edge when text doesn't fit into the the
     textfield - the cursor should be after the last character, not after the 
     one before the last
-
-- text: cursor should be hidden in selection mode
-- capslock handling
 
 - dropdown: quickly click and move pointer down -> value select (put small
   delay in there, wait a few frames at least)
@@ -22,6 +21,14 @@ BUGS
 
 TODO
 ====
+
+- OS X specific shortcuts (e.g. Ctrl-A = Select All on Win)
+- value entry widget (modified slider)
+- display tooltip based on screen position
+- proper tooltip sizing/formatting (requires multi-line wrapping...)
+- scroll wheel support
+
+- test shortcuts & widgets with capslock & numlock again
 
 - test all textfield shortcuts with edge cases:
     - empty string
@@ -43,17 +50,13 @@ TODO
     - at first char
     - at last char
 
-- OS X specific shortcuts (e.g. Ctrl-A = Select All on Win)
-- value entry widget (modified slider)
-- menus
-- display tooltip based on screen position
-- windows (e.g. modal popups)
-- scroll wheel support
 - keyboard support for dropdowns
-- proper tooltip sizing/formatting (requires multi-line wrapping...)
 - theming
+- menus
+- windows (e.g. modal popups)
 - SweepCheckBox?
 
 - "soft asserts" (check) that print errors to stderr instead of aborting
 
 - set theme paramters globally (e.g. font, corner roundness, colours)
+
