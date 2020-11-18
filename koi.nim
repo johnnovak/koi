@@ -907,6 +907,22 @@ const EventBufSize = 64
 var g_eventBuf = initRingBuffer[Event](EventBufSize)
 
 
+# No key events will be generated for these keys
+# TODO this could be made configurable
+const ExcludedKeyEvents = @[
+  keyLeftShift,
+  keyLeftControl,
+  keyLeftAlt,
+  keyLeftSuper,
+  keyRightShift,
+  keyRightControl,
+  keyRightAlt,
+  keyRightSuper,
+  keyCapsLock,
+  keyScrollLock,
+  keyNumLock
+]
+
 proc keyCb(win: Window, key: Key, scanCode: int32, action: KeyAction,
            mods: set[ModifierKey]) =
 
@@ -918,11 +934,12 @@ proc keyCb(win: Window, key: Key, scanCode: int32, action: KeyAction,
     of kaDown, kaRepeat: ui.keyStates[keyIdx] = true
     of kaUp:             ui.keyStates[keyIdx] = false
 
-  let event = Event(
-    kind: ekKey,
-    key: key, action: action, mods: mods
-  )
-  discard g_eventBuf.write(event)
+  if key notin ExcludedKeyEvents:
+    let event = Event(
+      kind: ekKey,
+      key: key, action: action, mods: mods
+    )
+    discard g_eventBuf.write(event)
 
 
 proc clearEventBuf*() = g_eventBuf.clear()
@@ -950,21 +967,21 @@ proc mouseButtonCb(win: Window, button: MouseButton, pressed: bool,
 
 type MouseScrollEvent = object
   ox, oy: float
-  mx, my: float
 
-const MouseScrollBufSize = 256
+const MouseScrollBufSize = 16
 var
   g_mouseScrollBuf: array[MouseScrollBufSize, MouseScrollEvent]
   g_mouseScrollBufIdx: Natural
 
 proc mouseScrollCb(win: Window, offset: tuple[x, y: float64]) =
+  # The mouse scroll callback seems to only be called during
+  # pollEvents/waitEvents. GLFW coalesces all scroll events since the last
+  # poll into a single event.
   if g_mouseScrollBufIdx <= g_mouseScrollBuf.high:
     let cursor = win.cursorPos
     g_mouseScrollBuf[g_mouseScrollBufIdx] = MouseScrollEvent(
       ox: offset.x,
-      oy: offset.y,
-      mx: cursor.x,
-      my: cursor.y
+      oy: offset.y
     )
     inc(g_mouseScrollBufIdx)
 
@@ -5218,6 +5235,7 @@ proc beginFrame*(winWidth, winHeight: float) =
   ui.hasEvent = false
   ui.eventHandled = false
 
+  # Get next pending event from the queue
   if g_eventBuf.canRead():
     ui.currEvent = g_eventBuf.read().get
     ui.hasEvent = true
@@ -5247,7 +5265,7 @@ proc beginFrame*(winWidth, winHeight: float) =
     # events can become "out of sync" with the char buffer. So we need to keep
     # processing one more frame while there are still events in the buffer to
     # prevent that from happening.
-    if g_eventBuf.canRead(): renderNextFrame()
+    if g_eventBuf.canRead():renderNextFrame()
 
   # Reset hot item
   ui.hotItem = 0
