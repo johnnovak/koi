@@ -29,6 +29,22 @@ var
 
 var currTheme = new ThemeStyle
 
+var
+  section1 = true
+  section2 = true
+  section3 = true
+
+  dropDownVal1 = 0
+  dropDownVal2 = 0
+  dropDownVal3 = 0
+
+  checkBoxVal1 = false
+  checkBoxVal2 = false
+  checkBoxVal3 = false
+  checkBoxVal4 = false
+  checkBoxVal5 = false
+  checkBoxVal6 = false
+
 ##############################################################################
 
 proc createWindow(): Window =
@@ -65,51 +81,7 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
 
   ############################################################################
 
-  koi.beginScrollPanel(x=100, y=100, w=250, h=600)
-
-#[
-  if koi.sectionHeader("First section", section1):
-    koi.beginGroup()
-    koi.label("CheckBox 1")
-    koi.checkBox(checkBoxVal1, tooltip = "Checkbox 1")
-
-    koi.label("CheckBox 2")
-    koi.checkBox(checkBoxVal2, tooltip = "Checkbox 2")
-
-    koi.label("CheckBox 3")
-    koi.checkBox(checkBoxVal3, tooltip = "Checkbox 3")
-
-    koi.label("CheckBox 4")
-    koi.checkBox(checkBoxVal4, tooltip = "Checkbox 4")
-    koi.endGroup()
-
-    koi.beginGroup()
-    koi.label("Dropdown 1")
-    koi.dropdown(items = @["Orange", "Banana", "Blueberry", "Apricot", "Apple"],
-                 dropdownVal1,
-                 tooltip = "Select a fruit")
-
-    koi.label("Dropdown 2")
-    koi.dropdown(items = @["One", "Two", "Three"],
-                 dropdownVal2,
-                 tooltip = "Select a number")
-    koi.endGroup()
-
-  if koi.sectionHeader("Second section", section2):
-    koi.label("Dropdown 1")
-    koi.dropdown(items = @["Orange", "Banana", "Blueberry", "Apricot", "Apple"],
-                 dropdownVal1,
-                 tooltip = "Select a fruit")
-
-    koi.beginGroup()
-    koi.label("CheckBox 1")
-    koi.checkBox(checkBoxVal1, tooltip = "Checkbox 1")
-
-    koi.label("CheckBox 2")
-    koi.checkBox(checkBoxVal2, tooltip = "Checkbox 2")
-    koi.endGroup()
-]#
-
+  koi.beginScrollView(x=100, y=100, w=250, h=600)
 
   if koi.sectionHeader("General", sectionGeneral):
     koi.beginGroup()
@@ -321,7 +293,54 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
     buttonBgColorHover      = "rgb(255, 255, 255)"
 ]#
 
-  koi.endScrollPanel()
+  koi.endScrollView()
+
+
+
+  koi.beginScrollView(x=400, y=150, w=300, h=300)
+
+  if koi.sectionHeader("First section", section1):
+    koi.beginGroup()
+    koi.label("CheckBox 1")
+    koi.checkBox(checkBoxVal1, tooltip = "Checkbox 1")
+
+    koi.label("CheckBox 2")
+    koi.checkBox(checkBoxVal2, tooltip = "Checkbox 2")
+
+    koi.label("CheckBox 3")
+    koi.checkBox(checkBoxVal3, tooltip = "Checkbox 3")
+
+    koi.label("CheckBox 4")
+    koi.checkBox(checkBoxVal4, tooltip = "Checkbox 4")
+    koi.endGroup()
+
+    koi.beginGroup()
+    koi.label("Dropdown 1")
+    koi.dropdown(items = @["Orange", "Banana", "Blueberry", "Apricot", "Apple"],
+                 dropdownVal1,
+                 tooltip = "Select a fruit")
+
+    koi.label("Dropdown 2")
+    koi.dropdown(items = @["One", "Two", "Three"],
+                 dropdownVal2,
+                 tooltip = "Select a number")
+    koi.endGroup()
+
+  if koi.sectionHeader("Second section", section2):
+    koi.label("Dropdown 1")
+    koi.dropdown(items = @["Orange", "Banana", "Blueberry", "Apricot", "Apple"],
+                 dropdownVal3,
+                 tooltip = "Select a fruit")
+
+    koi.beginGroup()
+    koi.label("CheckBox 1")
+    koi.checkBox(checkBoxVal5, tooltip = "Checkbox 1")
+
+    koi.label("CheckBox 2")
+    koi.checkBox(checkBoxVal6, tooltip = "Checkbox 2")
+    koi.endGroup()
+
+  koi.endScrollView()
 
   ############################################################################
 

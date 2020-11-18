@@ -1,4 +1,5 @@
 import hashes
+import json
 import lenientops
 import math
 import options
@@ -206,7 +207,7 @@ type WidgetState* = enum
 
 type
   EventKind* = enum
-    ekKey, ekMouse
+    ekKey, ekMouseButton, ekScroll
 
   Event* = object
     case kind*: EventKind
@@ -214,20 +215,27 @@ type
       key*:     Key
       action*:  KeyAction
 
-    of ekMouse:
+    of ekMouseButton:
       button*:  MouseButton
       pressed*: bool
       x*, y*:   float64
+
+    of ekScroll:
+      ox*, oy*: float64
 
     mods*:      set[ModifierKey]
 
   UIState = object
     # General state
     # *************
-
     hasEvent:       bool
     currEvent:      Event
     eventHandled:   bool
+
+    # Key-value storage for arbitrary widget-specific data (JObject).
+    # Keys have the "<id>:<keyname>" format, where <id> is widget's unique
+    # string ID.
+    props:          JsonNode
 
     # Frames left to render
     framesLeft:     Natural
@@ -260,6 +268,7 @@ type
     mbLeftDownT:     float
     mbLeftDownX:     float
     mbLeftDownY:     float
+
     lastMbLeftDownT: float
     lastMbLeftDownX: float
     lastMbLeftDownY: float
@@ -302,6 +311,9 @@ type
     scrollBarState: ScrollBarStateVars
     sliderState:    SliderStateVars
 
+    # TODO
+    currScrollViewId: string
+
     # Internal tooltip state
     # **********************
     tooltipState:   TooltipStateVars
@@ -341,13 +353,20 @@ type
     nextItemWidth:     float
     nextItemHeight:    float
     insideGroup:       bool
-    panelX:            float
-    panelY:            float
-    panelWidth:        float
-    panelHeight:       float
-    lastContentHeight: float
 
 # }}}
+
+# {{{ Property names
+const
+  PropScrollBarVal = "scrollBarVal"
+  PropViewX = "viewX"
+  PropViewY = "viewY"
+  PropViewWidth = "viewWidth"
+  PropViewHeight = "viewHeight"
+  PropLastContentHeight = "lastContentHeight"
+
+# }}}
+
 # }}}
 # {{{ Globals
 
@@ -502,23 +521,33 @@ proc draw(dl: DrawLayers, vg: NVGContext) =
 # }}}
 # {{{ UI helpers
 
-const KoiInternalIdPrefix = "~-=[//.K0i:iN73Rn4L:!D.//]=-~"  # unique enough?!
-
-template generateId(id: string): ItemId =
+proc hashId(id: string): ItemId =
   let hash32 = hash(id).uint32
   # Make sure the IDs are always positive integers
   let h = int64(hash32) - int32.low + 1
   assert h > 0
   h
 
+proc mkIdString*(filename: string, line: int, id: string): string =
+  result = filename & ":" & $line & ":" & id
+
 var g_lastIdString: string
+
+proc generateId(filename: string, line: int, id: string): ItemId =
+  let idString = mkIdString(filename, line, id)
+  g_lastIdString = idString
+  hashId(idString)
 
 proc lastIdString*(): string = g_lastIdString
 
-template generateId*(filename: string, line: int, id: string): ItemId =
-  let idString = filename & ":" & $line & ":" & id
-  g_lastIdString = idString
-  generateId(idString)
+template mkPropName(id, propName: string): string =
+  id & ":" & propName
+
+proc setProp(id, propName: string, f: float) =
+  g_uiState.props[mkPropName(id, propName)] = %f
+
+proc getFloatProp(id, propName: string): float =
+  g_uiState.props{mkPropName(id, propName)}.getFloat()
 
 proc renderNextFrame*() =
   alias(ui, g_uiState)
@@ -579,13 +608,16 @@ proc hasEvent*(): bool =
   template calcHasEvent(): bool =
     ui.hasEvent and (not ui.eventHandled) and not ui.focusCaptured
 
+  # TODO isn't this a bit hacky?
   if ui.isDialogOpen:
     if ui.insideDialog: calcHasEvent()
     else: false
   else: calcHasEvent()
 
-
 proc currEvent*(): Event = g_uiState.currEvent
+
+proc setEventHandled*() =
+  g_uiState.eventHandled = true
 
 proc mbLeftDown*():   bool = g_uiState.mbLeftDown
 proc mbRightDown*():  bool = g_uiState.mbRightDown
@@ -955,7 +987,7 @@ proc mouseButtonCb(win: Window, button: MouseButton, pressed: bool,
 
   discard g_eventBuf.write(
     Event(
-      kind: ekMouse,
+      kind: ekMouseButton,
       button: button,
       pressed: pressed,
       x: x,
@@ -964,30 +996,16 @@ proc mouseButtonCb(win: Window, button: MouseButton, pressed: bool,
     )
   )
 
-
-type MouseScrollEvent = object
-  ox, oy: float
-
-const MouseScrollBufSize = 16
-var
-  g_mouseScrollBuf: array[MouseScrollBufSize, MouseScrollEvent]
-  g_mouseScrollBufIdx: Natural
-
-proc mouseScrollCb(win: Window, offset: tuple[x, y: float64]) =
-  # The mouse scroll callback seems to only be called during
-  # pollEvents/waitEvents. GLFW coalesces all scroll events since the last
-  # poll into a single event.
-  if g_mouseScrollBufIdx <= g_mouseScrollBuf.high:
-    let cursor = win.cursorPos
-    g_mouseScrollBuf[g_mouseScrollBufIdx] = MouseScrollEvent(
+proc scrollCb(win: Window, offset: tuple[x, y: float64]) =
+  # The scroll callback seems to only be called during pollEvents/waitEvents.
+  # GLFW coalesces all scroll events since the last poll into a single event.
+  discard g_eventBuf.write(
+    Event(
+      kind: ekScroll,
       ox: offset.x,
       oy: offset.y
     )
-    inc(g_mouseScrollBufIdx)
-
-proc clearMouseScrollBuf() = g_mouseScrollBufIdx = 0
-
-proc mouseScrollBufEmpty(): bool = g_mouseScrollBufIdx == 0
+  )
 
 
 proc showCursor*() =
@@ -1626,7 +1644,7 @@ proc sectionHeader(id:           ItemId,
 
   let buttonWidth = h
 
-  let cbId = generateId(g_lastIdString & ":checkBox")
+  let cbId = hashId(lastIdString() & ":checkBox")
   checkBox(cbId, x, y, buttonWidth, expanded_out, tooltip,
            SectionHeaderCheckboxStyle)
 
@@ -1663,7 +1681,9 @@ template sectionHeader*(
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, label)
 
-  let result = sectionHeader(id, a.x, a.y, a.panelWidth, a.nextItemHeight,
+  let viewWidth = getFloatProp(ui.currScrollViewId, PropViewWidth)
+
+  let result = sectionHeader(id, a.x, a.y, viewWidth, a.nextItemHeight,
                              label, expanded, tooltip, style)
 
   handleAutoLayout(forceNextRow=true)
@@ -3614,14 +3634,14 @@ proc textField(
     # exitEditMode() clears the key buffer.)
 
     # "Fall-through" into edit mode happens here
-    if ui.hasEvent and (not ui.eventHandled) and
+    if hasEvent() and
        ui.currEvent.kind == ekKey and
        ui.currEvent.action in {kaDown, kaRepeat}:
 
       alias(shortcuts, g_textFieldEditShortcuts)
       let sc = mkKeyShortcut(ui.currEvent.key, ui.currEvent.mods)
 
-      ui.eventHandled = true
+      setEventHandled()
 
       let res = handleCommonTextEditingShortcuts(sc, text,
                                                  tf.cursorPos, tf.selection)
@@ -4110,7 +4130,7 @@ proc textArea(
     # exitEditMode() clears the key buffer.)
 
     # "Fall-through" into edit mode happens here
-    if ui.hasEvent and (not ui.eventHandled) and
+    if hasEvent() and
        ui.currEvent.kind == ekKey and
        ui.currEvent.action in {kaDown, kaRepeat}:
 
@@ -4377,7 +4397,7 @@ proc textArea(
   let thumbSize = maxDisplayRows.float *
                   ((rows.len.float - maxDisplayRows) / rows.len)
 
-  let sbId = generateId(g_lastIdString & ":scrollBar")
+  let sbId = hashId(lastIdString() & ":scrollBar")
 
   vertScrollBar(
     sbId,
@@ -4603,8 +4623,8 @@ proc horizSlider(id:         ItemId,
         ss.state = ssEditValue
         ss.valueText = fmt"{value:.6f}"
         trimZeros(ss.valueText)
-        ss.textFieldId = generateId(KoiInternalIdPrefix &
-                                    "EditHorizSliderValue")
+
+        ss.textFieldId = hashId(lastIdString() & ":textField")
         const TextBoxPadX = 8
         textFieldEnterEditMode(ss.textFieldId, ss.valueText, x + TextBoxPadX)
         ss.editModeItem = id
@@ -4982,13 +5002,10 @@ proc closeDialog*() =
 
 # }}}
 
-# {{{ ScrollPanel
-# TODO
-var scrollPaneSbVal: float
+# {{{ ScrollView
 
-# {{{ beginScrollPanel*()
-proc beginScrollPanel*(x, y, w, h: float) =
-  alias(ui, g_uiState)
+# {{{ beginScrollView*()
+template beginScrollView*(x, y, w, h: float) =
   alias(vg, g_nvgContext)
 
   let
@@ -4996,31 +5013,38 @@ proc beginScrollPanel*(x, y, w, h: float) =
     ox = ds.ox + x
     oy = ds.oy + y
 
-  addDrawLayer(ui.currentLayer, vg):
+  addDrawLayer(g_uiState.currentLayer, vg):
     vg.save()
     vg.intersectScissor(ox, oy, w+1, h+1)
 
-#    vg.strokeWidth(1)
-#    vg.strokeColor(black())
+    vg.strokeWidth(1)
+    vg.strokeColor(black())
 
-#    vg.beginPath()
-#    vg.rect(x+0.5, y+0.5, w, h)
-#    vg.stroke()
+    vg.beginPath()
+    vg.rect(x+0.5, y+0.5, w, h)
+    vg.stroke()
 
-  alias(a, ui.autoLayoutState)
-  a.panelX = x
-  a.panelY = y
-  a.panelWidth = w
-  a.panelHeight = h
+  let i = instantiationInfo(fullPaths=true)
+  let id = mkIdString(i.filename, i.line, "")
+  g_uiState.currScrollViewId = id
+
+  setProp(id, PropViewX, x)
+  setProp(id, PropViewY, y)
+  setProp(id, PropViewWidth, w)
+  setProp(id, PropViewHeight, h)
+
+  let scrollBarVal = getFloatProp(id, PropScrollBarVal)
 
   pushDrawState(
-    DrawState(ox: ox, oy: oy - scrollPaneSbVal)
+    DrawState(ox: ox, oy: oy - scrollBarVal)
   )
 
-# }}}
-# {{{ endScrollPanel*()
+  initAutoLayout()
 
-proc endScrollPanel*() =
+# }}}
+# {{{ endScrollView*()
+
+proc endScrollView*() =
   alias(ui, g_uiState)
   alias(vg, g_nvgContext)
   alias(a, ui.autoLayoutState)
@@ -5030,36 +5054,50 @@ proc endScrollPanel*() =
 
   popDrawState()
 
-  let visibleHeight = a.panelHeight
+  # TODO make this configurable
+  const ScrollSensitivity = if defined(macosx): 10 else: 40
+
+  let id = ui.currScrollViewId
+  let
+    x = getFloatProp(id, PropViewX)
+    y = getFloatProp(id, PropViewY)
+    w = getFloatProp(id, PropViewWidth)
+    h = getFloatProp(id, PropViewHeight)
+
+  var scrollBarVal = getFloatProp(id, PropScrollBarVal)
+
+  let visibleHeight = h
   let contentHeight = a.yNoPad
 
   if contentHeight > visibleHeight:
+
     let thumbSize = visibleHeight *
                     ((contentHeight - visibleHeight) / contentHeight)
 
     let endVal = contentHeight - visibleHeight
 
-    if not mouseScrollBufEmpty():
-      for i in 0..<g_mouseScrollBufIdx:
-        let ev = g_mouseScrollBuf[i]
-        scrollPaneSbVal -= ev.oy * 10
-      clearMouseScrollBuf()
-      renderNextFrame()
+    if isHit(x, y, w, h):
+      if hasEvent() and ui.currEvent.kind == ekScroll:
+        scrollBarVal -= ui.currEvent.oy * ScrollSensitivity
+        ui.eventHandled = true
+        renderNextFrame()
 
-    scrollPaneSbVal = scrollPaneSbVal.clamp(0, endVal)
+    scrollBarVal = scrollBarVal.clamp(0, endVal)
 
     koi.vertScrollBar(
-      x=(a.panelX + a.panelWidth), y=(a.panelY), w=16.0, h=visibleHeight,
+      x=(x + w), y=y, w=16.0, h=visibleHeight,
       startVal=0, endVal=endVal,
-      scrollPaneSbVal,
+      scrollBarVal,
       thumbSize=thumbSize, clickStep=20)
   else:
-    scrollPaneSbVal = 0
+    scrollBarVal = 0
 
-  if contentHeight != a.lastContentHeight:
+  setProp(id, PropScrollBarVal, scrollBarVal)
+
+  if contentHeight != getFloatProp(id, PropLastContentHeight):
       renderNextFrame()
 
-  a.lastContentHeight = contentHeight
+  setProp(id, PropLastContentHeight, contentHeight)
 
 # }}}
 
@@ -5191,13 +5229,15 @@ proc init*(nvg: NVGContext) =
   g_cursorHand        = wrapper.createStandardCursor(csHand)
 
   let win = currentContext()
-  win.lockKeyMods = true
+  win.lockKeyMods = true  # TODO make configurable?
   win.keyCb  = keyCb
   win.charCb = charCb
   win.mouseButtonCb = mouseButtonCb
-  win.scrollCb = mouseScrollCb
+  win.scrollCb = scrollCb
 
   glfw.swapInterval(1)
+
+  g_uiState.props = newJObject()
 
 # }}}
 # {{{ deinit*()
@@ -5241,10 +5281,8 @@ proc beginFrame*(winWidth, winHeight: float) =
     ui.hasEvent = true
     let ev = ui.currEvent
 
-    case ev.kind:
-    of ekKey: discard
-
-    of ekMouse:
+    # Update current mouse button state
+    if ev.kind == ekMouseButton:
       case ev.button
       of mbLeft:
         ui.mbLeftDown = ev.pressed
@@ -5265,7 +5303,7 @@ proc beginFrame*(winWidth, winHeight: float) =
     # events can become "out of sync" with the char buffer. So we need to keep
     # processing one more frame while there are still events in the buffer to
     # prevent that from happening.
-    if g_eventBuf.canRead():renderNextFrame()
+    if g_eventBuf.canRead(): renderNextFrame()
 
   # Reset hot item
   ui.hotItem = 0
@@ -5315,8 +5353,6 @@ proc endFrame*() =
 
   if ui.framesLeft > 0:
     dec(ui.framesLeft)
-
-  clearMouseScrollBuf()
 
 # }}}
 # {{{ shouldRenderNextFrame*()
