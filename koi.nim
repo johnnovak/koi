@@ -511,8 +511,9 @@ template generateId(id: string): ItemId =
   assert h > 0
   h
 
-# TODO quite hacky...
 var g_lastIdString: string
+
+proc lastIdString*(): string = g_lastIdString
 
 template generateId*(filename: string, line: int, id: string): ItemId =
   let idString = filename & ":" & $line & ":" & id
@@ -558,13 +559,9 @@ proc isDialogOpen*(): bool =
 
 proc isHit*(x, y, w, h: float): bool =
   alias(ui, g_uiState)
-  let hit = not ui.focusCaptured and
-            (ui.insideDialog or not ui.isDialogOpen) and
-            mouseInside(x, y, w, h)
-  # TODO
-  # Draw another frame after the current frame (some widgets need one extra
-  # frame to refresh properly after finishing the interaction with them).
-  hit
+  not ui.focusCaptured and
+    (ui.insideDialog or not ui.isDialogOpen) and
+    mouseInside(x, y, w, h)
 
 proc winWidth*():  float = g_uiState.winWidth
 proc winHeight*(): float = g_uiState.winHeight
