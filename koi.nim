@@ -358,9 +358,9 @@ type
     layerDefault,
     layerDialog,
     layerPopup,
-    layerDropdown,
+    layerWidgetOverlay,
     layerTooltip,
-    layerOverlay
+    layerGlobalOverlay
 
   AutoLayoutParams* = object
     rowWidth*:         float
@@ -2246,7 +2246,7 @@ proc dropdown[T](id:               ItemId,
   # Dropdown items
   if isActive(id) and ds.state >= dsOpenLMBPressed:
 
-    addDrawLayer(layerDropdown, vg):
+    addDrawLayer(layerWidgetOverlay, vg):
       # Draw item list box
       vg.fillColor(s.itemListFillColor)
       vg.strokeColor(s.itemListStrokeColor)
@@ -3807,7 +3807,7 @@ proc textField(
 
   let editing = tf.activeItem == id
 
-  let layer = if editing: layerDropdown else: ui.currentLayer
+  let layer = if editing: layerWidgetOverlay else: ui.currentLayer
 
   addDrawLayer(layer, vg):
     vg.save()
@@ -4099,6 +4099,9 @@ proc textArea(
     ui.focusCaptured = false
     setCursorShape(csArrow)
 
+    echo isHot(id)
+    echo noActiveItem()
+
 
   var tabActivate = false
 
@@ -4139,13 +4142,9 @@ proc textArea(
     if ta.state == tasEditEntered:
       if not ui.mbLeftDown:
         ta.state = tasEdit
-
     else:
-      if ui.mbLeftDown:
-        if mouseInside(x, y, w, h):
-          discard
-        else:
-          exitEditMode()
+      if ui.mbLeftDown and not mouseInside(x, y, w, h):
+        exitEditMode()
 
     # Handle text field shortcuts
     # (If we exited edit mode above key handler, this will result in a noop as
@@ -4897,6 +4896,10 @@ proc sliderPost() =
 # }}}
 # {{{ Color
 
+var sliderVal1: float
+var sliderVal2: float
+var sliderVal3: float
+
 proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
   alias(ui, g_uiState)
   alias(cs, ui.colorState)
@@ -4961,8 +4964,9 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
     vg.fill()
     vg.stroke()
 
-
   if isActive(id) and cs.state == csOpen:
+    let oldLayer = ui.currentLayer
+    ui.currentLayer = layerPopup
 
     addDrawLayer(layerPopup, vg):
       let sw = 0.0
@@ -4976,6 +4980,41 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
       vg.roundedRect(x, y, w, h, 5)
       vg.fill()
       vg.stroke()
+
+
+    let lastId = lastIdString()
+    var sliderId = hashId(lastId & ":sliderR")
+
+    ui.activeItem = 0
+    ui.focusCaptured = false
+
+    koi.horizSlider(
+      sliderId,
+      popupX + 10 - ds.ox, popupY + 10 - ds.oy, popupW - 20, 22,
+      startVal = 0, endVal = 255,
+      sliderVal1,
+      tooltip = "Red value")
+
+    sliderId = hashId(lastId & ":sliderG")
+    koi.horizSlider(
+      sliderId,
+      popupX + 10 - ds.ox, popupY + 36 - ds.oy, popupW - 20, 22,
+      startVal = 0, endVal = 255,
+      sliderVal2,
+      tooltip = "Green value")
+
+    sliderId = hashId(lastId & ":sliderB")
+    koi.horizSlider(
+      sliderId,
+      popupX + 10 - ds.ox, popupY + 62 - ds.oy, popupW - 20, 22,
+      startVal = 0, endVal = 255,
+      sliderVal3,
+      tooltip = "Blue value")
+
+    ui.focusCaptured = true
+    ui.activeItem = id
+
+    ui.currentLayer = oldLayer
 
 
 template color*(x, y, w, h: float,
