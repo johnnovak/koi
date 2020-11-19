@@ -5342,11 +5342,15 @@ proc init*(nvg: NVGContext) =
   g_cursorHand        = wrapper.createStandardCursor(csHand)
 
   let win = currentContext()
-  win.lockKeyMods = true  # TODO make configurable?
+
   win.keyCb  = keyCb
   win.charCb = charCb
   win.mouseButtonCb = mouseButtonCb
   win.scrollCb = scrollCb
+
+  # LockKeyMods must be enabled so we can differentiate between keypad keys
+  # and keypad cursor movement keys
+  win.lockKeyMods = true
 
   glfw.swapInterval(1)
 
