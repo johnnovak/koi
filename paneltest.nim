@@ -27,9 +27,11 @@ var
   sectionLevelDropdown = true
   sectionAboutButton = true
 
-var currTheme = new ThemeStyle
+var currTheme = loadTheme("../gridmonger/themes/Default.cfg")
 
 var
+  themeName = "Default"
+
   section1 = true
   section2 = true
   section3 = true
@@ -44,6 +46,15 @@ var
   checkBoxVal4 = false
   checkBoxVal5 = false
   checkBoxVal6 = false
+
+let layoutParams = AutoLayoutParams(
+  rowWidth:         300.0,
+  labelWidth:       180.0,
+  itemsPerRow:      2,
+  rowPad:           16.0,
+  rowGroupPad:      6.0,
+  defaultRowHeight: 22.0
+)
 
 ##############################################################################
 
@@ -83,8 +94,15 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
 
   koi.beginScrollView(x=100, y=100, w=250, h=600)
 
+  var lp = layoutParams
+  lp.rowWidth = 250
+  koi.setAutoLayoutParams(lp)
+
   if koi.sectionHeader("General", sectionGeneral):
     koi.beginGroup()
+    koi.label("Theme name")
+    koi.textfield(themeName)
+
     koi.label("Background")
     koi.color(currTheme.general.backgroundColor)
 
@@ -298,6 +316,10 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
 
 
   koi.beginScrollView(x=400, y=150, w=300, h=300)
+
+  lp = layoutParams
+  lp.rowWidth = 300
+  koi.setAutoLayoutParams(lp)
 
   if koi.sectionHeader("First section", section1):
     koi.beginGroup()

@@ -180,6 +180,21 @@ type
     activatePrev:    bool
 
 # }}}
+# {{{ ColorState
+
+type
+  ColorState = enum
+    csClosed, csOpen
+
+  ColorMode = enum
+    cmRGB, cmHSV
+
+  ColorStateVars = object
+    state:      ColorState
+    mode:       ColorMode
+# Dropdown in open mode, 0 if no dropdown is open currently.
+    activeItem: ItemId
+# }}}
 # {{{ TooltipState
 
 type
@@ -303,15 +318,17 @@ type
 
     # Widget-specific states
     # **********************
+    # TODO wrap into state vars?
     radioButtonsActiveItem: Natural
 
+    colorState:     ColorStateVars
     dropdownState:  DropdownStateVars
-    textFieldState: TextFieldStateVars
-    textAreaState:  TextAreaStateVars
     scrollBarState: ScrollBarStateVars
     sliderState:    SliderStateVars
+    textAreaState:  TextAreaStateVars
+    textFieldState: TextFieldStateVars
 
-    # TODO
+    # TODO current container ID?
     currScrollViewId: string
 
     # Internal tooltip state
@@ -521,7 +538,7 @@ proc draw(dl: DrawLayers, vg: NVGContext) =
 # }}}
 # {{{ UI helpers
 
-proc hashId(id: string): ItemId =
+proc hashId*(id: string): ItemId =
   let hash32 = hash(id).uint32
   # Make sure the IDs are always positive integers
   let h = int64(hash32) - int32.low + 1
@@ -533,20 +550,20 @@ proc mkIdString*(filename: string, line: int, id: string): string =
 
 var g_lastIdString: string
 
-proc generateId(filename: string, line: int, id: string): ItemId =
+proc generateId*(filename: string, line: int, id: string): ItemId =
   let idString = mkIdString(filename, line, id)
   g_lastIdString = idString
   hashId(idString)
 
 proc lastIdString*(): string = g_lastIdString
 
-template mkPropName(id, propName: string): string =
+template mkPropName*(id, propName: string): string =
   id & ":" & propName
 
-proc setProp(id, propName: string, f: float) =
+proc setProp*(id, propName: string, f: float) =
   g_uiState.props[mkPropName(id, propName)] = %f
 
-proc getFloatProp(id, propName: string): float =
+proc getFloatProp*(id, propName: string): float =
   g_uiState.props{mkPropName(id, propName)}.getFloat()
 
 proc renderNextFrame*() =
@@ -2156,15 +2173,15 @@ proc dropdown[T](id:               ItemId,
     # Hit testing
     let
       insideButton = mouseInside(x, y, w, h)
-      insideBox = mouseInside(itemListX, itemListY, itemListW, itemListH)
+      insideItemList = mouseInside(itemListX, itemListY, itemListW, itemListH)
 
-    if insideButton or insideBox:
+    if insideButton or insideItemList:
       setHot(id)
       setActive(id)
     else:
       closeDropdown()
 
-    if insideBox:
+    if insideItemList:
       hoverItem = min(
         ((ui.my - itemListY - s.itemListPadVert) / itemHeight).int,
         numItems-1
@@ -2226,8 +2243,9 @@ proc dropdown[T](id:               ItemId,
                  s.labelFontSize, s.labelFontFace, s.labelAlign)
 
   # Dropdown items
-  addDrawLayer(ui.currentLayer + 1, vg):
-    if isActive(id) and ds.state >= dsOpenLMBPressed:
+  if isActive(id) and ds.state >= dsOpenLMBPressed:
+
+    addDrawLayer(ui.currentLayer + 1, vg):
       # Draw item list box
       vg.fillColor(s.itemListFillColor)
       vg.strokeColor(s.itemListStrokeColor)
@@ -2288,7 +2306,7 @@ template dropdown*(
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  dropdown(id, 0, 0, 0, 0, items, selectedItem, tooltip, disabled, style)
+  dropdown(id, a.x, a.y, a.nextItemHeight, a.nextItemHeight, items, selectedItem, tooltip, disabled, style)
 
   handleAutoLayout()
 
@@ -3914,11 +3932,14 @@ template textField*(
   style:      TextFieldStyle = DefaultTextFieldStyle
 ) =
 
+  alias(ui, g_uiState)
+  alias(a, ui.autoLayoutState)
+
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  textField(id, 0, 0, 0, 0, text, tooltip, activate, drawWidget = true,
-            constraint, style)
+  textField(id, a.x, a.y, a.nextItemWidth, a.nextItemHeight, text,
+            tooltip, activate, drawWidget = true, constraint, style)
 
   handleAutoLayout()
 
@@ -4874,19 +4895,106 @@ proc sliderPost() =
 
 # }}}
 # }}}
-
 # {{{ Color
 
-template color*(color:  var Color,
-                tooltip: string = "") =
+proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
+  alias(ui, g_uiState)
+  alias(cs, ui.colorState)
 
+  var color = color_out
+
+  let
+    ds = drawState()
+    x = x + ds.ox
+    y = y + ds.oy
+
+  var popupX, popupY, popupW, popupH: float
+
+  if cs.state == csClosed:
+    if isHit(x, y, w, h):
+      setHot(id)
+      if ui.mbLeftDown and noActiveItem():
+        setActive(id)
+        cs.state = csOpen
+        cs.activeItem = id
+        ui.focusCaptured = true
+
+  proc closePopup() =
+    cs.state = csClosed
+
+    cs.activeItem = 0
+    ui.focusCaptured = false
+    renderNextFrame()
+
+  # Fall-through to avoid a 1-frame delay when opening the popup
+  if cs.activeItem == id and cs.state == csOpen:
+    popupX = x
+    popupY = y + h
+    popupW = 150
+    popupH = 150
+
+    # Hit testing
+    let
+      insideButton = mouseInside(x, y, w, h)
+      insidePopup = mouseInside(popupX, popupY, popupW, popupH)
+
+    if insideButton or insidePopup:
+      setHot(id)
+      setActive(id)
+    else:
+      closePopup()
+
+    if insidePopup:
+      discard
+
+
+  addDrawLayer(ui.currentLayer, vg):
+    let sw = 0.0
+    let (x, y, w, h) = snapToGrid(x, y, w, h, sw)
+
+    vg.fillColor(color)
+    vg.strokeColor(gray(0.3))
+    vg.strokeWidth(sw)
+
+    vg.beginPath()
+    vg.roundedRect(x, y, w, h, 3)
+    vg.fill()
+    vg.stroke()
+
+
+  if isActive(id) and cs.state == csOpen:
+
+    addDrawLayer(ui.currentLayer + 1, vg):
+      let sw = 0.0
+      let (x, y, w, h) = snapToGrid(popupX, popupY, popupW, popupH, sw)
+
+      vg.fillColor(gray(0.1))
+      vg.strokeColor(gray(0.1))
+      vg.strokeWidth(sw)
+
+      vg.beginPath()
+      vg.roundedRect(x, y, w, h, 5)
+      vg.fill()
+      vg.stroke()
+
+
+template color*(x, y, w, h: float,
+                color:  var Color) =
+
+  let i = instantiationInfo(fullPaths=true)
+  let id = generateId(i.filename, i.line, "")
+
+  color(id, x, y, w, h, color)
+
+
+template color*(col: var Color) =
   alias(ui, g_uiState)
   alias(a, ui.autoLayoutState)
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  # TODO
+  color(id, a.x, a.y, a.nextItemWidth, a.nextItemHeight, col)
 
   handleAutoLayout()
 
@@ -4920,7 +5028,6 @@ proc getDefaultDialogStyle*(): DialogStyle =
 
 proc setDefaultDialogStyle*(style: DialogStyle) =
   DefaultDialogStyle = style.deepCopy
-
 
 
 const DialogLayerOffset = 3
@@ -5001,7 +5108,6 @@ proc closeDialog*() =
 
 
 # }}}
-
 # {{{ ScrollView
 
 var DefaultScrollViewScrollBarStyle = getDefaultScrollBarStyle()
@@ -5010,12 +5116,9 @@ DefaultScrollViewScrollBarStyle.trackFillColor = gray(0, 0)
 DefaultScrollViewScrollBarStyle.trackFillColorHover = gray(0, 0.14)
 DefaultScrollViewScrollBarStyle.trackFillColorActive = gray(0, 0.14)
 DefaultScrollViewScrollBarStyle.thumbCornerRadius = 4
-DefaultScrollViewScrollBarStyle.thumbFillColor = gray(0.42)
+DefaultScrollViewScrollBarStyle.thumbFillColor = gray(0.422)
 DefaultScrollViewScrollBarStyle.thumbFillColorHover = gray(0.54)
 DefaultScrollViewScrollBarStyle.thumbFillColorActive = gray(0.48)
-
-# TODO style param
-let ScrollViewScrollBarWidth = 14.0
 
 # {{{ beginScrollView*()
 template beginScrollView*(x, y, w, h: float) =
@@ -5028,7 +5131,7 @@ template beginScrollView*(x, y, w, h: float) =
 
   addDrawLayer(g_uiState.currentLayer, vg):
     vg.save()
-    vg.intersectScissor(ox, oy, w - ScrollViewScrollBarWidth, h)
+    vg.intersectScissor(ox, oy, w, h)
 
   let i = instantiationInfo(fullPaths=true)
   let id = mkIdString(i.filename, i.line, "")
@@ -5045,8 +5148,6 @@ template beginScrollView*(x, y, w, h: float) =
     DrawState(ox: ox, oy: oy - scrollBarVal)
   )
 
-  initAutoLayout()
-
 # }}}
 # {{{ endScrollView*()
 proc endScrollView*() =
@@ -5058,6 +5159,9 @@ proc endScrollView*() =
     vg.restore()
 
   popDrawState()
+
+  # TODO style param
+  let ScrollViewScrollBarWidth = 14.0
 
   # TODO make this configurable
   const ScrollSensitivity = if defined(macosx): 10 else: 40
