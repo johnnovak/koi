@@ -5004,6 +5004,19 @@ proc closeDialog*() =
 
 # {{{ ScrollView
 
+var DefaultScrollViewScrollBarStyle = getDefaultScrollBarStyle()
+DefaultScrollViewScrollBarStyle.trackCornerRadius = 6
+DefaultScrollViewScrollBarStyle.trackFillColor = gray(0, 0)
+DefaultScrollViewScrollBarStyle.trackFillColorHover = gray(0, 0.14)
+DefaultScrollViewScrollBarStyle.trackFillColorActive = gray(0, 0.14)
+DefaultScrollViewScrollBarStyle.thumbCornerRadius = 4
+DefaultScrollViewScrollBarStyle.thumbFillColor = gray(0.42)
+DefaultScrollViewScrollBarStyle.thumbFillColorHover = gray(0.54)
+DefaultScrollViewScrollBarStyle.thumbFillColorActive = gray(0.48)
+
+# TODO style param
+let ScrollViewScrollBarWidth = 14.0
+
 # {{{ beginScrollView*()
 template beginScrollView*(x, y, w, h: float) =
   alias(vg, g_nvgContext)
@@ -5015,14 +5028,7 @@ template beginScrollView*(x, y, w, h: float) =
 
   addDrawLayer(g_uiState.currentLayer, vg):
     vg.save()
-    vg.intersectScissor(ox, oy, w+1, h+1)
-
-    vg.strokeWidth(1)
-    vg.strokeColor(black())
-
-    vg.beginPath()
-    vg.rect(x+0.5, y+0.5, w, h)
-    vg.stroke()
+    vg.intersectScissor(ox, oy, w - ScrollViewScrollBarWidth, h)
 
   let i = instantiationInfo(fullPaths=true)
   let id = mkIdString(i.filename, i.line, "")
@@ -5043,7 +5049,6 @@ template beginScrollView*(x, y, w, h: float) =
 
 # }}}
 # {{{ endScrollView*()
-
 proc endScrollView*() =
   alias(ui, g_uiState)
   alias(vg, g_nvgContext)
@@ -5084,11 +5089,16 @@ proc endScrollView*() =
 
     scrollBarVal = scrollBarVal.clamp(0, endVal)
 
+    let sbId = hashId(lastIdString() & ":scrollBar")
+
     koi.vertScrollBar(
-      x=(x + w), y=y, w=16.0, h=visibleHeight,
+      sbId,
+      x=(x + w - ScrollViewScrollBarWidth), y=y,
+      w=ScrollViewScrollBarWidth, h=visibleHeight,
       startVal=0, endVal=endVal,
       scrollBarVal,
-      thumbSize=thumbSize, clickStep=20)
+      thumbSize=thumbSize, clickStep=20,
+      style=DefaultScrollViewScrollBarStyle)
   else:
     scrollBarVal = 0
 
