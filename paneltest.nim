@@ -313,7 +313,7 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
 
   koi.endScrollView()
 
-
+#[
 
   koi.beginScrollView(x=400, y=150, w=300, h=300)
 
@@ -365,7 +365,7 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
   koi.endScrollView()
 
   ############################################################################
-
+]#
   koi.endFrame()
   vg.endFrame()
 

@@ -255,8 +255,8 @@ type
     # Frames left to render
     framesLeft:     Natural
 
-    # Widgets will be drawn on this layer by default
-    currentLayer:   Natural
+    # Current draw layer
+    currentLayer:   DrawLayer
 
     # Window dimensions (in virtual pixels)
     winWidth, winHeight: float
@@ -354,6 +354,13 @@ type
     # Origin offset, used for relative coordinate handling (e.g in dialogs)
     ox, oy: float
 
+  DrawLayer = enum
+    layerDefault,
+    layerDialog,
+    layerPopup,
+    layerDropdown,
+    layerTooltip,
+    layerOverlay
 
   AutoLayoutParams* = object
     rowWidth*:         float
@@ -498,16 +505,11 @@ proc fromClipboard*(): string =
 # }}}
 # {{{ Draw layers
 
-const
-  BottomLayer  = 0
-  DefaultLayer = 10
-  TopLayer     = 20
-
 type
   DrawProc = proc (vg: NVGContext)
 
   DrawLayers = object
-    layers:        array[BottomLayer..TopLayer, seq[DrawProc]]
+    layers:        array[0..ord(DrawLayer.high), seq[DrawProc]]
     lastUsedLayer: Natural
 
 var
@@ -521,8 +523,8 @@ proc add(dl: var DrawLayers, layer: Natural, p: DrawProc) =
   dl.layers[layer].add(p)
   dl.lastUsedLayer = layer
 
-template addDrawLayer(layer: Natural, vg, body: untyped) =
-  g_drawLayers.add(layer, proc (vg: NVGContext) =
+template addDrawLayer(layer: DrawLayer, vg, body: untyped) =
+  g_drawLayers.add(ord(layer), proc (vg: NVGContext) =
     body
   )
 
@@ -1111,7 +1113,9 @@ proc handleTooltip(id: ItemId, tooltip: string) =
 # {{{ drawTooltip
 
 proc drawTooltip(x, y: float, text: string, alpha: float = 1.0) =
-  addDrawLayer(TopLayer-3, vg):
+  alias(vg, g_nvgContext)
+
+  addDrawLayer(layerTooltip, vg):
     let
       w = 150.0
       h = 40.0
@@ -2121,9 +2125,6 @@ proc dropdown[T](id:               ItemId,
     ds.activeItem = 0
     ui.focusCaptured = false
     renderNextFrame()
-    # TODO do we need this here?
-    clearCharBuf()
-    clearEventBuf()
 
   if ds.state == dsClosed:
     if isHit(x, y, w, h):
@@ -2245,7 +2246,7 @@ proc dropdown[T](id:               ItemId,
   # Dropdown items
   if isActive(id) and ds.state >= dsOpenLMBPressed:
 
-    addDrawLayer(ui.currentLayer + 1, vg):
+    addDrawLayer(layerDropdown, vg):
       # Draw item list box
       vg.fillColor(s.itemListFillColor)
       vg.strokeColor(s.itemListStrokeColor)
@@ -3652,7 +3653,7 @@ proc textField(
     # exitEditMode() clears the key buffer.)
 
     # "Fall-through" into edit mode happens here
-    if hasEvent() and
+    if ui.hasEvent and (not ui.eventHandled) and
        ui.currEvent.kind == ekKey and
        ui.currEvent.action in {kaDown, kaRepeat}:
 
@@ -3801,28 +3802,28 @@ proc textField(
           tf.displayStartX = textBoxX
           tf.displayStartPos = min(tf.displayStartPos, p)
 
+
   text_out = text
 
-  # Draw text field
   let editing = tf.activeItem == id
 
-  let state = if isHot(id) and noActiveItem(): wsHover
-    elif editing: wsActive
-    else: wsNormal
-
-  var
-    textX = textBoxX
-    textY = y + h*TextVertAlignFactor
-
-  let (fillColor, strokeColor) = case state
-    of wsHover:  (s.bgFillColorHover,  s.bgStrokeColorHover)
-    of wsActive: (s.bgFillColorActive, s.bgStrokeColorActive)
-    else:        (s.bgFillColor,       s.bgStrokeColor)
-
-  let layer = if editing: TopLayer-3 else: ui.currentLayer
+  let layer = if editing: layerDropdown else: ui.currentLayer
 
   addDrawLayer(layer, vg):
     vg.save()
+
+    let state = if isHot(id) and noActiveItem(): wsHover
+      elif editing: wsActive
+      else: wsNormal
+
+    let (fillColor, strokeColor) = case state
+      of wsHover:  (s.bgFillColorHover,  s.bgStrokeColorHover)
+      of wsActive: (s.bgFillColorActive, s.bgStrokeColorActive)
+      else:        (s.bgFillColor,       s.bgStrokeColor)
+
+    var
+      textX = textBoxX
+      textY = y + h*TextVertAlignFactor
 
     # Draw text field background
     if drawWidget:
@@ -3842,6 +3843,7 @@ proc textField(
 
     # Make scissor region slightly wider because of the cursor
     let xPad = 3
+    echo "textfield scissor"
     vg.intersectScissor(textBoxX-xPad, textBoxY, textBoxW+xPad, textBoxH)
 
     # Scroll content into view & draw cursor when editing
@@ -4151,14 +4153,14 @@ proc textArea(
     # exitEditMode() clears the key buffer.)
 
     # "Fall-through" into edit mode happens here
-    if hasEvent() and
+    if ui.hasEvent and (not ui.eventHandled) and
        ui.currEvent.kind == ekKey and
        ui.currEvent.action in {kaDown, kaRepeat}:
 
       alias(shortcuts, g_textFieldEditShortcuts)
       let sc = mkKeyShortcut(ui.currEvent.key, ui.currEvent.mods)
 
-      ui.eventHandled = true
+      setEventHandled()
 
       # Only use the stored X position for consecutive prev/next line
       # actions
@@ -4383,8 +4385,6 @@ proc textArea(
     # correctly
     rows = textBreakLines(text, textBoxW)
 
-    renderNextFrame()
-
 
   let editing = ta.activeItem == id
 
@@ -4418,20 +4418,10 @@ proc textArea(
   let thumbSize = maxDisplayRows.float *
                   ((rows.len.float - maxDisplayRows) / rows.len)
 
-  let sbId = hashId(lastIdString() & ":scrollBar")
-
-  vertScrollBar(
-    sbId,
-    x+w - ScrollBarWidth - ds.ox, y - ds.oy,
-    ScrollBarWidth, h,
-    startVal=0, endVal=endVal,
-    ta.displayStartRow,
-    thumbSize=thumbSize, clickStep=2, style=sbStyle)
-
   text_out = text
 
 
-  addDrawLayer(ui.currentLayer-1, vg):
+  addDrawLayer(ui.currentLayer, vg):
     vg.save()
 
     let state = if isHot(id) and noActiveItem(): wsHover
@@ -4545,6 +4535,17 @@ proc textArea(
       textY += lineHeight
 
     vg.restore()
+
+
+  let sbId = hashId(lastIdString() & ":scrollBar")
+
+  vertScrollBar(
+    sbId,
+    x+w - ScrollBarWidth - ds.ox, y - ds.oy,
+    ScrollBarWidth, h,
+    startVal=0, endVal=endVal,
+    ta.displayStartRow,
+    thumbSize=thumbSize, clickStep=2, style=sbStyle)
 
 
   if isHot(id):
@@ -4964,7 +4965,7 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
 
   if isActive(id) and cs.state == csOpen:
 
-    addDrawLayer(ui.currentLayer + 1, vg):
+    addDrawLayer(layerPopup, vg):
       let sw = 0.0
       let (x, y, w, h) = snapToGrid(popupX, popupY, popupW, popupH, sw)
 
@@ -5030,8 +5031,6 @@ proc setDefaultDialogStyle*(style: DialogStyle) =
   DefaultDialogStyle = style.deepCopy
 
 
-const DialogLayerOffset = 3
-
 proc beginDialog*(w, h: float, title: string,
                   style: DialogStyle = DefaultDialogStyle) =
 
@@ -5042,7 +5041,16 @@ proc beginDialog*(w, h: float, title: string,
     x = floor((ui.winWidth - w) / 2)
     y = floor((ui.winHeight - h) / 2)
 
-  addDrawLayer(ui.currentLayer+1, vg):
+  ui.currentLayer = layerDialog
+
+  pushDrawState(
+    DrawState(ox: x, oy: y)
+  )
+
+  ui.insideDialog = true
+  ui.isDialogOpen = true
+
+  addDrawLayer(ui.currentLayer, vg):
     const TitleBarHeight = 30.0
 
     # Outer border
@@ -5084,21 +5092,12 @@ proc beginDialog*(w, h: float, title: string,
     vg.fillColor(s.titleBarTextColor)
     discard vg.text(x+10.0, y + TitleBarHeight * TextVertAlignFactor, title)
 
-  inc(ui.currentLayer, DialogLayerOffset)
-
-  pushDrawState(
-    DrawState(ox: x, oy: y)
-  )
-
-  ui.insideDialog = true
-  ui.isDialogOpen = true
-
 
 proc endDialog*() =
   alias(ui, g_uiState)
   popDrawState()
   ui.insideDialog = false
-  dec(ui.currentLayer, DialogLayerOffset)
+  ui.currentLayer = layerDefault
 
 
 proc closeDialog*() =
@@ -5131,6 +5130,7 @@ template beginScrollView*(x, y, w, h: float) =
 
   addDrawLayer(g_uiState.currentLayer, vg):
     vg.save()
+    echo "scrollview scissor"
     vg.intersectScissor(ox, oy, w, h)
 
   let i = instantiationInfo(fullPaths=true)
@@ -5155,7 +5155,9 @@ proc endScrollView*() =
   alias(vg, g_nvgContext)
   alias(a, ui.autoLayoutState)
 
+  # TODO ordering problem...
   addDrawLayer(ui.currentLayer, vg):
+    echo "restore scrollview scissor"
     vg.restore()
 
   popDrawState()
@@ -5209,7 +5211,7 @@ proc endScrollView*() =
   setProp(id, PropScrollBarVal, scrollBarVal)
 
   if contentHeight != getFloatProp(id, PropLastContentHeight):
-      renderNextFrame()
+    renderNextFrame()
 
   setProp(id, PropLastContentHeight, contentHeight)
 
@@ -5365,6 +5367,7 @@ proc deinit*() =
 # {{{ beginFrame*()
 
 proc beginFrame*(winWidth, winHeight: float) =
+  echo "\nbeginFrame"
   let win = glfw.currentContext()
 
   alias(ui, g_uiState)
@@ -5375,7 +5378,7 @@ proc beginFrame*(winWidth, winHeight: float) =
 
   ui.insideDialog = false
 
-  ui.currentLayer = DefaultLayer
+  ui.currentLayer = layerDefault
 
   ui.winWidth = winWidth
   ui.winHeight = winHeight
@@ -5412,12 +5415,6 @@ proc beginFrame*(winWidth, winHeight: float) =
       of mbRight:  ui.mbRightDown  = ev.pressed
       of mbMiddle: ui.mbMiddleDown = ev.pressed
       else: discard
-
-    # Because up to one event is processed per frame, handling keystroke
-    # events can become "out of sync" with the char buffer. So we need to keep
-    # processing one more frame while there are still events in the buffer to
-    # prevent that from happening.
-    if g_eventBuf.canRead(): renderNextFrame()
 
   # Reset hot item
   ui.hotItem = 0
@@ -5465,8 +5462,17 @@ proc endFrame*() =
       # widget but released outside of it.
       ui.activeItem = 0
 
-  if ui.framesLeft > 0:
-    dec(ui.framesLeft)
+  # Decrement remaining frames counter
+  if ui.framesLeft > 0: dec(ui.framesLeft)
+
+  # Because up to one event is processed per frame, handling keystroke events
+  # can become "out of sync" with the char buffer. So we need to keep
+  # processing one more frame while there are still events in the buffer to
+  # prevent that from happening.
+  #
+  # The same problem cannot be triggered easily with mouse events.
+
+  if g_eventBuf.canRead(): renderNextFrame()
 
 # }}}
 # {{{ shouldRenderNextFrame*()
