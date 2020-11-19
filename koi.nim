@@ -3843,7 +3843,6 @@ proc textField(
 
     # Make scissor region slightly wider because of the cursor
     let xPad = 3
-    echo "textfield scissor"
     vg.intersectScissor(textBoxX-xPad, textBoxY, textBoxW+xPad, textBoxH)
 
     # Scroll content into view & draw cursor when editing
@@ -5130,7 +5129,6 @@ template beginScrollView*(x, y, w, h: float) =
 
   addDrawLayer(g_uiState.currentLayer, vg):
     vg.save()
-    echo "scrollview scissor"
     vg.intersectScissor(ox, oy, w, h)
 
   let i = instantiationInfo(fullPaths=true)
@@ -5157,7 +5155,6 @@ proc endScrollView*() =
 
   # TODO ordering problem...
   addDrawLayer(ui.currentLayer, vg):
-    echo "restore scrollview scissor"
     vg.restore()
 
   popDrawState()
@@ -5367,7 +5364,6 @@ proc deinit*() =
 # {{{ beginFrame*()
 
 proc beginFrame*(winWidth, winHeight: float) =
-  echo "\nbeginFrame"
   let win = glfw.currentContext()
 
   alias(ui, g_uiState)
