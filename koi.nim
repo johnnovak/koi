@@ -1854,7 +1854,7 @@ proc radioButtons[T](
   x, y, w, h:       float,
   labels:           seq[string],
   activeButton_out: var T,
-  tooltips:         seq[string],
+  tooltips:         seq[string] = @[],
   layout:           RadioButtonsLayout = RadioButtonsLayout(kind: rblHoriz),
   drawProc:         Option[RadioButtonsDrawProc] = RadioButtonsDrawProc.none,
   style:            RadioButtonsStyle = DefaultRadioButtonsStyle
@@ -1888,7 +1888,6 @@ proc radioButtons[T](
   case layout.kind
   of rblHoriz:
     hotButton = min(((ui.mx - x) / buttonW).int, numButtons-1)
-
     if isHit(x, y, w, h): setHot()
 
   of rblGridHoriz:
@@ -2227,16 +2226,16 @@ proc dropdown[T](id:               ItemId,
 
   selectedItem_out = selectedItem
 
+  let state =
+    if disabled: wsDisabled
+    elif isHot(id) and noActiveItem(): wsHover
+    elif isHotAndActive(id): wsActive
+    else: wsNormal
+
   # Dropdown button
   addDrawLayer(ui.currentLayer, vg):
     let sw = s.buttonStrokeWidth
     let (x, y, w, h) = snapToGrid(x, y, w, h, sw)
-
-    let state =
-      if disabled: wsDisabled
-      elif isHot(id) and noActiveItem(): wsHover
-      elif isHotAndActive(id): wsActive
-      else: wsNormal
 
     let (fillColor, strokeColor, textColor) = case state
       of wsNormal:
@@ -4606,7 +4605,7 @@ proc horizSlider(id:         ItemId,
     x = x + ds.ox
     y = y + ds.oy
 
-  const SliderPad = 3
+  const SliderPad = 1
 
   let
     posMinX = x + SliderPad
@@ -4680,8 +4679,8 @@ proc horizSlider(id:         ItemId,
       setActive(ss.textFieldId)
 
       # TODO couldn't we do activate=true here and simplify the code?
-      koi.textField(ss.textFieldId, x, y, w, h, ss.valueText,
-                    drawWidget = false)
+      textField(ss.textFieldId, x, y, w, h, ss.valueText,
+                drawWidget = false)
 
       if ui.textFieldState.state == tfsDefault:
         value = try:
@@ -4716,14 +4715,14 @@ proc horizSlider(id:         ItemId,
     elif isActive(id): wsActive
     else: wsNormal
 
-  let fillColor = case state
-    of wsHover: GRAY_HI
-    else:       GRAY_MID
-
   addDrawLayer(ui.currentLayer, vg):
+    let fillColor = case state
+      of wsHover: GRAY_HI
+      else:       GRAY_MID
+
     # Draw slider background
     vg.beginPath()
-    vg.roundedRect(x, y, w, h, 5)
+    vg.roundedRect(x, y, w, h, 3)
     vg.fillColor(fillColor)
     vg.fill()
 
@@ -4736,14 +4735,14 @@ proc horizSlider(id:         ItemId,
 
       vg.beginPath()
       vg.roundedRect(x + SliderPad, y + SliderPad,
-                     newPosX - x - SliderPad, h - SliderPad*2, 5)
+                     newPosX - x - SliderPad, h - SliderPad*2, 3)
       vg.fillColor(sliderColor)
       vg.fill()
 
       # Draw slider text
-      vg.setFont(14.0)
+      vg.setFont(13.0, name="sans")
       vg.fillColor(white())
-      let valueString = fmt"{value:.3f}"
+      let valueString = $value.int
       let tw = vg.textWidth(valueString)
       discard vg.text(x + w*0.5 - tw*0.5, y + h*TextVertAlignFactor, valueString)
 
@@ -4906,9 +4905,7 @@ proc sliderPost() =
 # }}}
 # {{{ Color
 
-var sliderVal1: float
-var sliderVal2: float
-var sliderVal3: float
+var mode: Natural
 
 proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
   alias(ui, g_uiState)
@@ -4927,14 +4924,14 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
     if isHit(x, y, w, h):
       setHot(id)
       if ui.mbLeftDown and noActiveItem():
-        setActive(id)
         cs.state = csOpen
+        # Note we're not setting ui.activeItem, that's importat so widget
+        # created inside the popup can function normally
         cs.activeItem = id
         ui.focusCaptured = true
 
   proc closePopup() =
     cs.state = csClosed
-
     cs.activeItem = 0
     ui.focusCaptured = false
 
@@ -4942,24 +4939,18 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
   if cs.activeItem == id and cs.state == csOpen:
     popupX = x
     popupY = y + h
-    popupW = 150
-    popupH = 150
+    popupW = 160
+    popupH = 250
 
     # Hit testing
     let
       insideButton = mouseInside(x, y, w, h)
       insidePopup = mouseInside(popupX, popupY, popupW, popupH)
 
-    if insideButton or insidePopup:
-      setHot(id)
-      setActive(id)
-    else:
-      closePopup()
+    if insideButton or insidePopup: setHot(id)
+    else: closePopup()
 
-    if insidePopup:
-      discard
-
-
+  # Draw color widget (button or whatever)
   addDrawLayer(ui.currentLayer, vg):
     let sw = 0.0
     let (x, y, w, h) = snapToGrid(x, y, w, h, sw)
@@ -4973,10 +4964,12 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
     vg.fill()
     vg.stroke()
 
-  if isActive(id) and cs.state == csOpen:
+
+  if cs.activeItem == id and cs.state == csOpen:
     let oldLayer = ui.currentLayer
     ui.currentLayer = layerPopup
 
+    # Draw popup window
     addDrawLayer(layerPopup, vg):
       let sw = 0.0
       let (x, y, w, h) = snapToGrid(popupX, popupY, popupW, popupH, sw)
@@ -4990,38 +4983,73 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
       vg.fill()
       vg.stroke()
 
-
-    let lastId = lastIdString()
-    var sliderId = hashId(lastId & ":sliderR")
-
-    ui.activeItem = 0
     ui.focusCaptured = false
 
-    koi.horizSlider(
-      sliderId,
-      popupX + 10 - ds.ox, popupY + 10 - ds.oy, popupW - 20, 22,
-      startVal = 0, endVal = 255,
-      sliderVal1,
-      tooltip = "Red value")
+    ##### WIDGETS START
+    var
+      x = popupX + 10 - ds.ox
+      y = popupY + 120 - ds.oy
+      w = popupW - 20
+      h = 19.0
+      labelW = 15
 
-    sliderId = hashId(lastId & ":sliderG")
-    koi.horizSlider(
-      sliderId,
-      popupX + 10 - ds.ox, popupY + 36 - ds.oy, popupW - 20, 22,
-      startVal = 0, endVal = 255,
-      sliderVal2,
-      tooltip = "Green value")
+    var
+      r = color.r.float * 255
+      g = color.g.float * 255
+      b = color.b.float * 255
+      a = color.a.float * 255
 
-    sliderId = hashId(lastId & ":sliderB")
-    koi.horizSlider(
-      sliderId,
-      popupX + 10 - ds.ox, popupY + 62 - ds.oy, popupW - 20, 22,
+    let lastId = lastIdString()
+
+#    let modeId = hashId(lastId & ":mode")
+    radioButtons(
+#      modeId,
+      x, y, w, h,
+      labels = @["RGB", "HSV", "Hex"],
+      mode)
+
+#    var sliderId = hashId(lastId & ":sliderR")
+
+    y += 32
+    label(x, y, w, h, "R")
+    horizSlider(
+#      sliderId,
+      x+labelW, y, w-labelW, h,
       startVal = 0, endVal = 255,
-      sliderVal3,
-      tooltip = "Blue value")
+      r)
+
+    y += 22
+    label(x, y, w, h, "G")
+#    sliderId = hashId(lastId & ":sliderG")
+    horizSlider(
+#      sliderId,
+      x+labelW, y, w-labelW, h,
+      startVal = 0, endVal = 255,
+      g)
+
+    y += 22
+    label(x, y, w, h, "B")
+#    sliderId = hashId(lastId & ":sliderB")
+    horizSlider(
+#      sliderId,
+      x+labelW, y, w-labelW, h,
+      startVal = 0, endVal = 255,
+      b)
+
+    y += 28
+    label(x, y, w, h, "A")
+#    sliderId = hashId(lastId & ":sliderA")
+    horizSlider(
+#      sliderId,
+      x+labelW, y, w-labelW, h,
+      startVal = 0, endVal = 255,
+      a)
+
+    color_out = rgba(r.int, g.int, b.int, a.int)
+
+    ##### WIDGETS END
 
     ui.focusCaptured = true
-    ui.activeItem = id
 
     ui.currentLayer = oldLayer
 
@@ -5246,7 +5274,7 @@ proc endScrollView*() =
 
     let sbId = hashId(lastIdString() & ":scrollBar")
 
-    koi.vertScrollBar(
+    vertScrollBar(
       sbId,
       x=(x + w - ScrollViewScrollBarWidth), y=y,
       w=ScrollViewScrollBarWidth, h=visibleHeight,
