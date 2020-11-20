@@ -202,12 +202,16 @@ type
     tsOff, tsShowDelay, tsShow, tsFadeOutDelay, tsFadeOut
 
   TooltipStateVars = object
-    state:     TooltipState
-    lastState: TooltipState
+    state:       TooltipState
+    lastState:   TooltipState
 
     # Used for the various tooltip delays & timeouts.
-    t0:        float
-    text:      string
+    t0:          float
+    text:        string
+
+    # Hot item from the last frame
+    lastHotItem: ItemId
+
 
 # }}}
 
@@ -251,6 +255,8 @@ type
     # Keys have the "<id>:<keyname>" format, where <id> is widget's unique
     # string ID.
     props:          JsonNode
+    # TODO use a table of object refs instead & cast
+    # TODO rename to frameProps & introduce persistentProps
 
     # Frames left to render
     framesLeft:     Natural
@@ -265,18 +271,26 @@ type
     # all other UI interactions (hovers, tooltips, etc.) should be disabled.
     focusCaptured:  bool
 
+    # TODO
+    currInteractionLevel:   InteractionLevel
+
     drawStateStack: seq[DrawState]
 
     # Mouse state
     # -----------
-    mx, my:         float
+    mx, my:          float
+
+    # When widgetMouseDrag is true, only dx and dy are updated instead
+    # of mx and my
+    widgetMouseDrag: bool
+    dx, dy:    float
 
     # Mouse cursor position from the last frame.
-    lastmx, lastmy: float
+    lastmx, lastmy:  float
 
-    mbLeftDown:     bool
-    mbRightDown:    bool
-    mbMiddleDown:   bool
+    mbLeftDown:      bool
+    mbRightDown:     bool
+    mbMiddleDown:    bool
 
     # Time and position of the last left mouse button down event (for
     # double-click detenction)
@@ -298,9 +312,6 @@ type
     # ------------------
     hotItem:        ItemId
     activeItem:     ItemId
-
-    # Hot item from the last frame
-    lastHotItem:    ItemId
 
     # General purpose widget states
     # -----------------------------
@@ -342,6 +353,7 @@ type
 
     # Only true when we're in a dialog. This is needed so widgets outside
     # of the dialog won't register any events.
+    # TODO replace with currInteractionLevel
     insideDialog:   bool
 
     # Auto-layout
@@ -353,6 +365,13 @@ type
   DrawState = object
     # Origin offset, used for relative coordinate handling (e.g in dialogs)
     ox, oy: float
+
+  # TODO
+  InteractionLevel = enum
+    ilDefault,
+    ilDialog,
+    ilPopup,
+    ilWidget
 
   DrawLayer = enum
     layerDefault,
@@ -1098,7 +1117,7 @@ proc handleTooltip(id: ItemId, tooltip: string) =
     # Start the show delay if we just entered the widget with LMB up and no
     # other tooltip is being shown
     elif tt.state == tsOff and not ui.mbLeftDown and
-         ui.lastHotItem != id:
+         tt.lastHotItem != id:
       tt.state = tsShowDelay
       tt.t0 = getTime()
       renderNextFrame()
@@ -1136,6 +1155,7 @@ proc tooltipPost() =
   alias(ui, g_uiState)
   alias(tt, ui.tooltipState)
 
+  # TODO constants
   let
     ttx = ui.mx + 13
     tty = ui.my + 20
@@ -1182,6 +1202,8 @@ proc tooltipPost() =
 
   if tt.state == tsShow:
     ui.framesLeft = 0
+
+  tt.lastHotItem = ui.hotItem
 
 # }}}
 # }}}
@@ -2456,6 +2478,7 @@ proc horizScrollBar(id:         ItemId,
           sb.state = sbsDragHidden
         else:
           sb.state = sbsDragNormal
+        ui.widgetMouseDrag = true
       else:
         let s = sgn(endVal - startVal).float
         if ui.mx < thumbX: sb.clickDir = -1 * s
@@ -2468,38 +2491,39 @@ proc horizScrollBar(id:         ItemId,
         disableCursor()
         sb.state = sbsDragHidden
       else:
-        let dx = ui.mx - ui.x0
+        let dx = ui.dx - ui.x0
 
         newThumbX = clamp(thumbX + dx, thumbMinX, thumbMaxX)
         newValue = calcNewValue(newThumbX)
 
-        ui.x0 = clamp(ui.mx, thumbMinX, thumbMaxX + thumbW)
+        ui.x0 = clamp(ui.dx, thumbMinX, thumbMaxX + thumbW)
 
       renderNextFrame()
 
     of sbsDragHidden:
+      # TODO not needed with widgetMouseDrag
       # Technically, the cursor can move outside the widget when it's disabled
       # in "drag hidden" mode, and then it will cease to be "hot". But in
       # order to not break the tooltip processing logic, we're making here
       # sure the widget is always hot in "drag hidden" mode.
-      setHot(id)
+#      setHot(id)
 
       if shiftDown():
         let d = if altDown(): ScrollBarUltraFineDragDivisor
                 else:         ScrollBarFineDragDivisor
-        let dx = (ui.mx - ui.x0) / d
+        let dx = (ui.dx - ui.x0) / d
 
         newThumbX = clamp(thumbX + dx, thumbMinX, thumbMaxX)
         newValue = calcNewValue(newThumbX)
 
-        ui.x0 = ui.mx
+        ui.x0 = ui.dx
         ui.dragX = newThumbX + thumbW*0.5
         ui.dragY = -1.0
       else:
         sb.state = sbsDragNormal
         showCursor()
         setCursorPosX(ui.dragX)
-        ui.mx = ui.dragX
+        ui.dx = ui.dragX
         ui.x0 = ui.dragX
 
     of sbsTrackClickFirst:
@@ -2697,6 +2721,7 @@ proc vertScrollBar(id:         ItemId,
           sb.state = sbsDragHidden
         else:
           sb.state = sbsDragNormal
+        ui.widgetMouseDrag = true
       else:
         let s = sgn(endVal - startVal).float
         if ui.my < thumbY: sb.clickDir = -1 * s
@@ -2709,12 +2734,12 @@ proc vertScrollBar(id:         ItemId,
         disableCursor()
         sb.state = sbsDragHidden
       else:
-        let dy = ui.my - ui.y0
+        let dy = ui.dy - ui.y0
 
         newThumbY = clamp(thumbY + dy, thumbMinY, thumbMaxY)
         newValue = calcNewValue(newThumbY)
 
-        ui.y0 = clamp(ui.my, thumbMinY, thumbMaxY + thumbH)
+        ui.y0 = clamp(ui.dy, thumbMinY, thumbMaxY + thumbH)
 
       renderNextFrame()
 
@@ -2728,19 +2753,19 @@ proc vertScrollBar(id:         ItemId,
       if shiftDown():
         let d = if altDown(): ScrollBarUltraFineDragDivisor
                 else:         ScrollBarFineDragDivisor
-        let dy = (ui.my - ui.y0) / d
+        let dy = (ui.dy - ui.y0) / d
 
         newThumbY = clamp(thumbY + dy, thumbMinY, thumbMaxY)
         newValue = calcNewValue(newThumbY)
 
-        ui.y0 = ui.my
+        ui.y0 = ui.dy
         ui.dragX = -1.0
         ui.dragY = newThumbY + thumbH*0.5
       else:
         sb.state = sbsDragNormal
         showCursor()
         setCursorPosY(ui.dragY)
-        ui.my = ui.dragY
+        ui.dy = ui.dragY
         ui.y0 = ui.dragY
 
     of sbsTrackClickFirst:
@@ -2871,6 +2896,8 @@ proc scrollBarPost() =
 
     else:
       sb.state = sbsDefault
+
+    ui.widgetMouseDrag = false
 
 # }}}
 # }}}
@@ -4099,9 +4126,6 @@ proc textArea(
     ui.focusCaptured = false
     setCursorShape(csArrow)
 
-    echo isHot(id)
-    echo noActiveItem()
-
 
   var tabActivate = false
 
@@ -4631,12 +4655,13 @@ proc horizSlider(id:         ItemId,
       ui.x0 = ui.mx
       ui.dragX = ui.mx
       ui.dragY = -1.0
+      ui.widgetMouseDrag = true
       ss.state = ssDragHidden
       ss.cursorMoved = false
       disableCursor()
 
     of ssDragHidden:
-      if ui.dragX != ui.mx:
+      if ui.dragX != ui.dx:
         ss.cursorMoved = true
 
       if not ui.mbLeftDown and not ss.cursorMoved:
@@ -4661,12 +4686,12 @@ proc horizSlider(id:         ItemId,
           else:         SliderFineDragDivisor
         else: 1
 
-        let dx = (ui.mx - ui.x0) / d
+        let dx = (ui.dx - ui.x0) / d
 
         newPosX = clamp(posX + dx, posMinX, posMaxX)
         let t = invLerp(posMinX, posMaxX, newPosX)
         value = lerp(startVal, endVal, t)
-        ui.x0 = ui.mx
+        ui.x0 = ui.dx
 
     of ssEditValue:
       # The textfield will only work correctly if it thinks it's active
@@ -4806,6 +4831,7 @@ proc vertSlider(id:         ItemId,
       ui.y0 = ui.my
       ui.dragX = -1.0
       ui.dragY = ui.my
+      ui.widgetMouseDrag = true
       disableCursor()
       ss.state = ssDragHidden
 
@@ -4821,12 +4847,12 @@ proc vertSlider(id:         ItemId,
         else:         SliderFineDragDivisor
       else: 1
 
-      let dy = (ui.my - ui.y0) / d
+      let dy = (ui.dy - ui.y0) / d
 
       newPosY = clamp(posY + dy, posMaxY, posMinY)
       let t = invLerp(posMinY, posMaxY, newPosY)
       value = lerp(startVal, endVal, t)
-      ui.y0 = ui.my
+      ui.y0 = ui.dy
 
     of ssEditValue:
       discard
@@ -4891,6 +4917,8 @@ proc sliderPost() =
         setCursorPosX(ui.dragX)
       else:
         setCursorPosY(ui.dragY)
+
+    ui.widgetMouseDrag = false
 
 # }}}
 # }}}
@@ -5075,6 +5103,8 @@ proc beginDialog*(w, h: float, title: string,
   alias(ui, g_uiState)
   alias(s, style)
 
+  assert not ui.insideDialog
+
   let
     x = floor((ui.winWidth - w) / 2)
     y = floor((ui.winHeight - h) / 2)
@@ -5133,6 +5163,8 @@ proc beginDialog*(w, h: float, title: string,
 
 proc endDialog*() =
   alias(ui, g_uiState)
+  assert ui.insideDialog
+
   popDrawState()
   ui.insideDialog = false
   ui.currentLayer = layerDefault
@@ -5140,6 +5172,8 @@ proc endDialog*() =
 
 proc closeDialog*() =
   alias(ui, g_uiState)
+  assert ui.isDialogOpen
+
   ui.isDialogOpen = false
   renderNextFrame()
 
@@ -5426,7 +5460,10 @@ proc beginFrame*(winWidth, winHeight: float) =
   ui.lastmx = ui.mx
   ui.lastmy = ui.my
 
-  (ui.mx, ui.my) = win.cursorPos()
+  if ui.widgetMouseDrag:
+    (ui.dx, ui.dy) = win.cursorPos()
+  else:
+    (ui.mx, ui.my) = win.cursorPos()
 
   ui.hasEvent = false
   ui.eventHandled = false
@@ -5476,8 +5513,6 @@ proc endFrame*() =
   setCursorMode(ui.cursorShape)
 
   g_drawLayers.draw(g_nvgContext)
-
-  ui.lastHotItem = ui.hotItem
 
   # Widget specific postprocessing
   #

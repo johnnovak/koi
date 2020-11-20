@@ -1,6 +1,8 @@
 BUGS
 ====
 
+- tooltips are broken
+
 - maybe keep dropdown open in LMBPressed mode even if the cursor goes
   outside of the selection box
 
@@ -14,6 +16,9 @@ BUGS
   - move cursor past the right edge when text doesn't fit into the the
     textfield - the cursor should be after the last character, not after the 
     one before the last
+
+- textarea: get rid of two frame delay when exiting widget with ESC while the
+  the cursor is over if (edit -> default -> hover state)
 
 - dropdown: quickly click and move pointer down -> value select (put small
   delay in there, wait a few frames at least)
