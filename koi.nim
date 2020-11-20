@@ -406,7 +406,6 @@ const
   PropViewY = "viewY"
   PropViewWidth = "viewWidth"
   PropViewHeight = "viewHeight"
-  PropLastContentHeight = "lastContentHeight"
 
 # }}}
 
@@ -587,9 +586,9 @@ proc setProp*(id, propName: string, f: float) =
 proc getFloatProp*(id, propName: string): float =
   g_uiState.props{mkPropName(id, propName)}.getFloat()
 
-proc renderNextFrame*() =
+proc setFramesLeft*(n: Natural = 5) =
   alias(ui, g_uiState)
-  inc(ui.framesLeft)
+  ui.framesLeft = 5
 
 proc mouseInside*(x, y, w, h: float): bool =
   alias(ui, g_uiState)
@@ -1108,7 +1107,7 @@ proc handleTooltip(id: ItemId, tooltip: string) =
       let cursorMoved = ui.mx != ui.lastmx or ui.my != ui.lastmy
       if cursorMoved:
         tt.t0 = getTime()
-      renderNextFrame()
+      setFramesLeft()
 
     # Hide the tooltip immediately if the LMB is pressed inside the widget
     if ui.mbLeftDown and hasActiveItem():
@@ -1120,13 +1119,13 @@ proc handleTooltip(id: ItemId, tooltip: string) =
          tt.lastHotItem != id:
       tt.state = tsShowDelay
       tt.t0 = getTime()
-      renderNextFrame()
+      setFramesLeft()
 
     elif tt.state >= tsShow:
       tt.state = tsShow
       tt.t0 = getTime()
       tt.text = tooltip
-      renderNextFrame()
+      setFramesLeft()
 
 # }}}
 # {{{ drawTooltip
@@ -1198,7 +1197,7 @@ proc tooltipPost() =
 
   # Make sure to keep drawing until the tooltip animation cycle is over
   if tt.state > tsOff:
-    renderNextFrame()
+    setFramesLeft()
 
   if tt.state == tsShow:
     ui.framesLeft = 0
@@ -2146,7 +2145,6 @@ proc dropdown[T](id:               ItemId,
     ds.state = dsClosed
     ds.activeItem = 0
     ui.focusCaptured = false
-    renderNextFrame()
 
   if ds.state == dsClosed:
     if isHit(x, y, w, h):
@@ -2498,8 +2496,6 @@ proc horizScrollBar(id:         ItemId,
 
         ui.x0 = clamp(ui.dx, thumbMinX, thumbMaxX + thumbW)
 
-      renderNextFrame()
-
     of sbsDragHidden:
       # TODO not needed with widgetMouseDrag
       # Technically, the cursor can move outside the widget when it's disabled
@@ -2532,12 +2528,10 @@ proc horizScrollBar(id:         ItemId,
 
       sb.state = sbsTrackClickDelay
       ui.t0 = getTime()
-      renderNextFrame()
 
     of sbsTrackClickDelay:
       if getTime() - ui.t0 > ScrollBarTrackClickRepeatDelay:
         sb.state = sbsTrackClickRepeat
-      renderNextFrame()
 
     of sbsTrackClickRepeat:
       if isHot(id):
@@ -2557,7 +2551,6 @@ proc horizScrollBar(id:         ItemId,
           ui.t0 = getTime()
       else:
         ui.t0 = getTime()
-      renderNextFrame()
 
   value_out = newValue
 
@@ -2741,8 +2734,6 @@ proc vertScrollBar(id:         ItemId,
 
         ui.y0 = clamp(ui.dy, thumbMinY, thumbMaxY + thumbH)
 
-      renderNextFrame()
-
     of sbsDragHidden:
       # Technically, the cursor can move outside the widget when it's disabled
       # in "drag hidden" mode, and then it will cease to be "hot". But in
@@ -2774,12 +2765,10 @@ proc vertScrollBar(id:         ItemId,
 
       sb.state = sbsTrackClickDelay
       ui.t0 = getTime()
-      renderNextFrame()
 
     of sbsTrackClickDelay:
       if getTime() - ui.t0 > ScrollBarTrackClickRepeatDelay:
         sb.state = sbsTrackClickRepeat
-      renderNextFrame()
 
     of sbsTrackClickRepeat:
       if isHot(id):
@@ -2799,7 +2788,6 @@ proc vertScrollBar(id:         ItemId,
           ui.t0 = getTime()
       else:
         ui.t0 = getTime()
-      renderNextFrame()
 
   value_out = newValue
 
@@ -3627,7 +3615,6 @@ proc textField(
             tf.state = tfsDragScroll
         else:
           tf.state = tfsDragStart
-        renderNextFrame()
       else:
         tf.state = tfsEdit
 
@@ -3645,7 +3632,6 @@ proc textField(
         tf.cursorPos = newCursorPos
         ui.t0 = getTime()
         tf.state = tfsDragDelay
-        renderNextFrame()
       else:
         tf.state = tfsEdit
 
@@ -3742,13 +3728,11 @@ proc textField(
           exitEditMode()
           tf.activatePrev = true
           tf.itemToActivate = tf.prevItem
-          renderNextFrame()
 
         elif sc in shortcuts[tesNextTextField]:
           text = enforceConstraint(text, tf.originalText)
           exitEditMode()
           tf.activateNext = true
-          renderNextFrame()
 
         elif sc in shortcuts[tesAccept]:
           text = enforceConstraint(text, tf.originalText)
@@ -4365,12 +4349,10 @@ proc textArea(
           exitEditMode()
           ta.activatePrev = true
           ta.itemToActivate = ta.prevItem
-          renderNextFrame()
 
         elif sc in shortcuts[tesNextTextField]:
           exitEditMode()
           ta.activateNext = true
-          renderNextFrame()
 
         elif sc in shortcuts[tesAccept]:
           exitEditMode()
@@ -4955,7 +4937,6 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
 
     cs.activeItem = 0
     ui.focusCaptured = false
-    renderNextFrame()
 
   # Fall-through to avoid a 1-frame delay when opening the popup
   if cs.activeItem == id and cs.state == csOpen:
@@ -5175,7 +5156,6 @@ proc closeDialog*() =
   assert ui.isDialogOpen
 
   ui.isDialogOpen = false
-  renderNextFrame()
 
 
 # }}}
@@ -5261,7 +5241,6 @@ proc endScrollView*() =
       if hasEvent() and ui.currEvent.kind == ekScroll:
         scrollBarVal -= ui.currEvent.oy * ScrollSensitivity
         ui.eventHandled = true
-        renderNextFrame()
 
     scrollBarVal = scrollBarVal.clamp(0, endVal)
 
@@ -5279,11 +5258,6 @@ proc endScrollView*() =
     scrollBarVal = 0
 
   setProp(id, PropScrollBarVal, scrollBarVal)
-
-  if contentHeight != getFloatProp(id, PropLastContentHeight):
-    renderNextFrame()
-
-  setProp(id, PropLastContentHeight, contentHeight)
 
 # }}}
 
@@ -5474,6 +5448,8 @@ proc beginFrame*(winWidth, winHeight: float) =
     ui.hasEvent = true
     let ev = ui.currEvent
 
+    setFramesLeft()
+
     # Update current mouse button state
     if ev.kind == ekMouseButton:
       case ev.button
@@ -5491,6 +5467,7 @@ proc beginFrame*(winWidth, winHeight: float) =
       of mbRight:  ui.mbRightDown  = ev.pressed
       of mbMiddle: ui.mbMiddleDown = ev.pressed
       else: discard
+
 
   # Reset hot item
   ui.hotItem = 0
@@ -5538,15 +5515,6 @@ proc endFrame*() =
 
   # Decrement remaining frames counter
   if ui.framesLeft > 0: dec(ui.framesLeft)
-
-  # Because up to one event is processed per frame, handling keystroke events
-  # can become "out of sync" with the char buffer. So we need to keep
-  # processing one more frame while there are still events in the buffer to
-  # prevent that from happening.
-  #
-  # The same problem cannot be triggered easily with mouse events.
-
-  if g_eventBuf.canRead(): renderNextFrame()
 
 # }}}
 # {{{ shouldRenderNextFrame*()
