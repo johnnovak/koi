@@ -24,7 +24,7 @@ var
   sectionDialog = true
   sectionTitleBar = true
   sectionStatusBar = true
-  sectionLevelDropdown = true
+  sectionLeveldropDown = true
   sectionAboutButton = true
 
 var currTheme = loadTheme("../gridmonger/themes/Default.cfg")
@@ -208,26 +208,26 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
     koi.color(currTheme.statusBar.coordsColor)
     koi.endGroup()
 
-  if koi.sectionHeader("Level dropdown", sectionLevelDropdown):
+  if koi.sectionHeader("Level dropDown", sectionLeveldropDown):
     koi.beginGroup()
     koi.label("Button")
-    koi.color(currTheme.levelDropdown.buttonColor)
+    koi.color(currTheme.leveldropDown.buttonColor)
 
     koi.label("Button hover")
-    koi.color(currTheme.levelDropdown.buttonColorHover)
+    koi.color(currTheme.leveldropDown.buttonColorHover)
 
     koi.label("Text")
-    koi.color(currTheme.levelDropdown.textColor)
+    koi.color(currTheme.leveldropDown.textColor)
 
     koi.beginGroup()
     koi.label("Item list")
-    koi.color(currTheme.levelDropdown.itemListColor)
+    koi.color(currTheme.leveldropDown.itemListColor)
 
     koi.label("Item")
-    koi.color(currTheme.levelDropdown.itemColor)
+    koi.color(currTheme.leveldropDown.itemColor)
 
     koi.label("Item hover")
-    koi.color(currTheme.levelDropdown.itemColorHover)
+    koi.color(currTheme.leveldropDown.itemColorHover)
     koi.endGroup()
 
   if koi.sectionHeader("About button", sectionAboutButton):
@@ -336,21 +336,21 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
     koi.endGroup()
 
     koi.beginGroup()
-    koi.label("Dropdown 1")
-    koi.dropdown(items = @["Orange", "Banana", "Blueberry", "Apricot", "Apple"],
-                 dropdownVal1,
+    koi.label("dropDown 1")
+    koi.dropDown(items = @["Orange", "Banana", "Blueberry", "Apricot", "Apple"],
+                 dropDownVal1,
                  tooltip = "Select a fruit")
 
-    koi.label("Dropdown 2")
-    koi.dropdown(items = @["One", "Two", "Three"],
-                 dropdownVal2,
+    koi.label("dropDown 2")
+    koi.dropDown(items = @["One", "Two", "Three"],
+                 dropDownVal2,
                  tooltip = "Select a number")
     koi.endGroup()
 
   if koi.sectionHeader("Second section", section2):
-    koi.label("Dropdown 1")
-    koi.dropdown(items = @["Orange", "Banana", "Blueberry", "Apricot", "Apple"],
-                 dropdownVal3,
+    koi.label("dropDown 1")
+    koi.dropDown(items = @["Orange", "Banana", "Blueberry", "Apricot", "Apple"],
+                 dropDownVal3,
                  tooltip = "Select a fruit")
 
     koi.beginGroup()

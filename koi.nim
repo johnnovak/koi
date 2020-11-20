@@ -24,35 +24,39 @@ export CursorShape
 
 type ItemId = int64
 
-# {{{ TextSelection
-type
-  TextSelection = object
-    # Rune position of the start of the selection (inclusive),
-    # -1 if nothing is selected.
-    startPos: int
+# {{{ ColorPickerState
 
-    # Rune position of the end of the selection (exclusive)
-    endPos:   Natural
+type
+  ColorPickerState = enum
+    cpsClosed, cpsOpen
+
+  ColorPickerMode = enum
+    cpmRGB, cpmHSV, cpmHex
+
+  ColorPickerStateVars = object
+    state:      ColorPickerState
+    mode:       ColorPickerMode
+    activeItem: ItemId
 
 # }}}
-
-# {{{ SliderState
+# {{{ DropDownState
 
 type
-  SliderState = enum
-    ssDefault,
-    ssDragHidden,
-    ssEditValue
+  DropDownState = enum
+    dsClosed, dsOpenLMBPressed, dsOpen
 
-  SliderStateVars = object
-    state:       SliderState
+  DropDownStateVars = object
+    state:      DropDownState
 
-    # Whether the cursor was moved before releasing the LMB in drag mode
-    cursorMoved:  bool
+    # Drop-down in open mode, 0 if no drop-down is open currently.
+    activeItem: ItemId
 
-    valueText:    string
-    editModeItem: ItemId
-    textFieldId:  ItemId
+# }}}
+# {{{ RadioButtonState
+
+type
+  RadioButtonStateVars = object
+    activeItem: Natural
 
 # }}}
 # {{{ ScrollBarState
@@ -76,64 +80,35 @@ type
     clickDir: float
 
 # }}}
-# {{{ DropdownState
+# {{{ SliderState
 
 type
-  DropdownState = enum
-    dsClosed, dsOpenLMBPressed, dsOpen
+  SliderState = enum
+    ssDefault,
+    ssDragHidden,
+    ssEditValue
 
-  DropdownStateVars = object
-    state:      DropdownState
+  SliderStateVars = object
+    state:       SliderState
 
-    # Dropdown in open mode, 0 if no dropdown is open currently.
-    activeItem: ItemId
+    # Whether the cursor was moved before releasing the LMB in drag mode
+    cursorMoved:  bool
 
-# }}}
-# {{{ TextFieldState
-type
-  TextFieldState = enum
-    tfsDefault,
-    tfsEditLMBPressed,
-    tfsEdit
-    tfsDragStart,
-    tfsDragDelay,
-    tfsDragScroll,
-    tfsDoubleClicked
-
-  TextFieldStateVars = object
-    state:           TextFieldState
-
-    # The cursor is before the Rune with this index. If the cursor is at the end
-    # of the text, the cursor pos equals the length of the text. From this
-    # follows that the cursor position for an empty string is 0.
-    cursorPos:       Natural
-
-    # Current text selection
-    selection:       TextSelection
-
-    # Text field item in edit mode, 0 if no text field is being edited.
-    activeItem:      ItemId
-
-    # The text is displayed starting from the Rune of this index.
-    displayStartPos: Natural
-
-    # The text will be drawn at thix X coordinate (can be smaller than the
-    # starting X coordinate of the textbox)
-    displayStartX:   float
-
-    # The original text is stored when going into edit mode so it can be
-    # restored if the editing is cancelled.
-    originalText:    string
-
-    # State variables for tabbing back and forth between textfields
-    prevItem:        ItemId
-    lastActiveItem:  ItemId
-    itemToActivate:  ItemId
-    activateNext:    bool
-    activatePrev:    bool
+    valueText:    string
+    editModeItem: ItemId
+    textFieldId:  ItemId
 
 # }}}
 # {{{ TextAreaState
+type
+  TextSelection = object
+    # Rune position of the start of the selection (inclusive),
+    # -1 if nothing is selected.
+    startPos: int
+
+    # Rune position of the end of the selection (exclusive)
+    endPos:   Natural
+
 type
   TextAreaState = enum
     tasDefault
@@ -180,20 +155,49 @@ type
     activatePrev:    bool
 
 # }}}
-# {{{ ColorState
-
+# {{{ TextFieldState
 type
-  ColorState = enum
-    csClosed, csOpen
+  TextFieldState = enum
+    tfsDefault,
+    tfsEditLMBPressed,
+    tfsEdit
+    tfsDragStart,
+    tfsDragDelay,
+    tfsDragScroll,
+    tfsDoubleClicked
 
-  ColorMode = enum
-    cmRGB, cmHSV
+  TextFieldStateVars = object
+    state:           TextFieldState
 
-  ColorStateVars = object
-    state:      ColorState
-    mode:       ColorMode
-# Dropdown in open mode, 0 if no dropdown is open currently.
-    activeItem: ItemId
+    # The cursor is before the Rune with this index. If the cursor is at the end
+    # of the text, the cursor pos equals the length of the text. From this
+    # follows that the cursor position for an empty string is 0.
+    cursorPos:       Natural
+
+    # Current text selection
+    selection:       TextSelection
+
+    # Text field item in edit mode, 0 if no text field is being edited.
+    activeItem:      ItemId
+
+    # The text is displayed starting from the Rune of this index.
+    displayStartPos: Natural
+
+    # The text will be drawn at thix X coordinate (can be smaller than the
+    # starting X coordinate of the textbox)
+    displayStartX:   float
+
+    # The original text is stored when going into edit mode so it can be
+    # restored if the editing is cancelled.
+    originalText:    string
+
+    # State variables for tabbing back and forth between textfields
+    prevItem:        ItemId
+    lastActiveItem:  ItemId
+    itemToActivate:  ItemId
+    activateNext:    bool
+    activatePrev:    bool
+
 # }}}
 # {{{ TooltipState
 
@@ -211,7 +215,6 @@ type
 
     # Hot item from the last frame
     lastHotItem: ItemId
-
 
 # }}}
 
@@ -329,21 +332,20 @@ type
 
     # Widget-specific states
     # **********************
-    # TODO wrap into state vars?
-    radioButtonsActiveItem: Natural
 
-    colorState:     ColorStateVars
-    dropdownState:  DropdownStateVars
-    scrollBarState: ScrollBarStateVars
-    sliderState:    SliderStateVars
-    textAreaState:  TextAreaStateVars
-    textFieldState: TextFieldStateVars
+    colorPickerState: ColorPickerStateVars
+    dropDownState:    DropDownStateVars
+    radioButtonState: RadioButtonStateVars
+    scrollBarState:   ScrollBarStateVars
+    sliderState:      SliderStateVars
+    textAreaState:    TextAreaStateVars
+    textFieldState:   TextFieldStateVars
 
     # TODO current container ID?
     currScrollViewId: string
 
-    # Internal tooltip state
-    # **********************
+    # Tooltip state
+    # *************
     tooltipState:   TooltipStateVars
 
     # Dialog state
@@ -1866,6 +1868,7 @@ proc radioButtons[T](
   assert tooltips.len == 0 or tooltips.len == labels.len
 
   alias(ui, g_uiState)
+  alias(rs, ui.radioButtonState)
 
   let
     ds = drawState()
@@ -1881,7 +1884,7 @@ proc radioButtons[T](
     setHot(id)
     if ui.mbLeftDown and noActiveItem():
       setActive(id)
-      ui.radioButtonsActiveItem = hotButton
+      rs.activeItem = hotButton
 
   let buttonW = w / numButtons.float
 
@@ -1920,7 +1923,7 @@ proc radioButtons[T](
 
   # LMB released over active widget means it was clicked
   if not ui.mbLeftDown and isHotAndActive(id) and
-     ui.radioButtonsActiveItem == hotButton:
+     rs.activeItem == hotButton:
     activeButton = T(hotButton)
 
   activeButton_out = activeButton
@@ -1934,9 +1937,10 @@ proc radioButtons[T](
     let hover = state == wsHover and hotButton == i
     let active = activeButton.ord == i
     let down = state == wsActive and hotButton == i and
-               ui.radioButtonsActiveItem == i
+               rs.activeItem == i
 
     result = (hover, active, down)
+
 
   addDrawLayer(ui.currentLayer, vg):
     var x = x
@@ -2027,9 +2031,9 @@ template radioButtons*[T](
                layout, drawProc, style)
 
 # }}}
-# {{{ Dropdown
+# {{{ DropDown
 
-type DropdownStyle* = ref object
+type DropDownStyle* = ref object
   buttonCornerRadius*:        float
   buttonStrokeWidth*:         float
   buttonStrokeColor*:         Color
@@ -2065,7 +2069,7 @@ type DropdownStyle* = ref object
   itemColorHover*:            Color
   itemBackgroundColorHover*:  Color
 
-var DefaultDropdownStyle = DropdownStyle(
+var DefaultDropDownStyle = DropDownStyle(
   buttonCornerRadius        : 5,
   buttonStrokeWidth         : 0,
   buttonStrokeColor         : black(),
@@ -2103,20 +2107,20 @@ var DefaultDropdownStyle = DropdownStyle(
 )
 
 
-proc getDefaultDropdownStyle*(): DropdownStyle =
-  DefaultDropdownStyle.deepCopy
+proc getDefaultDropDownStyle*(): DropDownStyle =
+  DefaultDropDownStyle.deepCopy
 
-proc setDefaultDropdownStyle*(style: DropdownStyle) =
-  DefaultDropdownStyle = style.deepCopy
+proc setDefaultDropDownStyle*(style: DropDownStyle) =
+  DefaultDropDownStyle = style.deepCopy
 
 
-proc dropdown[T](id:               ItemId,
+proc dropDown[T](id:               ItemId,
                  x, y, w, h:       float,
                  items:            seq[string],
                  selectedItem_out: var T,
                  tooltip:          string,
                  disabled:         bool,
-                 style:            DropdownStyle) =
+                 style:            DropDownStyle) =
 
   var selectedItem = selectedItem_out
 
@@ -2124,7 +2128,7 @@ proc dropdown[T](id:               ItemId,
   assert selectedItem.ord <= items.high
 
   alias(ui, g_uiState)
-  alias(ds, ui.dropdownState)
+  alias(ds, ui.dropDownState)
   alias(s, style)
 
   let
@@ -2140,7 +2144,7 @@ proc dropdown[T](id:               ItemId,
     numItems = items.len
     itemHeight = h  # TODO just temporarily
 
-  proc closeDropdown() =
+  proc closeDropDown() =
     ds.state = dsClosed
     ds.activeItem = 0
     ui.focusCaptured = false
@@ -2158,7 +2162,7 @@ proc dropdown[T](id:               ItemId,
   # the button
   if ds.activeItem == id and ds.state >= dsOpenLMBPressed:
 
-    # Calculate the position of the box around the dropdown items
+    # Calculate the position of the box around the drop-down items
     var maxItemWidth = 0.0
 
     g_nvgContext.setFont(s.itemFontSize)
@@ -2199,7 +2203,7 @@ proc dropdown[T](id:               ItemId,
       setHot(id)
       setActive(id)
     else:
-      closeDropdown()
+      closeDropDown()
 
     if insideItemList:
       hoverItem = min(
@@ -2208,21 +2212,21 @@ proc dropdown[T](id:               ItemId,
       )
 
     # LMB released inside the box selects the item under the cursor and closes
-    # the dropdown
+    # the dropDown
     if ds.state == dsOpenLMBPressed:
       if not ui.mbLeftDown:
         if hoverItem >= 0:
           selectedItem = T(hoverItem)
-          closeDropdown()
+          closeDropDown()
         else:
           ds.state = dsOpen
     else:
       if ui.mbLeftDown:
         if hoverItem >= 0:
           selectedItem = (hoverItem)
-          closeDropdown()
+          closeDropDown()
         elif insideButton:
-          closeDropdown()
+          closeDropDown()
 
   selectedItem_out = selectedItem
 
@@ -2232,7 +2236,7 @@ proc dropdown[T](id:               ItemId,
     elif isHotAndActive(id): wsActive
     else: wsNormal
 
-  # Dropdown button
+  # Drop-down button
   addDrawLayer(ui.currentLayer, vg):
     let sw = s.buttonStrokeWidth
     let (x, y, w, h) = snapToGrid(x, y, w, h, sw)
@@ -2262,7 +2266,7 @@ proc dropdown[T](id:               ItemId,
     vg.drawLabel(x, y, w, h, s.labelPadHoriz, itemText, textColor,
                  s.labelFontSize, s.labelFontFace, s.labelAlign)
 
-  # Dropdown items
+  # Drop-down items
   if isActive(id) and ds.state >= dsOpenLMBPressed:
 
     addDrawLayer(layerWidgetOverlay, vg):
@@ -2300,33 +2304,33 @@ proc dropdown[T](id:               ItemId,
     handleTooltip(id, tooltip)
 
 
-template dropdown*(
+template dropDown*(
   x, y, w, h:   float,
   items:        seq[string],
   selectedItem: Natural,
   tooltip:      string = "",
   disabled:     bool = false,
-  style:        DropdownStyle = DefaultDropdownStyle
+  style:        DropDownStyle = DefaultDropDownStyle
 ) =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  dropdown(id, x, y, w, h, items, selectedItem, tooltip, disabled, style)
+  dropDown(id, x, y, w, h, items, selectedItem, tooltip, disabled, style)
 
 
-template dropdown*(
+template dropDown*(
   items:        seq[string],
   selectedItem: Natural,
   tooltip:      string = "",
   disabled:     bool = false,
-  style:        DropdownStyle = DefaultDropdownStyle
+  style:        DropDownStyle = DefaultDropDownStyle
 ) =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  dropdown(id, a.x, a.y, a.nextItemHeight, a.nextItemHeight, items, selectedItem, tooltip, disabled, style)
+  dropDown(id, a.x, a.y, a.nextItemHeight, a.nextItemHeight, items, selectedItem, tooltip, disabled, style)
 
   handleAutoLayout()
 
@@ -4905,11 +4909,9 @@ proc sliderPost() =
 # }}}
 # {{{ Color
 
-var mode: Natural
-
 proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
   alias(ui, g_uiState)
-  alias(cs, ui.colorState)
+  alias(cs, ui.colorPickerState)
 
   var color = color_out
 
@@ -4920,32 +4922,36 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
 
   var popupX, popupY, popupW, popupH: float
 
-  if cs.state == csClosed:
+  if cs.state == cpsClosed:
     if isHit(x, y, w, h):
       setHot(id)
       if ui.mbLeftDown and noActiveItem():
-        cs.state = csOpen
+        cs.state = cpsOpen
         # Note we're not setting ui.activeItem, that's importat so widget
         # created inside the popup can function normally
         cs.activeItem = id
         ui.focusCaptured = true
 
   proc closePopup() =
-    cs.state = csClosed
+    cs.state = cpsClosed
     cs.activeItem = 0
     ui.focusCaptured = false
 
   # Fall-through to avoid a 1-frame delay when opening the popup
-  if cs.activeItem == id and cs.state == csOpen:
+  if cs.activeItem == id and cs.state == cpsOpen:
     popupX = x
     popupY = y + h
     popupW = 160
     popupH = 250
 
     # Hit testing
+    const popupHitBorder = 50
     let
       insideButton = mouseInside(x, y, w, h)
-      insidePopup = mouseInside(popupX, popupY, popupW, popupH)
+      insidePopup = mouseInside(popupX - popupHitBorder,
+                                popupY - popupHitBorder,
+                                popupW + popupHitBorder*2,
+                                popupH + popupHitBorder*2)
 
     if insideButton or insidePopup: setHot(id)
     else: closePopup()
@@ -4965,7 +4971,7 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
     vg.stroke()
 
 
-  if cs.activeItem == id and cs.state == csOpen:
+  if cs.activeItem == id and cs.state == cpsOpen:
     let oldLayer = ui.currentLayer
     ui.currentLayer = layerPopup
 
@@ -4985,13 +4991,17 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
 
     ui.focusCaptured = false
 
+    pushDrawState(
+      DrawState(ox: popupX, oy: popupY)
+    )
+
     ##### WIDGETS START
     var
-      x = popupX + 10 - ds.ox
-      y = popupY + 120 - ds.oy
+      x = 10.0
+      y = 120.0
       w = popupW - 20
       h = 19.0
-      labelW = 15
+      labelW = 15.0
 
     var
       r = color.r.float * 255
@@ -5001,46 +5011,35 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
 
     let lastId = lastIdString()
 
-#    let modeId = hashId(lastId & ":mode")
     radioButtons(
-#      modeId,
-      x, y, w, h,
+      x, y, w, 22,
       labels = @["RGB", "HSV", "Hex"],
-      mode)
-
-#    var sliderId = hashId(lastId & ":sliderR")
+      cs.mode)
 
     y += 32
     label(x, y, w, h, "R")
     horizSlider(
-#      sliderId,
       x+labelW, y, w-labelW, h,
       startVal = 0, endVal = 255,
       r)
 
     y += 22
     label(x, y, w, h, "G")
-#    sliderId = hashId(lastId & ":sliderG")
     horizSlider(
-#      sliderId,
       x+labelW, y, w-labelW, h,
       startVal = 0, endVal = 255,
       g)
 
     y += 22
     label(x, y, w, h, "B")
-#    sliderId = hashId(lastId & ":sliderB")
     horizSlider(
-#      sliderId,
       x+labelW, y, w-labelW, h,
       startVal = 0, endVal = 255,
       b)
 
     y += 28
     label(x, y, w, h, "A")
-#    sliderId = hashId(lastId & ":sliderA")
     horizSlider(
-#      sliderId,
       x+labelW, y, w-labelW, h,
       startVal = 0, endVal = 255,
       a)
@@ -5048,6 +5047,8 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
     color_out = rgba(r.int, g.int, b.int, a.int)
 
     ##### WIDGETS END
+
+    popDrawState()
 
     ui.focusCaptured = true
 

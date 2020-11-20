@@ -38,12 +38,12 @@ var
   radioButtonsVal6 = 1
   radioButtonsVal7 = 1
 
-  dropdownVal1 = 0
-  dropdownVal2 = 0
-  dropdownVal3 = 3
-  dropdownTopRight = 0
-  dropdownBottomLeft = 0
-  dropdownBottomRight = 0
+  dropDownVal1 = 0
+  dropDownVal2 = 0
+  dropDownVal3 = 3
+  dropDownTopRight = 0
+  dropDownBottomLeft = 0
+  dropDownBottomRight = 0
 
 #  textFieldVal1 = ""
 #  textFieldVal2 = "Nobody expects the Spanish Inquisition!"
@@ -194,43 +194,43 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
 
   koi.label(380, 590, w, h, fmt"{sliderVal4:.3f}", labelStyle)
 
-  # Dropdowns
+  # dropDowns
   y += pad * 2
-  koi.dropdown(
+  koi.dropDown(
     x, y, w, h,
     items = @["Orange", "Banana", "Blueberry", "Apricot", "Apple"],
-    dropdownVal1,
+    dropDownVal1,
     tooltip = "Select a fruit")
 
-  koi.dropdown(
+  koi.dropDown(
     280, y, w, h,
     items = @["Red", "Green", "Blue", "Yellow", "Purple (with little yellow dots)"],
-    dropdownVal2,
+    dropDownVal2,
     tooltip = "Select a colour")
 
-  koi.dropdown(
+  koi.dropDown(
     430, y, w, h,
-    items = @["This", "Dropdown", "Is", "Disabled"],
-    dropdownVal3,
-    tooltip = "Disabled dropdown",
+    items = @["This", "dropDown", "Is", "Disabled"],
+    dropDownVal3,
+    tooltip = "Disabled dropDown",
     disabled = true)
 
-  koi.dropdown(
+  koi.dropDown(
     winWidth.float - (w+10), 20, w, h,
     items = @["Red", "Green", "Blue", "Yellow", "Purple (with little yellow dots)"],
-    dropdownTopRight,
+    dropDownTopRight,
     tooltip = "Select a colour")
 
-  koi.dropdown(
+  koi.dropDown(
     winWidth.float - (w+10), winHeight.float - 40, w, h,
     items = @["Red", "Green", "Blue", "Yellow", "Purple (with little yellow dots)"],
-    dropdownBottomRight,
+    dropDownBottomRight,
     tooltip = "Select a colour")
 
-  koi.dropdown(
+  koi.dropDown(
     10, winHeight.float - 40, w, h,
     items = @["Red", "Green", "Blue", "Yellow", "Purple (with little yellow dots)"],
-    dropdownBottomLeft,
+    dropDownBottomLeft,
     tooltip = "Select a colour")
 
   # Text fields
