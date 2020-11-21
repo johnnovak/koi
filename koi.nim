@@ -261,10 +261,10 @@ type
     # TODO use a table of object refs instead & cast
     # TODO rename to frameProps & introduce persistentProps
 
-    # Frames left to render
+    # Frames left to render; this is decremented in endFrame()
     framesLeft:     Natural
 
-    # Current draw layer
+    # This is the draw layer all widgets will draw on
     currentLayer:   DrawLayer
 
     # Window dimensions (in virtual pixels)
@@ -274,10 +274,16 @@ type
     # all other UI interactions (hovers, tooltips, etc.) should be disabled.
     focusCaptured:  bool
 
-    # TODO
-    currInteractionLevel:   InteractionLevel
+    # TODO current container ID?
+    currScrollViewId: string
 
-    drawStateStack: seq[DrawState]
+    tooltipState:     TooltipStateVars
+
+    # True if a dialog is currently open
+    dialogOpen:       bool
+
+    # Reset to empty seq at the start of the frame
+    drawOffsetStack: seq[DrawOffset]
 
     # Mouse state
     # -----------
@@ -313,7 +319,7 @@ type
 
     # Active & hot items
     # ------------------
-    hotItem:        ItemId
+    hotItem:        ItemId    # reset at the start of the frame to 0
     activeItem:     ItemId
 
     # General purpose widget states
@@ -341,39 +347,15 @@ type
     textAreaState:    TextAreaStateVars
     textFieldState:   TextFieldStateVars
 
-    # TODO current container ID?
-    currScrollViewId: string
-
-    # Tooltip state
-    # *************
-    tooltipState:   TooltipStateVars
-
-    # Dialog state
-    # **********************
-    # True if a dialog is currently open.
-    isDialogOpen:   bool
-
-    # Only true when we're in a dialog. This is needed so widgets outside
-    # of the dialog won't register any events.
-    # TODO replace with currInteractionLevel
-    insideDialog:   bool
-
     # Auto-layout
     # ***********
-    autoLayoutParams:  AutoLayoutParams
-    autoLayoutState:   AutoLayoutStateVars
+    autoLayoutParams: AutoLayoutParams
+    autoLayoutState:  AutoLayoutStateVars
 
 
-  DrawState = object
+  DrawOffset = object
     # Origin offset, used for relative coordinate handling (e.g in dialogs)
     ox, oy: float
-
-  # TODO
-  InteractionLevel = enum
-    ilDefault,
-    ilDialog,
-    ilPopup,
-    ilWidget
 
   DrawLayer = enum
     layerDefault,
@@ -610,26 +592,21 @@ proc isActive*(id: ItemId): bool =
 proc setActive*(id: ItemId) =
   g_uiState.activeItem = id
 
-proc isHotAndActive*(id: ItemId): bool =
-  isHot(id) and isActive(id)
-
 proc hasHotItem*(): bool =
   g_uiState.hotItem > 0
 
-proc noActiveItem*(): bool =
+proc hasNoActiveItem*(): bool =
   g_uiState.activeItem == 0
 
 proc hasActiveItem*(): bool =
   g_uiState.activeItem > 0
 
 proc isDialogOpen*(): bool =
-  g_uiState.isDialogOpen
+  g_uiState.dialogOpen
 
 proc isHit*(x, y, w, h: float): bool =
   alias(ui, g_uiState)
-  not ui.focusCaptured and
-    (ui.insideDialog or not ui.isDialogOpen) and
-    mouseInside(x, y, w, h)
+  not ui.focusCaptured and mouseInside(x, y, w, h)
 
 proc winWidth*():  float = g_uiState.winWidth
 proc winHeight*(): float = g_uiState.winHeight
@@ -644,14 +621,16 @@ proc lastmy*(): float = g_uiState.lastmy
 proc hasEvent*(): bool =
   alias(ui, g_uiState)
 
-  template calcHasEvent(): bool =
-    ui.hasEvent and (not ui.eventHandled) and not ui.focusCaptured
+  not ui.focusCaptured and ui.hasEvent and (not ui.eventHandled)
+
+#  template calcHasEvent(): bool =
+#    ui.hasEvent and (not ui.eventHandled) and not ui.focusCaptured
 
   # TODO isn't this a bit hacky?
-  if ui.isDialogOpen:
-    if ui.insideDialog: calcHasEvent()
-    else: false
-  else: calcHasEvent()
+#  if ui.isDialogOpen:
+#    if ui.insideDialog: calcHasEvent()
+#    else: false
+#  else: calcHasEvent()
 
 proc currEvent*(): Event = g_uiState.currEvent
 
@@ -662,27 +641,30 @@ proc mbLeftDown*():   bool = g_uiState.mbLeftDown
 proc mbRightDown*():  bool = g_uiState.mbRightDown
 proc mbMiddleDown*(): bool = g_uiState.mbMiddleDown
 
-proc keyDown*(key: Key): bool =
+proc isKeyDown*(key: Key): bool =
   if key == keyUnknown: false
   else: g_uiState.keyStates[ord(key)]
 
-proc shiftDown*(): bool = keyDown(keyLeftShift)   or keyDown(keyRightShift)
-proc altDown*():   bool = keyDown(keyLeftAlt)     or keyDown(keyRightAlt)
-proc ctrlDown*():  bool = keyDown(keyLeftControl) or keyDown(keyRightControl)
-proc superDown*(): bool = keyDown(keyLeftSuper)   or keyDown(keyRightSuper)
+proc shiftDown*(): bool = isKeyDown(keyLeftShift)   or isKeyDown(keyRightShift)
+proc altDown*():   bool = isKeyDown(keyLeftAlt)     or isKeyDown(keyRightAlt)
+proc ctrlDown*():  bool = isKeyDown(keyLeftControl) or isKeyDown(keyRightControl)
+proc superDown*(): bool = isKeyDown(keyLeftSuper)   or isKeyDown(keyRightSuper)
 
-proc pushDrawState*(ds: DrawState) =
+proc pushDrawOffset*(ds: DrawOffset) =
   alias(ui, g_uiState)
-  ui.drawStateStack.add(ds)
+  ui.drawOffsetStack.add(ds)
 
-proc popDrawState*() =
+proc popDrawOffset*() =
   alias(ui, g_uiState)
-  if ui.drawStateStack.len > 1:
-    discard ui.drawStateStack.pop()
+  if ui.drawOffsetStack.len > 1:
+    discard ui.drawOffsetStack.pop()
 
-proc drawState(): DrawState =
-  alias(ui, g_uiState)
-  ui.drawStateStack[^1]
+proc drawOffset(): DrawOffset =
+  g_uiState.drawOffsetStack[^1]
+
+proc addDrawOffset(x, y: float): (float, float) =
+  let offs = drawOffset()
+  result = (offs.ox + x, offs.oy + y)
 
 # }}}
 # {{{ Keyboard handling
@@ -1315,10 +1297,7 @@ proc textLabel(id:         ItemId,
   alias(ui, g_uiState)
   alias(s, style)
 
-  let
-    ds = drawState()
-    x = x + ds.ox
-    y = y + ds.oy
+  let (x, y) = addDrawOffset(x, y)
 
   addDrawLayer(ui.currentLayer, vg):
     vg.drawLabel(x, y, w, h, padHoriz = 0, label, s.color,
@@ -1412,29 +1391,26 @@ proc button(id:         ItemId,
   alias(ui, g_uiState)
   alias(s, style)
 
-  let
-    ds = drawState()
-    x = x + ds.ox
-    y = y + ds.oy
+  let (x, y) = addDrawOffset(x, y)
 
   # Hit testing
   if isHit(x, y, w, h):
     setHot(id)
-    if not disabled and ui.mbLeftDown and noActiveItem():
+    if not disabled and ui.mbLeftDown and hasNoActiveItem():
       setActive(id)
 
   # LMB released over active widget means it was clicked
-  if not ui.mbLeftDown and isHotAndActive(id):
+  if not ui.mbLeftDown and isHot(id) and isActive(id):
     result = true
 
   addDrawLayer(ui.currentLayer, vg):
     let sw = s.buttonStrokeWidth
     let (x, y, w, h) = snapToGrid(x, y, w, h, sw)
 
-    let state = if disabled: wsDisabled
-      elif isHot(id) and noActiveItem(): wsHover
-      elif isHotAndActive(id): wsActive
-      else: wsNormal
+    let state = if   disabled: wsDisabled
+                elif isHot(id) and hasNoActiveItem(): wsHover
+                elif isHot(id) and isActive(id): wsActive
+                else: wsNormal
 
     let (fillColor, strokeColor, labelColor) =
       case state
@@ -1538,19 +1514,16 @@ proc checkBox(id:         ItemId,
   alias(ui, g_uiState)
   alias(s, style)
 
-  let
-    ds = drawState()
-    x = x + ds.ox
-    y = y + ds.oy
+  let (x, y) = addDrawOffset(x, y)
 
   # Hit testing
   if isHit(x, y, w, w):
     setHot(id)
-    if ui.mbLeftDown and noActiveItem():
+    if ui.mbLeftDown and hasNoActiveItem():
       setActive(id)
 
   # LMB released over active widget means it was clicked
-  active = if not ui.mbLeftDown and isHotAndActive(id): not active
+  active = if not ui.mbLeftDown and isHot(id) and isActive(id): not active
            else: active
 
   active_out = active
@@ -1559,9 +1532,9 @@ proc checkBox(id:         ItemId,
     let sw = s.strokeWidth
     let (x, y, w, _) = snapToGrid(x, y, w, w, sw)
 
-    let state = if isHot(id) and noActiveItem(): wsHover
-      elif isHotAndActive(id): wsActive
-      else: wsNormal
+    let state = if   isHot(id) and hasNoActiveItem(): wsHover
+                elif isHot(id) and isActive(id): wsActive
+                else: wsNormal
 
     var (fillColor, strokeColor, iconColor) =
       if active:
@@ -1870,10 +1843,7 @@ proc radioButtons[T](
   alias(ui, g_uiState)
   alias(rs, ui.radioButtonState)
 
-  let
-    ds = drawState()
-    x = x + ds.ox
-    y = y + ds.oy
+  let (x, y) = addDrawOffset(x, y)
 
   let numButtons = labels.len
 
@@ -1882,7 +1852,7 @@ proc radioButtons[T](
 
   proc setHot() =
     setHot(id)
-    if ui.mbLeftDown and noActiveItem():
+    if ui.mbLeftDown and hasNoActiveItem():
       setActive(id)
       rs.activeItem = hotButton
 
@@ -1922,7 +1892,7 @@ proc radioButtons[T](
     if isHit(x, y, bbWidth, bbHeight) and hotButton > -1: setHot()
 
   # LMB released over active widget means it was clicked
-  if not ui.mbLeftDown and isHotAndActive(id) and
+  if not ui.mbLeftDown and isHot(id) and isActive(id) and
      rs.activeItem == hotButton:
     activeButton = T(hotButton)
 
@@ -1930,9 +1900,9 @@ proc radioButtons[T](
 
   # Draw radio buttons
   proc buttonDrawState(i: Natural): (bool, bool, bool) =
-    let state = if isHot(id) and noActiveItem(): wsHover
-      elif isHotAndActive(id): wsActive
-      else: wsNormal
+    let state = if   isHot(id) and hasNoActiveItem(): wsHover
+                elif isHot(id) and isActive(id): wsActive
+                else: wsNormal
 
     let hover = state == wsHover and hotButton == i
     let active = activeButton.ord == i
@@ -2131,10 +2101,7 @@ proc dropDown[T](id:               ItemId,
   alias(ds, ui.dropDownState)
   alias(s, style)
 
-  let
-    drawState = drawState()
-    x = x + drawState.ox
-    y = y + drawState.oy
+  let (x, y) = addDrawOffset(x, y)
 
   var
     itemListX, itemListY, itemListW, itemListH: float
@@ -2152,7 +2119,7 @@ proc dropDown[T](id:               ItemId,
   if ds.state == dsClosed:
     if isHit(x, y, w, h):
       setHot(id)
-      if not disabled and ui.mbLeftDown and noActiveItem():
+      if not disabled and ui.mbLeftDown and hasNoActiveItem():
         setActive(id)
         ds.state = dsOpenLMBPressed
         ds.activeItem = id
@@ -2230,11 +2197,10 @@ proc dropDown[T](id:               ItemId,
 
   selectedItem_out = selectedItem
 
-  let state =
-    if disabled: wsDisabled
-    elif isHot(id) and noActiveItem(): wsHover
-    elif isHotAndActive(id): wsActive
-    else: wsNormal
+  let state = if disabled: wsDisabled
+              elif isHot(id) and hasNoActiveItem(): wsHover
+              elif isHot(id) and isActive(id): wsActive
+              else: wsNormal
 
   # Drop-down button
   addDrawLayer(ui.currentLayer, vg):
@@ -2421,10 +2387,7 @@ proc horizScrollBar(id:         ItemId,
   alias(sb, ui.scrollBarState)
   alias(s, style)
 
-  let
-    ds = drawState()
-    x = x + ds.ox
-    y = y + ds.oy
+  let (x, y) = addDrawOffset(x, y)
 
   # Calculate current thumb position
   let
@@ -2446,7 +2409,7 @@ proc horizScrollBar(id:         ItemId,
   # Hit testing
   if isHit(x, y, w, h):
     setHot(id)
-    if ui.mbLeftDown and noActiveItem():
+    if ui.mbLeftDown and hasNoActiveItem():
       setActive(id)
 
   let insideThumb = mouseInside(thumbX, y, thumbW, h)
@@ -2561,9 +2524,9 @@ proc horizScrollBar(id:         ItemId,
   addDrawLayer(ui.currentLayer, vg):
     let (bx, by, bw, bh) = (x, y, w, h)
 
-    let state = if isHot(id) and noActiveItem(): wsHover
-      elif isActive(id): wsActive
-      else: wsNormal
+    let state = if   isHot(id) and hasNoActiveItem(): wsHover
+                elif isActive(id): wsActive
+                else: wsNormal
 
     # Draw track
     var sw = s.trackStrokeWidth
@@ -2660,10 +2623,7 @@ proc vertScrollBar(id:         ItemId,
   alias(sb, ui.scrollBarState)
   alias(s, style)
 
-  let
-    ds = drawState()
-    x = x + ds.ox
-    y = y + ds.oy
+  let (x, y) = addDrawOffset(x, y)
 
   # Calculate current thumb position
   let
@@ -2685,7 +2645,7 @@ proc vertScrollBar(id:         ItemId,
   # Hit testing
   if isHit(x, y, w, h):
     setHot(id)
-    if ui.mbLeftDown and noActiveItem():
+    if ui.mbLeftDown and hasNoActiveItem():
       setActive(id)
 
   let insideThumb = mouseInside(x, thumbY, w, thumbH)
@@ -2800,9 +2760,9 @@ proc vertScrollBar(id:         ItemId,
 
     let (bx, by, bw, bh) = (x, y, w, h)
 
-    let state = if isHot(id) and noActiveItem(): wsHover
-      elif isActive(id): wsActive
-      else: wsNormal
+    let state = if   isHot(id) and hasNoActiveItem(): wsHover
+                elif isActive(id): wsActive
+                else: wsNormal
 
     # Draw track
     var sw = s.trackStrokeWidth
@@ -3469,10 +3429,7 @@ proc textField(
   alias(tf, ui.textFieldState)
   alias(s, style)
 
-  let
-    ds = drawState()
-    x = x + ds.ox
-    y = y + ds.oy
+  let (x, y) = addDrawOffset(x, y)
 
   # The text is displayed within this rectangle (used for drawing later)
   let
@@ -3499,7 +3456,7 @@ proc textField(
     # Hit testing
     if isHit(x, y, w, h) or activate or tabActivate:
       setHot(id)
-      if (ui.mbLeftDown and noActiveItem()) or activate or tabActivate:
+      if (ui.mbLeftDown and hasNoActiveItem()) or activate or tabActivate:
         textFieldEnterEditMode(id, text, textBoxX)
         tf.state = tfsEditLMBPressed
 
@@ -3826,7 +3783,7 @@ proc textField(
   addDrawLayer(layer, vg):
     vg.save()
 
-    let state = if isHot(id) and noActiveItem(): wsHover
+    let state = if isHot(id) and hasNoActiveItem(): wsHover
       elif editing: wsActive
       else: wsNormal
 
@@ -4057,10 +4014,7 @@ proc textArea(
   # TODO style param
   let ScrollBarWidth = 12.0
 
-  let
-    ds = drawState()
-    x = x + ds.ox
-    y = y + ds.oy
+  let (x, y) = addDrawOffset(x, y)
 
   # The text is displayed within this rectangle (used for drawing later)
   let
@@ -4130,7 +4084,7 @@ proc textArea(
     # Hit testing
     if isHit(x, y, w - ScrollBarWidth, h) or activate or tabActivate:
       setHot(id)
-      if (ui.mbLeftDown and noActiveItem()) or activate or tabActivate:
+      if (ui.mbLeftDown and hasNoActiveItem()) or activate or tabActivate:
         enterEditMode(id, text, textBoxX)
         ta.state = tasEditEntered
 
@@ -4431,7 +4385,7 @@ proc textArea(
   addDrawLayer(ui.currentLayer, vg):
     vg.save()
 
-    let state = if isHot(id) and noActiveItem(): wsHover
+    let state = if isHot(id) and hasNoActiveItem(): wsHover
       elif editing: wsActive
       else: wsNormal
 
@@ -4546,9 +4500,10 @@ proc textArea(
 
   let sbId = hashId(lastIdString() & ":scrollBar")
 
+  # TODO offset
   vertScrollBar(
     sbId,
-    x+w - ScrollBarWidth - ds.ox, y - ds.oy,
+    x+w - ScrollBarWidth, y,
     ScrollBarWidth, h,
     startVal=0, endVal=endVal,
     ta.displayStartRow,
@@ -4604,10 +4559,7 @@ proc horizSlider(id:         ItemId,
   alias(ui, g_uiState)
   alias(ss, ui.sliderState)
 
-  let
-    ds = drawState()
-    x = x + ds.ox
-    y = y + ds.oy
+  let (x, y) = addDrawOffset(x, y)
 
   const SliderPad = 1
 
@@ -4627,7 +4579,7 @@ proc horizSlider(id:         ItemId,
     setActive(id)
   elif isHit(x, y, w, h):
     setHot(id)
-    if ui.mbLeftDown and noActiveItem():
+    if ui.mbLeftDown and hasNoActiveItem():
       setActive(id)
 
   # New position & value calculation
@@ -4715,9 +4667,9 @@ proc horizSlider(id:         ItemId,
   value_out = value
 
   # Draw slider track
-  let state = if isHot(id) and noActiveItem(): wsHover
-    elif isActive(id): wsActive
-    else: wsNormal
+  let state = if isHot(id) and hasNoActiveItem(): wsHover
+              elif isActive(id): wsActive
+              else: wsNormal
 
   addDrawLayer(ui.currentLayer, vg):
     let fillColor = case state
@@ -4783,10 +4735,7 @@ proc vertSlider(id:         ItemId,
   alias(ui, g_uiState)
   alias(ss, ui.sliderState)
 
-  let
-    ds = drawState()
-    x = x + ds.ox
-    y = y + ds.oy
+  let (x, y) = addDrawOffset(x, y)
 
   const SliderPad = 3
 
@@ -4804,7 +4753,7 @@ proc vertSlider(id:         ItemId,
   # Hit testing
   if isHit(x, y, w, h):
     setHot(id)
-    if ui.mbLeftDown and noActiveItem():
+    if ui.mbLeftDown and hasNoActiveItem():
       setActive(id)
 
   # New position & value calculation
@@ -4845,9 +4794,9 @@ proc vertSlider(id:         ItemId,
   value_out = value
 
   # Draw slider track
-  let state = if isHot(id) and noActiveItem(): wsHover
-    elif isActive(id): wsActive
-    else: wsNormal
+  let state = if isHot(id) and hasNoActiveItem(): wsHover
+              elif isActive(id): wsActive
+              else: wsNormal
 
   let fillColor = case state
     of wsHover: GRAY_HI
@@ -4915,22 +4864,33 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
 
   var color = color_out
 
-  let
-    ds = drawState()
-    x = x + ds.ox
-    y = y + ds.oy
+  let (x, y) = addDrawOffset(x, y)
+
+  # Draw color widget (button or whatever)
+  addDrawLayer(ui.currentLayer, vg):
+    let sw = 0.0
+    let (x, y, w, h) = snapToGrid(x, y, w, h, sw)
+
+    vg.fillColor(color)
+    vg.strokeColor(gray(0.3))
+    vg.strokeWidth(sw)
+
+    vg.beginPath()
+    vg.roundedRect(x, y, w, h, 3)
+    vg.fill()
+    vg.stroke()
+
 
   var popupX, popupY, popupW, popupH: float
 
   if cs.state == cpsClosed:
     if isHit(x, y, w, h):
       setHot(id)
-      if ui.mbLeftDown and noActiveItem():
+      if ui.mbLeftDown and hasNoActiveItem():
         cs.state = cpsOpen
         # Note we're not setting ui.activeItem, that's importat so widget
         # created inside the popup can function normally
         cs.activeItem = id
-        ui.focusCaptured = true
 
   proc closePopup() =
     cs.state = cpsClosed
@@ -4956,20 +4916,6 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
     if insideButton or insidePopup: setHot(id)
     else: closePopup()
 
-  # Draw color widget (button or whatever)
-  addDrawLayer(ui.currentLayer, vg):
-    let sw = 0.0
-    let (x, y, w, h) = snapToGrid(x, y, w, h, sw)
-
-    vg.fillColor(color)
-    vg.strokeColor(gray(0.3))
-    vg.strokeWidth(sw)
-
-    vg.beginPath()
-    vg.roundedRect(x, y, w, h, 3)
-    vg.fill()
-    vg.stroke()
-
 
   if cs.activeItem == id and cs.state == cpsOpen:
     let oldLayer = ui.currentLayer
@@ -4989,11 +4935,11 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
       vg.fill()
       vg.stroke()
 
-    ui.focusCaptured = false
-
-    pushDrawState(
-      DrawState(ox: popupX, oy: popupY)
+    pushDrawOffset(
+      DrawOffset(ox: popupX, oy: popupY)
     )
+
+    ui.focusCaptured = false
 
     ##### WIDGETS START
     var
@@ -5048,7 +4994,7 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
 
     ##### WIDGETS END
 
-    popDrawState()
+    popDrawOffset()
 
     ui.focusCaptured = true
 
@@ -5078,6 +5024,8 @@ template color*(col: var Color) =
 # }}}
 
 # {{{ Dialog
+
+var activeDialog: Natural
 
 type DialogStyle* = ref object
   cornerRadius*:       float
@@ -5113,20 +5061,14 @@ proc beginDialog*(w, h: float, title: string,
   alias(ui, g_uiState)
   alias(s, style)
 
-  assert not ui.insideDialog
+  ui.dialogOpen = true
+  ui.focusCaptured = false
 
   let
     x = floor((ui.winWidth - w) / 2)
     y = floor((ui.winHeight - h) / 2)
 
   ui.currentLayer = layerDialog
-
-  pushDrawState(
-    DrawState(ox: x, oy: y)
-  )
-
-  ui.insideDialog = true
-  ui.isDialogOpen = true
 
   addDrawLayer(ui.currentLayer, vg):
     const TitleBarHeight = 30.0
@@ -5170,21 +5112,25 @@ proc beginDialog*(w, h: float, title: string,
     vg.fillColor(s.titleBarTextColor)
     discard vg.text(x+10.0, y + TitleBarHeight * TextVertAlignFactor, title)
 
+  pushDrawOffset(
+    DrawOffset(ox: x, oy: y)
+  )
+
 
 proc endDialog*() =
   alias(ui, g_uiState)
-  assert ui.insideDialog
 
-  popDrawState()
-  ui.insideDialog = false
+  popDrawOffset()
   ui.currentLayer = layerDefault
+  if ui.dialogOpen:
+    ui.focusCaptured = true
 
 
 proc closeDialog*() =
   alias(ui, g_uiState)
-  assert ui.isDialogOpen
 
-  ui.isDialogOpen = false
+  ui.focusCaptured = false
+  ui.dialogOpen = false
 
 
 # }}}
@@ -5204,10 +5150,7 @@ DefaultScrollViewScrollBarStyle.thumbFillColorActive = gray(0.48)
 template beginScrollView*(x, y, w, h: float) =
   alias(vg, g_nvgContext)
 
-  let
-    ds = drawState()
-    ox = ds.ox + x
-    oy = ds.oy + y
+  let (x, y) = addDrawOffset(x, y)
 
   addDrawLayer(g_uiState.currentLayer, vg):
     vg.save()
@@ -5224,8 +5167,8 @@ template beginScrollView*(x, y, w, h: float) =
 
   let scrollBarVal = getFloatProp(id, PropScrollBarVal)
 
-  pushDrawState(
-    DrawState(ox: ox, oy: oy - scrollBarVal)
+  pushDrawOffset(
+    DrawOffset(ox: ox, oy: oy - scrollBarVal)
   )
 
 # }}}
@@ -5239,7 +5182,7 @@ proc endScrollView*() =
   addDrawLayer(ui.currentLayer, vg):
     vg.restore()
 
-  popDrawState()
+  popDrawOffset()
 
   # TODO style param
   let ScrollViewScrollBarWidth = 14.0
@@ -5321,16 +5264,16 @@ proc menuBar(id:         ItemId,
     for i in 0..<menuPosX.high:
       if ui.mx >= menuPosX[i] and ui.mx < menuPosX[i+1]:
         echo fmt"inside {names[i]}"
-    if ui.mbLeftDown and noActiveItem():
+    if ui.mbLeftDown and hasNoActiveItem():
       setActive(id)
 
   # LMB released over active widget means it was clicked
-#  if not ui.mbLeftDown and isHotAndActive(id):
+#  if not ui.mbLeftDown and isHot(id) and isActive(id):
 #    result = true
 
   # Draw menu bar
-  let state = if isHot(id) and noActiveItem(): wsHover
-    elif isHotAndActive(id): wsActive
+  let state = if isHot(id) and hasNoActiveItem(): wsHover
+    elif isHot(id) and isActive(id): wsActive
     else: wsNormal
 
   let fillColor = case state
@@ -5448,11 +5391,9 @@ proc beginFrame*(winWidth, winHeight: float) =
 
   alias(ui, g_uiState)
 
-  ui.drawStateStack = @[
-    DrawState(ox: 0, oy: 0)
+  ui.drawOffsetStack = @[
+    DrawOffset(ox: 0, oy: 0)
   ]
-
-  ui.insideDialog = false
 
   ui.currentLayer = layerDefault
 
@@ -5496,7 +5437,6 @@ proc beginFrame*(winWidth, winHeight: float) =
       of mbRight:  ui.mbRightDown  = ev.pressed
       of mbMiddle: ui.mbMiddleDown = ev.pressed
       else: discard
-
 
   # Reset hot item
   ui.hotItem = 0
