@@ -96,6 +96,8 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
 
   var lp = layoutParams
   lp.rowWidth = 230
+  lp.labelWidth = 170
+  lp.defaultRowHeight = 20
   koi.setAutoLayoutParams(lp)
 
   if koi.sectionHeader("General", sectionGeneral):
@@ -120,6 +122,7 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
 
     koi.label("Background disabled")
     koi.color(currTheme.widget.bgColorDisabled)
+    koi.endGroup()
 
     koi.beginGroup()
     koi.label("Text")
@@ -169,17 +172,22 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
 
     koi.label("Background unfocused")
     koi.color(currTheme.titleBar.bgColorUnfocused)
+    koi.endGroup()
 
+    koi.beginGroup()
     koi.label("Text")
     koi.color(currTheme.titleBar.textColor)
 
     koi.label("Text unfocused")
     koi.color(currTheme.titleBar.textColorUnfocused)
+    koi.endGroup()
 
     koi.beginGroup()
     koi.label("Modified flag")
     koi.color(currTheme.titleBar.modifiedFlagColor)
+    koi.endGroup()
 
+    koi.beginGroup()
     koi.label("Button")
     koi.color(currTheme.titleBar.buttonColor)
 
@@ -197,13 +205,17 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
 
     koi.label("Text")
     koi.color(currTheme.statusBar.textColor)
+    koi.endGroup()
 
+    koi.beginGroup()
     koi.label("Command background")
     koi.color(currTheme.statusBar.commandBgColor)
 
     koi.label("Command")
     koi.color(currTheme.statusBar.commandColor)
+    koi.endGroup()
 
+    koi.beginGroup()
     koi.label("Coordinates")
     koi.color(currTheme.statusBar.coordsColor)
     koi.endGroup()
@@ -215,9 +227,12 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
 
     koi.label("Button hover")
     koi.color(currTheme.leveldropDown.buttonColorHover)
+    koi.endGroup()
 
+    koi.beginGroup()
     koi.label("Text")
     koi.color(currTheme.leveldropDown.textColor)
+    koi.endGroup()
 
     koi.beginGroup()
     koi.label("Item list")
