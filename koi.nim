@@ -1805,8 +1805,8 @@ let DefaultRadioButtonDrawProc: RadioButtonsDrawProc =
     vg.beginPath()
 
     let cr = s.buttonCornerRadius
-    if   first: vg.roundedRectVarying(bx, y, bw, bh, cr, 0, 0, cr)
-    elif last:  vg.roundedRectVarying(bx, y, bw, bh, 0, cr, cr, 0)
+    if   first: vg.roundedRect(bx, y, bw, bh, cr, 0, 0, cr)
+    elif last:  vg.roundedRect(bx, y, bw, bh, 0, cr, cr, 0)
     else:       vg.rect(bx, y, bw, bh)
 
     vg.fill()
@@ -4851,16 +4851,27 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
 
   # Draw color widget (button or whatever)
   addDrawLayer(ui.currentLayer, vg):
-    let sw = 0.0
-    let (x, y, w, h) = snapToGrid(x, y, w, h, sw)
+    let
+      sw = 1.0
+      (x, y, w, h) = snapToGrid(x, y, w, h, sw)
+      hw = w/2
+      cr = 5.0
 
-    vg.fillColor(color)
-    vg.strokeColor(gray(0.3))
+    vg.strokeColor(gray(0.1))
     vg.strokeWidth(sw)
 
     vg.beginPath()
-    vg.roundedRect(x, y, w, h, 3)
+    vg.fillColor(color.withAlpha(1.0))
+    vg.roundedRect(x,    y, hw, h, cr, 0, 0, cr)
     vg.fill()
+
+    vg.beginPath()
+    vg.fillColor(color)
+    vg.roundedRect(x+hw, y, hw, h, 0, cr, cr, 0)
+    vg.fill()
+
+    vg.beginPath()
+    vg.roundedRect(x, y, w, h, cr)
     vg.stroke()
 
 
@@ -5085,8 +5096,8 @@ proc beginDialog*(w, h: float, title: string,
     # Title bar
     vg.beginPath()
     vg.fillColor(s.titleBarBgColor)
-    vg.roundedRectVarying(x, y, w, TitleBarHeight,
-                          s.cornerRadius, s.cornerRadius, 0, 0)
+    vg.roundedRect(x, y, w, TitleBarHeight,
+                   s.cornerRadius, s.cornerRadius, 0, 0)
     vg.fill()
 
     vg.fontFace("sans-bold")
