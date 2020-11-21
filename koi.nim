@@ -24,17 +24,26 @@ export CursorShape
 
 type ItemId = int64
 
+# {{{ DrawLayer
+#
+type
+  DrawLayer = enum
+    layerDefault,
+    layerDialog,
+    layerPopup,
+    layerWidgetOverlay,
+    layerTooltip,
+    layerGlobalOverlay
+
+# }}}
+
 # {{{ ColorPickerState
 
 type
-  ColorPickerState = enum
-    cpsClosed, cpsOpen
-
   ColorPickerMode = enum
-    cpmRGB, cpmHSV, cpmHex
+    cmRGB, cmHSV, cmHex
 
   ColorPickerStateVars = object
-    state:      ColorPickerState
     mode:       ColorPickerMode
     activeItem: ItemId
 
@@ -50,6 +59,18 @@ type
 
     # Drop-down in open mode, 0 if no drop-down is open currently.
     activeItem: ItemId
+
+# }}}
+# {{{ PopupState
+
+type
+  PopupState = enum
+    psOpenLMBDown, psOpen
+
+  PopupStateVars = object
+    state:     PopupState
+    prevLayer: DrawLayer
+    closed:    bool
 
 # }}}
 # {{{ RadioButtonState
@@ -339,6 +360,7 @@ type
     # Global widget states (per widget type)
     colorPickerState: ColorPickerStateVars
     dropDownState:    DropDownStateVars
+    popupState:       PopupStateVars
     radioButtonState: RadioButtonStateVars
     scrollBarState:   ScrollBarStateVars
     scrollViewState:  ScrollViewStateVars
@@ -358,14 +380,6 @@ type
   DrawOffset = object
     # Origin offset, used for relative coordinate handling (e.g in dialogs)
     ox, oy: float
-
-  DrawLayer = enum
-    layerDefault,
-    layerDialog,
-    layerPopup,
-    layerWidgetOverlay,
-    layerTooltip,
-    layerGlobalOverlay
 
   AutoLayoutParams* = object
     rowWidth*:         float
@@ -1254,6 +1268,82 @@ proc handleAutoLayout(height: float = -1, forceNextRow: bool = false) =
     a.nextItemHeight = h
 
 # }}}
+# }}}
+
+# {{{ Popup
+
+# TODO needed?
+proc closePopup() =
+  alias(ui, g_uiState)
+  alias(ps, ui.popupState)
+
+  ui.focusCaptured = false
+  ps.state = psOpenLMBDown  # just resetting the default state
+  ps.closed = true
+
+
+proc beginPopup(x, y, w, h: float): bool =
+  alias(ui, g_uiState)
+  alias(ps, ui.popupState)
+
+  let (x, y) = addDrawOffset(x, y)
+
+  # Hit testing
+  const hitBorder = 35  # TODO make it configurable
+  let
+    inside = mouseInside(x, y, w, h)
+
+    insideHitBorder = mouseInside(x - hitBorder,   y - hitBorder,
+                                  w + hitBorder*2, h + hitBorder*2)
+
+  if ps.state == psOpenLMBDown:
+    ps.closed = false
+    if not ui.mbLeftDown:
+      ps.state = psOpen
+
+  if not (inside or insideHitBorder) or
+     (ps.state == psOpen and ui.mbLeftDown and not inside):
+    closePopup()
+    result = false
+
+  else:
+    ps.prevLayer = ui.currentLayer
+
+    # Draw popup window
+    addDrawLayer(layerPopup, vg):
+      let sw = 0.0
+      let (x, y, w, h) = snapToGrid(x, y, w, h, sw)
+
+      vg.fillColor(gray(0.1))
+      vg.strokeColor(gray(0.1))
+      vg.strokeWidth(sw)
+
+      vg.beginPath()
+      vg.roundedRect(x, y, w, h, 5)
+      vg.fill()
+      vg.stroke()
+
+    pushDrawOffset(
+      DrawOffset(ox: x, oy: y)
+    )
+
+    ui.focusCaptured = false
+    ui.currentLayer = layerPopup
+
+    result = true
+
+
+proc endPopup() =
+  alias(ui, g_uiState)
+  alias(ps, ui.popupState)
+
+  popDrawOffset()
+
+  # Do nothing closePopup() was called before this
+  if not ps.closed:
+    ui.focusCaptured = true
+    ui.currentLayer = ps.prevLayer
+
 # }}}
 
 # {{{ Label
@@ -3785,8 +3875,6 @@ proc textField(
 
   let editing = tf.activeItem == id
 
-#  let layer = if editing: layerWidgetOverlay else: ui.currentLayer
-
   addDrawLayer(ui.currentLayer, vg):
     vg.save()
 
@@ -4861,9 +4949,14 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
 
   var color = color_out
 
+  let (origX, origY) = (x, y)
   let (x, y) = addDrawOffset(x, y)
 
-  # Draw color widget (button or whatever)
+  if isHit(x, y, w, h):
+    if ui.mbLeftDown and hasNoActiveItem():
+      cs.activeItem = id
+
+  # Draw color widget
   addDrawLayer(ui.currentLayer, vg):
     let
       sw = 1.0
@@ -4889,128 +4982,58 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
     vg.stroke()
 
 
-  var popupX, popupY, popupW, popupH: float
+  if cs.activeItem == id:
+    if not beginPopup(origX, origY+h, w=140, h=242):
+      cs.activeItem = 0
+    else:
+      var
+        x = 12.0
+        y = 120.0
+        w = 140.0 - 24.0
+        h = 19.0
+        labelW = 15.0
 
-  if cs.state == cpsClosed:
-    if isHit(x, y, w, h):
-      setHot(id)
-      if ui.mbLeftDown and hasNoActiveItem():
-        cs.state = cpsOpen
-        # Note we're not setting ui.activeItem, that's importat so widget
-        # created inside the popup can function normally
-        cs.activeItem = id
+        r = color.r.float * 255
+        g = color.g.float * 255
+        b = color.b.float * 255
+        a = color.a.float * 255
 
-  proc closePopup() =
-    cs.state = cpsClosed
-    cs.activeItem = 0
-    ui.focusCaptured = false
+      radioButtons(
+        x, y, w+3, 22,
+        labels = @["RGB", "HSV", "Hex"],
+        cs.mode)
 
-  # Fall-through to avoid a 1-frame delay when opening the popup
-  if cs.activeItem == id and cs.state == cpsOpen:
-    popupX = x
-    popupY = y + h
-    popupW = 160
-    popupH = 250
+      y += 29
+      horizSlider(
+        x, y, w, h,
+        startVal = 0, endVal = 255,
+        r)
+      label(x+7, y, w, h, "R")
 
-    # Hit testing
-    const popupHitBorder = 50
-    let
-      insideButton = mouseInside(x, y, w, h)
-      insidePopup = mouseInside(popupX, popupY, popupW, popupH)
+      y += 18
+      horizSlider(
+        x, y, w, h,
+        startVal = 0, endVal = 255,
+        g)
+      label(x+7, y, w, h, "G")
 
-      insidePopupWithBorder = mouseInside(popupX - popupHitBorder,
-                                          popupY - popupHitBorder,
-                                          popupW + popupHitBorder*2,
-                                          popupH + popupHitBorder*2)
+      y += 18
+      horizSlider(
+        x, y, w, h,
+        startVal = 0, endVal = 255,
+        b)
+      label(x+7, y, w, h, "B")
 
-    if ui.mbLeftDown and not (insideButton or insidePopup): closePopup()
+      y += 26
+      horizSlider(
+        x, y, w, h,
+        startVal = 0, endVal = 255,
+        a)
+      label(x+7, y, w, h, "A")
 
-    if insideButton or insidePopupWithBorder: setHot(id)
-    else: closePopup()
+      color_out = rgba(r.int, g.int, b.int, a.int)
 
-
-  if cs.activeItem == id and cs.state == cpsOpen:
-    let oldLayer = ui.currentLayer
-    ui.currentLayer = layerPopup
-
-    # Draw popup window
-    addDrawLayer(layerPopup, vg):
-      let sw = 0.0
-      let (x, y, w, h) = snapToGrid(popupX, popupY, popupW, popupH, sw)
-
-      vg.fillColor(gray(0.1))
-      vg.strokeColor(gray(0.1))
-      vg.strokeWidth(sw)
-
-      vg.beginPath()
-      vg.roundedRect(x, y, w, h, 5)
-      vg.fill()
-      vg.stroke()
-
-    pushDrawOffset(
-      DrawOffset(ox: popupX, oy: popupY)
-    )
-
-    ui.focusCaptured = false
-
-    ##### WIDGETS START
-    var
-      x = 10.0
-      y = 120.0
-      w = popupW - 20
-      h = 19.0
-      labelW = 15.0
-
-    var
-      r = color.r.float * 255
-      g = color.g.float * 255
-      b = color.b.float * 255
-      a = color.a.float * 255
-
-    let lastId = lastIdString()
-
-    radioButtons(
-      x, y, w, 22,
-      labels = @["RGB", "HSV", "Hex"],
-      cs.mode)
-
-    y += 32
-    label(x, y, w, h, "R")
-    horizSlider(
-      x+labelW, y, w-labelW, h,
-      startVal = 0, endVal = 255,
-      r)
-
-    y += 22
-    label(x, y, w, h, "G")
-    horizSlider(
-      x+labelW, y, w-labelW, h,
-      startVal = 0, endVal = 255,
-      g)
-
-    y += 22
-    label(x, y, w, h, "B")
-    horizSlider(
-      x+labelW, y, w-labelW, h,
-      startVal = 0, endVal = 255,
-      b)
-
-    y += 28
-    label(x, y, w, h, "A")
-    horizSlider(
-      x+labelW, y, w-labelW, h,
-      startVal = 0, endVal = 255,
-      a)
-
-    color_out = rgba(r.int, g.int, b.int, a.int)
-
-    ##### WIDGETS END
-
-    popDrawOffset()
-
-    ui.focusCaptured = true
-
-    ui.currentLayer = oldLayer
+      endPopup()
 
 
 template color*(x, y, w, h: float,
