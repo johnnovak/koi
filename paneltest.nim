@@ -317,7 +317,7 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
   koi.beginScrollView(x=400, y=150, w=300, h=300)
 
   lp = layoutParams
-  lp.rowWidth = 300
+  lp.rowWidth = 270
   koi.setAutoLayoutParams(lp)
 
   if koi.sectionHeader("First section", section1):

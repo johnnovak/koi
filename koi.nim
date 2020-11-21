@@ -2288,7 +2288,8 @@ template dropDown*(
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  dropDown(id, a.x, a.y, a.nextItemHeight, a.nextItemHeight, items, selectedItem, tooltip, disabled, style)
+  dropDown(id, a.x, a.y, a.nextItemWidth, a.nextItemHeight, items,
+           selectedItem, tooltip, disabled, style)
 
   handleAutoLayout()
 
@@ -3770,9 +3771,9 @@ proc textField(
 
   let editing = tf.activeItem == id
 
-  let layer = if editing: layerWidgetOverlay else: ui.currentLayer
+#  let layer = if editing: layerWidgetOverlay else: ui.currentLayer
 
-  addDrawLayer(layer, vg):
+  addDrawLayer(ui.currentLayer, vg):
     vg.save()
 
     let state = if isHot(id) and hasNoActiveItem(): wsHover
@@ -4598,9 +4599,6 @@ proc horizSlider(id:         ItemId,
         ss.valueText = fmt"{value:.6f}"
         trimZeros(ss.valueText)
 
-        ss.textFieldId = hashId(lastIdString() & ":textField")
-        const TextBoxPadX = 8
-        textFieldEnterEditMode(ss.textFieldId, ss.valueText, x + TextBoxPadX)
         ss.editModeItem = id
         showCursor()
       else:
@@ -4623,38 +4621,8 @@ proc horizSlider(id:         ItemId,
         ui.x0 = ui.dx
 
     of ssEditValue:
-      # The textfield will only work correctly if it thinks it's active
-      setActive(ss.textFieldId)
+      discard
 
-      # TODO couldn't we do activate=true here and simplify the code?
-      textField(ss.textFieldId, x, y, w, h, ss.valueText,
-                drawWidget = false)
-
-      if ui.textFieldState.state == tfsDefault:
-        value = try:
-          let f = parseFloat(ss.valueText)
-          if startVal < endVal: clamp(f, startVal, endVal)
-          else:                 clamp(f, endVal, startVal)
-        except: value
-
-        newPosX = calcPosX(value)
-
-        ss.editModeItem = -1
-        ss.state = ssDefault
-
-        # Needed for the tooltips to work correctly
-        setHot(id)
-
-        # The edit field is drawn on the top of everything else; we'll need
-        # to remove it so we can draw the slider correctly
-        # TODO why was this needed???
-#        g_drawLayers.removeLastAdded()
-
-      else:
-        # Reset hot & active to the current item so we won't confuse the
-        # tooltip processing (among other things)
-        setActive(id)
-        setHot(id)
 
   value_out = value
 
@@ -4694,6 +4662,29 @@ proc horizSlider(id:         ItemId,
       let tw = vg.textWidth(valueString)
       discard vg.text(x + w*0.5 - tw*0.5, y + h*TextVertAlignFactor, valueString)
 
+
+  if isActive(id) and ss.state == ssEditValue:
+    rawTextField(x, y, w, h, ss.valueText, activate=true)
+
+    if ui.textFieldState.state == tfsDefault:
+      value = try:
+        let f = parseFloat(ss.valueText)
+        if startVal < endVal: clamp(f, startVal, endVal)
+        else:                 clamp(f, endVal, startVal)
+      except: value
+
+      newPosX = calcPosX(value)
+
+      ss.editModeItem = -1
+      ss.state = ssDefault
+
+      # Needed for the tooltips to work correctly
+      setHot(id)
+
+    else:
+      setActive(id)
+      setHot(id)
+#
   if isHot(id):
     handleTooltip(id, tooltip)
 
@@ -5157,6 +5148,7 @@ proc beginScrollView*(id: ItemId, x, y, w, h: float) =
     vg.intersectScissor(x, y, w-ScrollViewScrollBarWidth, h)
 
     vg.strokeColor(black())
+    vg.strokeWidth(1)
     vg.beginPath()
     vg.rect(x, y, w, h)
     vg.stroke()

@@ -23,6 +23,9 @@ BUGS
 - dropdown: quickly click and move pointer down -> value select (put small
   delay in there, wait a few frames at least)
 
+- slider: when exiting from edit value mode, active (dragging) state hover
+  flashes for 1 frame
+
 
 TODO
 ====
