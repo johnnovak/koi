@@ -80,6 +80,13 @@ type
     clickDir: float
 
 # }}}
+# {{{ ScrollViewState
+
+type
+  ScrollViewStateVars = object
+    activeItem: Natural
+
+# }}}
 # {{{ SliderState
 
 type
@@ -254,13 +261,6 @@ type
     currEvent:      Event
     eventHandled:   bool
 
-    # Key-value storage for arbitrary widget-specific data (JObject).
-    # Keys have the "<id>:<keyname>" format, where <id> is widget's unique
-    # string ID.
-    props:          JsonNode
-    # TODO use a table of object refs instead & cast
-    # TODO rename to frameProps & introduce persistentProps
-
     # Frames left to render; this is decremented in endFrame()
     framesLeft:     Natural
 
@@ -273,9 +273,6 @@ type
     # Set if a widget has captured the focus (e.g. a textfield in edit mode) so
     # all other UI interactions (hovers, tooltips, etc.) should be disabled.
     focusCaptured:  bool
-
-    # TODO current container ID?
-    currScrollViewId: string
 
     tooltipState:     TooltipStateVars
 
@@ -339,13 +336,18 @@ type
     # Widget-specific states
     # **********************
 
+    # Global widget states (per widget type)
     colorPickerState: ColorPickerStateVars
     dropDownState:    DropDownStateVars
     radioButtonState: RadioButtonStateVars
     scrollBarState:   ScrollBarStateVars
+    scrollViewState:  ScrollViewStateVars
     sliderState:      SliderStateVars
     textAreaState:    TextAreaStateVars
     textFieldState:   TextFieldStateVars
+
+    # Per-instance data storage for widgets that require it (e.g. ScrollView)
+    itemState:        Table[ItemId, ref RootObj]
 
     # Auto-layout
     # ***********
@@ -560,15 +562,6 @@ proc generateId*(filename: string, line: int, id: string): ItemId =
   hashId(idString)
 
 proc lastIdString*(): string = g_lastIdString
-
-template mkPropName*(id, propName: string): string =
-  id & ":" & propName
-
-proc setProp*(id, propName: string, f: float) =
-  g_uiState.props[mkPropName(id, propName)] = %f
-
-proc getFloatProp*(id, propName: string): float =
-  g_uiState.props{mkPropName(id, propName)}.getFloat()
 
 proc setFramesLeft*(n: Natural = 5) =
   alias(ui, g_uiState)
@@ -1694,13 +1687,12 @@ template sectionHeader*(
 
   alias(ui, g_uiState)
   alias(a, ui.autoLayoutState)
+  alias(ap, ui.autoLayoutParams)
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, label)
 
-  let viewWidth = getFloatProp(ui.currScrollViewId, PropViewWidth)
-
-  let result = sectionHeader(id, a.x, a.y, viewWidth, a.nextItemHeight,
+  let result = sectionHeader(id, a.x, a.y, ap.rowWidth, a.nextItemHeight,
                              label, expanded, tooltip, style)
 
   handleAutoLayout(forceNextRow=true)
@@ -5146,30 +5138,48 @@ DefaultScrollViewScrollBarStyle.thumbFillColor = gray(0.422)
 DefaultScrollViewScrollBarStyle.thumbFillColorHover = gray(0.54)
 DefaultScrollViewScrollBarStyle.thumbFillColorActive = gray(0.48)
 
+type ScrollViewState = ref object of RootObj
+  x, y, w, h: float
+  viewStartY: float
+
+# TODO style param
+let ScrollViewScrollBarWidth = 14.0
+
 # {{{ beginScrollView*()
-template beginScrollView*(x, y, w, h: float) =
+proc beginScrollView*(id: ItemId, x, y, w, h: float) =
   alias(vg, g_nvgContext)
+  alias(ui, g_uiState)
 
   let (x, y) = addDrawOffset(x, y)
 
-  addDrawLayer(g_uiState.currentLayer, vg):
+  addDrawLayer(ui.currentLayer, vg):
     vg.save()
-    vg.intersectScissor(ox, oy, w, h)
+    vg.intersectScissor(x, y, w-ScrollViewScrollBarWidth, h)
 
-  let i = instantiationInfo(fullPaths=true)
-  let id = mkIdString(i.filename, i.line, "")
-  g_uiState.currScrollViewId = id
+    vg.strokeColor(black())
+    vg.beginPath()
+    vg.rect(x, y, w, h)
+    vg.stroke()
 
-  setProp(id, PropViewX, x)
-  setProp(id, PropViewY, y)
-  setProp(id, PropViewWidth, w)
-  setProp(id, PropViewHeight, h)
+  ui.scrollViewState.activeItem = id
 
-  let scrollBarVal = getFloatProp(id, PropScrollBarVal)
+  discard ui.itemState.hasKeyOrPut(id,
+    ScrollViewState(x: x, y: y, w: w, h: h)
+  )
+  var ss = cast[ScrollViewState](ui.itemState[id])
 
   pushDrawOffset(
-    DrawOffset(ox: ox, oy: oy - scrollBarVal)
+    DrawOffset(ox: x, oy: y - ss.viewStartY)
   )
+
+  ui.itemState[id] = ss
+
+
+template beginScrollView*(x, y, w, h: float) =
+  let i = instantiationInfo(fullPaths=true)
+  let id = generateId(i.filename, i.line, "")
+
+  beginScrollView(id, x, y, w, h)
 
 # }}}
 # {{{ endScrollView*()
@@ -5178,58 +5188,53 @@ proc endScrollView*() =
   alias(vg, g_nvgContext)
   alias(a, ui.autoLayoutState)
 
-  # TODO ordering problem...
   addDrawLayer(ui.currentLayer, vg):
     vg.restore()
 
   popDrawOffset()
 
-  # TODO style param
-  let ScrollViewScrollBarWidth = 14.0
-
   # TODO make this configurable
   const ScrollSensitivity = if defined(macosx): 10 else: 40
 
-  let id = ui.currScrollViewId
-  let
-    x = getFloatProp(id, PropViewX)
-    y = getFloatProp(id, PropViewY)
-    w = getFloatProp(id, PropViewWidth)
-    h = getFloatProp(id, PropViewHeight)
+  let id = ui.scrollViewState.activeItem
+  var ss = cast[ScrollViewState](ui.itemState[id])
 
-  var scrollBarVal = getFloatProp(id, PropScrollBarVal)
+  var viewStartY = ss.viewStartY
 
-  let visibleHeight = h
+  let visibleHeight = ss.h
   let contentHeight = a.yNoPad
 
   if contentHeight > visibleHeight:
-
     let thumbSize = visibleHeight *
                     ((contentHeight - visibleHeight) / contentHeight)
 
     let endVal = contentHeight - visibleHeight
 
-    if isHit(x, y, w, h):
+    if isHit(ss.x, ss.y, ss.w, ss.h):
       if hasEvent() and ui.currEvent.kind == ekScroll:
-        scrollBarVal -= ui.currEvent.oy * ScrollSensitivity
+        viewStartY -= ui.currEvent.oy * ScrollSensitivity
         ui.eventHandled = true
 
-    scrollBarVal = scrollBarVal.clamp(0, endVal)
+    viewStartY = viewStartY.clamp(0, endVal)
 
     let sbId = hashId(lastIdString() & ":scrollBar")
 
     vertScrollBar(
       sbId,
-      x=(x + w - ScrollViewScrollBarWidth), y=y,
+      x=(ss.x + ss.w - ScrollViewScrollBarWidth), y=ss.y,
       w=ScrollViewScrollBarWidth, h=visibleHeight,
       startVal=0, endVal=endVal,
-      scrollBarVal,
+      viewStartY,
       thumbSize=thumbSize, clickStep=20,
       style=DefaultScrollViewScrollBarStyle)
-  else:
-    scrollBarVal = 0
 
-  setProp(id, PropScrollBarVal, scrollBarVal)
+  else:
+    viewStartY = 0
+
+  ss.viewStartY = viewStartY
+  ui.itemState[id] = ss
+
+  ui.scrollViewState.activeItem = 0
 
 # }}}
 
@@ -5372,8 +5377,6 @@ proc init*(nvg: NVGContext) =
   win.lockKeyMods = true
 
   glfw.swapInterval(1)
-
-  g_uiState.props = newJObject()
 
 # }}}
 # {{{ deinit*()

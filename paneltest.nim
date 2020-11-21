@@ -95,7 +95,7 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
   koi.beginScrollView(x=100, y=100, w=250, h=600)
 
   var lp = layoutParams
-  lp.rowWidth = 250
+  lp.rowWidth = 230
   koi.setAutoLayoutParams(lp)
 
   if koi.sectionHeader("General", sectionGeneral):

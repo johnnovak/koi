@@ -1,1 +1,1 @@
-nim c -r --passL:-mwindows -D:glfwStaticLib -D:nvgGL3 test
+nim c -r -d:release --passL:-mwindows -D:glfwStaticLib -D:nvgGL3 test
