@@ -4916,12 +4916,16 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
     const popupHitBorder = 50
     let
       insideButton = mouseInside(x, y, w, h)
-      insidePopup = mouseInside(popupX - popupHitBorder,
-                                popupY - popupHitBorder,
-                                popupW + popupHitBorder*2,
-                                popupH + popupHitBorder*2)
+      insidePopup = mouseInside(popupX, popupY, popupW, popupH)
 
-    if insideButton or insidePopup: setHot(id)
+      insidePopupWithBorder = mouseInside(popupX - popupHitBorder,
+                                          popupY - popupHitBorder,
+                                          popupW + popupHitBorder*2,
+                                          popupH + popupHitBorder*2)
+
+    if ui.mbLeftDown and not (insideButton or insidePopup): closePopup()
+
+    if insideButton or insidePopupWithBorder: setHot(id)
     else: closePopup()
 
 
