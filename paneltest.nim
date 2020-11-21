@@ -49,11 +49,11 @@ var
 
 let layoutParams = AutoLayoutParams(
   rowWidth:         300.0,
-  labelWidth:       180.0,
+  labelWidth:       170.0,
   itemsPerRow:      2,
-  rowPad:           16.0,
-  rowGroupPad:      6.0,
-  defaultRowHeight: 22.0
+  rowPad:           4.0,
+  rowGroupPad:      12.0,
+  defaultRowHeight: 20.0
 )
 
 ##############################################################################
@@ -96,8 +96,6 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
 
   var lp = layoutParams
   lp.rowWidth = 230
-  lp.labelWidth = 170
-  lp.defaultRowHeight = 20
   koi.setAutoLayoutParams(lp)
 
   if koi.sectionHeader("General", sectionGeneral):

@@ -1203,8 +1203,8 @@ const DefaultAutoLayoutParams = AutoLayoutParams(
   rowWidth:         300.0,
   labelWidth:       180.0,
   itemsPerRow:      2,
-  rowPad:           22.0,
-  rowGroupPad:      8.0,
+  rowPad:           6.0,
+  rowGroupPad:      18.0,
   defaultRowHeight: 22.0
 )
 
@@ -1225,7 +1225,7 @@ proc endGroup*() =
   alias(a, g_uiState.autoLayoutState)
   alias(ap, g_uiState.autoLayoutParams)
 
-  a.y += max(ap.rowPad - ap.rowGroupPad, 0)
+  a.y += ap.rowGroupPad
   a.insideGroup = false
 
 # }}}
@@ -1245,7 +1245,7 @@ proc handleAutoLayout(height: float = -1, forceNextRow: bool = false) =
 
     a.y += h
     a.yNoPad = a.y
-    a.y += (if a.insideGroup: ap.rowGroupPad else: ap.rowPad)
+    a.y += (if a.insideGroup: ap.rowPad else: ap.rowGroupPad)
 
   # TODO this only works for the default 2-column layout
   else:
@@ -1652,7 +1652,21 @@ proc sectionHeader(id:           ItemId,
   alias(ui, g_uiState)
   alias(s, style)
 
+  alias(ui, g_uiState)
+  alias(s, style)
+
+  let (ox, oy) = addDrawOffset(x, y)
+
   let buttonWidth = h
+
+  addDrawLayer(ui.currentLayer, vg):
+    let (x, y, w, h) = snapToGrid(ox, oy, w, h, 0)
+
+    vg.fillColor(gray(0.2))
+    vg.beginPath()
+    vg.rect(x, y-2, w, h+2)
+    vg.fill()
+
 
   let cbId = hashId(lastIdString() & ":checkBox")
   checkBox(cbId, x, y, buttonWidth, expanded_out, tooltip,
