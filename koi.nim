@@ -462,7 +462,7 @@ const
 
 # {{{ Utils
 
-func snapToGrid(x, y, w, h, sw: float): (float, float, float, float) =
+func snapToGrid*(x, y, w, h, sw: float): (float, float, float, float) =
   let s = (sw mod 2) / 2
   let
     x = x - s
@@ -511,6 +511,47 @@ proc drawLabel(vg: NVGContext, x, y, w, h, padHoriz: float,
 
   vg.restore()
 
+
+# }}}
+# {{{ rightClippedRoundedRect*()
+proc rightClippedRoundedRect*(vg: NVGContext, x, y, w, h, r, clipW: float) =
+  alias(vg, g_nvgContext)
+
+  vg.beginPath()
+
+  if clipW < r:
+    let da = arccos((r - clipW) / r)
+    vg.arc(x+r, y+r, r, PI, PI + da, pwCW)
+    vg.arc(x+r, y+h-r, r, PI - da, PI, pwCW)
+    vg.closePath()
+
+  elif clipW < r*2:
+    vg.arc(x+r, y+r, r, PI, 1.5*PI, pwCW)
+
+    # end cap
+    vg.lineTo(x+clipW, y)
+    vg.lineTo(x+clipW, y+h)
+    vg.lineTo(x+r, y+h)
+
+    vg.arc(x+r, y+h-r, r, PI*0.5, PI, pwCW)
+    vg.closePath()
+
+  elif clipW > w-r:
+    vg.arc(x+r, y+r, r, PI, 1.5*PI, pwCW)
+    vg.lineTo(x+w-r, y)
+
+    # end cap
+    let dx = clipW - (w-r)
+    var da = arccos(dx / r)
+    vg.arc(x+w-r, y+r, r, 1.5*PI, 1.5*PI + (PI*0.5-da), pwCW)
+    vg.arc(x+w-r, y+h-r, r, da, PI*0.5, pwCW)
+
+    vg.lineTo(x+r, y+h)
+    vg.arc(x+r, y+h-r, r, PI*0.5, PI, pwCW)
+    vg.closePath()
+
+  else:
+    vg.roundedRect(x, y, clipW, h, r, 0, 0, r)
 
 # }}}
 
@@ -4636,6 +4677,7 @@ template textArea*(
 # {{{ Slider
 
 # TODO add slider style
+# TODO snap to grid
 
 # {{{ horizSlider
 
@@ -4746,16 +4788,18 @@ proc horizSlider(id:         ItemId,
 
     if not (ss.editModeItem == id and ss.state == ssEditValue):
       # Draw slider value bar
-      let sliderColor = case state
-        of wsHover:  GRAY_LOHI
-        of wsActive: HILITE
-        else:        GRAY_LO
+      if value > 0:
+        let sliderColor = case state
+          of wsHover:  GRAY_LOHI
+          of wsActive: HILITE
+          else:        GRAY_LO
 
-      vg.beginPath()
-      vg.roundedRect(x + SliderPad, y + SliderPad,
-                     newPosX - x - SliderPad, h - SliderPad*2, 3)
-      vg.fillColor(sliderColor)
-      vg.fill()
+        vg.beginPath()
+        vg.rightClippedRoundedRect(x + SliderPad, y + SliderPad,
+                                   w - SliderPad*2, h - SliderPad*2, r=3,
+                                   clipW=(newPosX - x - SliderPad))
+        vg.fillColor(sliderColor)
+        vg.fill()
 
       # Draw slider text
       vg.setFont(13.0, name="sans")

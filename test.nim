@@ -347,7 +347,6 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
   koi.textArea(
     650, 300, 300, 225, textAreaVal1, tooltip = "Text area 1")
 
-
   # Menu
 
   x = 70.0
