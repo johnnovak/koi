@@ -4696,6 +4696,7 @@ proc horizSlider(id:         ItemId,
   alias(ui, g_uiState)
   alias(ss, ui.sliderState)
 
+  let (ox, oy) = (x, y)
   let (x, y) = addDrawOffset(x, y)
 
   const SliderPad = 1
@@ -4810,7 +4811,7 @@ proc horizSlider(id:         ItemId,
 
 
   if isActive(id) and ss.state == ssEditValue:
-    rawTextField(x, y, w, h, ss.valueText, activate=true)
+    rawTextField(ox, oy, w, h, ss.valueText, activate=true)
 
     if ui.textFieldState.state == tfsDefault:
       value = try:
@@ -4819,6 +4820,7 @@ proc horizSlider(id:         ItemId,
         else:                 clamp(f, endVal, startVal)
       except: value
 
+      value_out = value
       newPosX = calcPosX(value)
 
       ss.editModeItem = -1
