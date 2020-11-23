@@ -252,6 +252,11 @@ type WidgetState* = enum
   wsNormal, wsHover, wsActive, wsDisabled
 
 # }}}
+# {{{ WidgetGrouping
+type WidgetGrouping = enum
+  wgNone, wgStart, wgMiddle, wgEnd
+
+# }}}
 
 # {{{ UIState
 
@@ -514,7 +519,9 @@ proc drawLabel(vg: NVGContext, x, y, w, h, padHoriz: float,
 
 # }}}
 # {{{ rightClippedRoundedRect*()
-proc rightClippedRoundedRect*(vg: NVGContext, x, y, w, h, r, clipW: float) =
+proc rightClippedRoundedRect*(vg: NVGContext, x, y, w, h, r, clipW: float,
+                              grouping: WidgetGrouping = wgNone) =
+
   alias(vg, g_nvgContext)
 
   vg.beginPath()
@@ -4674,6 +4681,8 @@ type SliderStyle* = ref object
   trackFillColor*:         Color
   trackFillColorHover*:    Color
   trackFillColorActive*:   Color
+  valuePrecision:          Natural
+  valueCornerRadius*:      float
   valueColor*:             Color
   valueColorHover*:        Color
   valueColorActive*:       Color
@@ -4695,6 +4704,8 @@ var DefaultSliderStyle = SliderStyle(
   trackFillColor         : GRAY_MID,
   trackFillColorHover    : GRAY_HI,
   trackFillColorActive   : GRAY_MID,
+  valuePrecision         : 3,
+  valueCornerRadius      : 3.0,
   valueColor             : GRAY_LO,
   valueColorHover        : GRAY_LOHI,
   valueColorActive       : HILITE,
@@ -4713,7 +4724,8 @@ proc horizSlider(id:         ItemId,
                  endVal:     float,
                  value_out:  var float,
                  tooltip:    string = "",
-                 style:      SliderStyle = DefaultSliderStyle) =
+                 style:      SliderStyle = DefaultSliderStyle,
+                 grouping:   WidgetGrouping = wgNone) =
 
   var value = value_out
 
@@ -4803,10 +4815,6 @@ proc horizSlider(id:         ItemId,
                 elif isActive(id): wsActive
                 else: wsNormal
 
-    let fillColor = case state
-      of wsHover: GRAY_HI
-      else:       GRAY_MID
-
     var sw = s.trackStrokeWidth
     var (x, y, w, h) = snapToGrid(x, y, w, h, sw)
 
@@ -4828,30 +4836,53 @@ proc horizSlider(id:         ItemId,
     vg.strokeWidth(sw)
 
     # Draw track background
+    proc drawTrackShape() =
+      let cr = s.trackCornerRadius
+      case grouping
+      of wgNone:   vg.roundedRect(x, y, w, h, cr)
+      of wgStart:  vg.roundedRect(x, y, w, h, cr, cr, 0, 0)
+      of wgMiddle: vg.rect(x, y, w, h)
+      of wgEnd:    vg.roundedRect(x, y, w, h, 0, 0, cr, cr)
+
     vg.beginPath()
-    vg.roundedRect(x, y, w, h, s.trackCornerRadius)
+    drawTrackShape()
     vg.fill()
 
     # Draw value
     if not (ss.editModeItem == id and ss.state == ssEditValue):
       if value > 0:
         vg.beginPath()
-        vg.rightClippedRoundedRect(x + s.trackPad,   y + s.trackPad,
-                                   w - s.trackPad*2, h - s.trackPad*2, r=3,
-                                   clipW=(newPosX - x - s.trackPad))
+
+        let
+          cr = s.valueCornerRadius
+          vx = x + s.trackPad
+          vy = y + s.trackPad
+          vw = w - s.trackPad*2
+          vh = h - s.trackPad*2
+          clipW = round(newPosX - x - s.trackPad)
+
+        case grouping
+        of wgNone:
+          vg.rightClippedRoundedRect(vx, vy, vw, vh, cr, clipW, wgNone)
+        of wgStart:
+          vg.rightClippedRoundedRect(vx, vy, vw, vh, cr, clipW, wgStart)
+        of wgMiddle:
+          vg.rect(x, y, w, h)
+        of wgEnd:
+          vg.rightClippedRoundedRect(vx, vy, vw, vh, cr, clipW, wgEnd)
+
         vg.fillColor(valueColor)
         vg.fill()
 
       # Draw slider text
-      let valueString = fmt"{value:.3f}"
+      let valueString = value.formatFloat(ffDecimal, s.valuePrecision)
 
       vg.drawLabel(x, y, w, h, s.labelPadHoriz, valueString, labelColor,
                    s.labelFontSize, s.labelFontFace, s.labelAlign)
 
-
     # Draw track outline
     vg.beginPath()
-    vg.roundedRect(x, y, w, h, s.trackCornerRadius)
+    drawTrackShape()
     vg.stroke()
 
 
@@ -5152,8 +5183,6 @@ template color*(col: var Color) =
 # }}}
 
 # {{{ Dialog
-
-var activeDialog: Natural
 
 type DialogStyle* = ref object
   cornerRadius*:       float
