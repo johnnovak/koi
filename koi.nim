@@ -1165,6 +1165,9 @@ proc handleTooltip(id: ItemId, tooltip: string) =
 proc drawTooltip(x, y: float, text: string, alpha: float = 1.0) =
   alias(vg, g_nvgContext)
 
+  # TODO make visual parameters configurable
+  # TODO multi-line support
+  # TODO auto-positioning close to edges
   addDrawLayer(layerTooltip, vg):
     let
       w = 150.0
@@ -1413,10 +1416,10 @@ proc getDefaultLabelStyle*(): LabelStyle =
 proc setDefaultLabelStyle*(style: LabelStyle) =
   DefaultLabelStyle = style.deepCopy
 
-proc textLabel(id:         ItemId,
-               x, y, w, h: float,
-               label:      string,
-               style:      LabelStyle) =
+
+proc label*(x, y, w, h: float,
+           labelText:  string,
+           style:      LabelStyle = DefaultLabelStyle) =
 
   alias(ui, g_uiState)
   alias(s, style)
@@ -1424,31 +1427,15 @@ proc textLabel(id:         ItemId,
   let (x, y) = addDrawOffset(x, y)
 
   addDrawLayer(ui.currentLayer, vg):
-    vg.drawLabel(x, y, w, h, padHoriz = 0, label, s.color,
+    vg.drawLabel(x, y, w, h, padHoriz = 0, labelText, s.color,
                  s.fontSize, s.fontFace, s.align, s.multiLine, s.lineHeight)
 
 
-template label*(x, y, w, h: float,
-                label:      string,
-                style:      LabelStyle = DefaultLabelStyle) =
-
-  let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
-
-  textLabel(id, x, y, w, h, label, style)
-
-
-template label*(label: string,
-                style: LabelStyle = DefaultLabelStyle) =
-
+proc label*(labelText: string, style: LabelStyle = DefaultLabelStyle) =
   alias(ui, g_uiState)
   alias(a, ui.autoLayoutState)
 
-  let
-    i = instantiationInfo(fullPaths=true)
-    id = generateId(i.filename, i.line, "")
-
-  textLabel(id, a.x, a.y, a.nextItemWidth, a.nextItemHeight, label, style)
+  label(a.x, a.y, a.nextItemWidth, a.nextItemHeight, labelText, style)
 
   handleAutoLayout()
 
@@ -1783,9 +1770,6 @@ proc sectionHeader(id:           ItemId,
   alias(ui, g_uiState)
   alias(s, style)
 
-  alias(ui, g_uiState)
-  alias(s, style)
-
   let (ox, oy) = addDrawOffset(x, y)
 
   let buttonWidth = h
@@ -1803,7 +1787,9 @@ proc sectionHeader(id:           ItemId,
   checkBox(cbId, x, y, buttonWidth, expanded_out, tooltip,
            SectionHeaderCheckboxStyle)
 
-  textLabel(cbId, x+buttonWidth, y, w-buttonWidth, h, label, DefaultLabelStyle)
+  alias(vg, g_nvgContext)
+  vg.drawLabel(x+buttonWidth, y, w-buttonWidth, h, padHoriz=0, label,
+               color=white(), fontSize=13.0, fontFace="sans", align=haLeft)
 
   result = expanded_out
 
@@ -2666,7 +2652,6 @@ proc horizScrollBar(id:         ItemId,
                 elif isActive(id): wsActive
                 else: wsNormal
 
-    # Draw track
     var sw = s.trackStrokeWidth
     var (x, y, w, h) = snapToGrid(x, y, w, h, sw)
 
@@ -2687,6 +2672,7 @@ proc horizScrollBar(id:         ItemId,
          s.thumbFillColorActive, s.thumbStrokeColorActive,
          s.labelColorActive)
 
+    # Draw track
     vg.fillColor(trackFillColor)
     vg.strokeColor(trackStrokeColor)
     vg.strokeWidth(sw)
@@ -4676,17 +4662,58 @@ template textArea*(
 
 # {{{ Slider
 
-# TODO add slider style
-# TODO snap to grid
-
 # {{{ horizSlider
+
+type SliderStyle* = ref object
+  trackCornerRadius*:      float
+  trackPad:                float
+  trackStrokeWidth*:       float
+  trackStrokeColor*:       Color
+  trackStrokeColorHover*:  Color
+  trackStrokeColorActive*: Color
+  trackFillColor*:         Color
+  trackFillColorHover*:    Color
+  trackFillColorActive*:   Color
+  valueColor*:             Color
+  valueColorHover*:        Color
+  valueColorActive*:       Color
+  labelPadHoriz*:          float
+  labelFontSize*:          float
+  labelFontFace*:          string
+  labelAlign*:             HorizontalAlign
+  labelColor*:             Color
+  labelColorHover*:        Color
+  labelColorActive*:       Color
+
+var DefaultSliderStyle = SliderStyle(
+  trackCornerRadius      : 5,
+  trackPad:                3,
+  trackStrokeWidth       : 0,
+  trackStrokeColor       : black(),
+  trackStrokeColorHover  : black(),
+  trackStrokeColorActive : black(),
+  trackFillColor         : GRAY_MID,
+  trackFillColorHover    : GRAY_HI,
+  trackFillColorActive   : GRAY_MID,
+  valueColor             : GRAY_LO,
+  valueColorHover        : GRAY_LOHI,
+  valueColorActive       : HILITE,
+  labelPadHoriz          : 5.0,
+  labelFontSize          : 14.0,
+  labelFontFace          : "sans-bold",
+  labelAlign             : haCenter,
+  labelColor             : white(),
+  labelColorHover        : white(),
+  labelColorActive       : white()
+)
 
 proc horizSlider(id:         ItemId,
                  x, y, w, h: float,
                  startVal:   float,
                  endVal:     float,
                  value_out:  var float,
-                 tooltip:    string = "") =
+                 tooltip:    string = "",
+                 style:      SliderStyle = DefaultSliderStyle) =
 
   var value = value_out
 
@@ -4695,15 +4722,14 @@ proc horizSlider(id:         ItemId,
 
   alias(ui, g_uiState)
   alias(ss, ui.sliderState)
+  alias(s, style)
 
   let (ox, oy) = (x, y)
   let (x, y) = addDrawOffset(x, y)
 
-  const SliderPad = 1
-
   let
-    posMinX = x + SliderPad
-    posMaxX = x + w - SliderPad
+    posMinX = x + s.trackPad
+    posMaxX = x + w - s.trackPad
 
   # Calculate current slider position
   proc calcPosX(val: float): float =
@@ -4771,45 +4797,65 @@ proc horizSlider(id:         ItemId,
 
   value_out = value
 
-  # Draw slider track
-  let state = if isHot(id) and hasNoActiveItem(): wsHover
-              elif isActive(id): wsActive
-              else: wsNormal
-
+  # Draw slider
   addDrawLayer(ui.currentLayer, vg):
+    let state = if isHot(id) and hasNoActiveItem(): wsHover
+                elif isActive(id): wsActive
+                else: wsNormal
+
     let fillColor = case state
       of wsHover: GRAY_HI
       else:       GRAY_MID
 
-    # Draw slider background
+    var sw = s.trackStrokeWidth
+    var (x, y, w, h) = snapToGrid(x, y, w, h, sw)
+
+    let (trackFillColor, trackStrokeColor,
+         valueColor, labelColor) =
+      case state
+      of wsNormal, wsDisabled:
+        (s.trackFillColor, s.trackStrokeColor,
+         s.valueColor, s.labelColor)
+      of wsHover:
+        (s.trackFillColorHover, s.trackStrokeColorHover,
+         s.valueColorHover, s.labelColorHover)
+      of wsActive:
+        (s.trackFillColorActive, s.trackStrokeColorActive,
+         s.valueColorActive, s.labelColorActive)
+
+    vg.fillColor(trackFillColor)
+    vg.strokeColor(trackStrokeColor)
+    vg.strokeWidth(sw)
+
+    # Draw track background
     vg.beginPath()
-    vg.roundedRect(x, y, w, h, 3)
-    vg.fillColor(fillColor)
+    vg.roundedRect(x, y, w, h, s.trackCornerRadius)
     vg.fill()
 
+    # Draw value
     if not (ss.editModeItem == id and ss.state == ssEditValue):
-      # Draw slider value bar
       if value > 0:
-        let sliderColor = case state
-          of wsHover:  GRAY_LOHI
-          of wsActive: HILITE
-          else:        GRAY_LO
-
         vg.beginPath()
-        vg.rightClippedRoundedRect(x + SliderPad, y + SliderPad,
-                                   w - SliderPad*2, h - SliderPad*2, r=3,
-                                   clipW=(newPosX - x - SliderPad))
-        vg.fillColor(sliderColor)
+        vg.rightClippedRoundedRect(x + s.trackPad,   y + s.trackPad,
+                                   w - s.trackPad*2, h - s.trackPad*2, r=3,
+                                   clipW=(newPosX - x - s.trackPad))
+        vg.fillColor(valueColor)
         vg.fill()
 
       # Draw slider text
-      vg.setFont(13.0, name="sans")
-      vg.fillColor(white())
-      let valueString = $value.int
-      let tw = vg.textWidth(valueString)
-      discard vg.text(x + w*0.5 - tw*0.5, y + h*TextVertAlignFactor, valueString)
+      let valueString = fmt"{value:.3f}"
+
+      vg.drawLabel(x, y, w, h, s.labelPadHoriz, valueString, labelColor,
+                   s.labelFontSize, s.labelFontFace, s.labelAlign)
 
 
+    # Draw track outline
+    vg.beginPath()
+    vg.roundedRect(x, y, w, h, s.trackCornerRadius)
+    vg.stroke()
+
+
+  # Handle text field edit mode
   if isActive(id) and ss.state == ssEditValue:
     rawTextField(ox, oy, w, h, ss.valueText, activate=true)
 
@@ -4832,7 +4878,7 @@ proc horizSlider(id:         ItemId,
     else:
       setActive(id)
       setHot(id)
-#
+
   if isHot(id):
     handleTooltip(id, tooltip)
 
@@ -4841,12 +4887,13 @@ template horizSlider*(x, y, w, h: float,
                       startVal:   float = 0.0,
                       endVal:     float = 1.0,
                       value:      float,
-                      tooltip:    string = "") =
+                      tooltip:    string = "",
+                      style:      SliderStyle = DefaultSliderStyle) =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  horizSlider(id, x, y, w, h, startVal, endVal, value, tooltip)
+  horizSlider(id, x, y, w, h, startVal, endVal, value, tooltip, style)
 
 # }}}
 # {{{ vertSlider
