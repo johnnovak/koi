@@ -31,6 +31,7 @@ var currTheme = loadTheme("../gridmonger/themes/Default.cfg")
 
 var
   themeName = "Default"
+  themeAuthor = "chaos"
 
   section1 = true
   section2 = true
@@ -102,6 +103,9 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
     koi.beginGroup()
     koi.label("Theme name")
     koi.textfield(themeName)
+
+    koi.label("Theme author")
+    koi.textfield(themeAuthor)
 
     koi.label("Background")
     koi.color(currTheme.general.backgroundColor)

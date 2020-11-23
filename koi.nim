@@ -3580,7 +3580,7 @@ proc textField(
 
   var tabActivate = false
 
-  if tf.state == tfsDefault:
+  if not ui.focusCaptured and tf.state == tfsDefault:
     if tf.activateNext and tf.lastActiveItem == tf.prevItem and
        id != tf.prevItem:  # exit editing textfield if there's just one
       tf.activateNext = false
@@ -4206,7 +4206,7 @@ proc textArea(
 
   var tabActivate = false
 
-  if ta.state == tasDefault:
+  if not ui.focusCaptured and ta.state == tasDefault:
     if ta.activateNext and ta.lastActiveItem == ta.prevItem and
        id != ta.prevItem:  # exit editing textarea if there's just one
       ta.activateNext = false
