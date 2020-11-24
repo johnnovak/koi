@@ -121,6 +121,8 @@ type
 
     # Whether the cursor was moved before releasing the LMB in drag mode
     cursorMoved:  bool
+    cursorPosX:   float
+    cursorPosY:   float
 
     valueText:    string
     editModeItem: ItemId
@@ -516,49 +518,83 @@ proc drawLabel(vg: NVGContext, x, y, w, h, padHoriz: float,
 
   vg.restore()
 
-
 # }}}
 # {{{ rightClippedRoundedRect*()
 proc rightClippedRoundedRect*(vg: NVGContext, x, y, w, h, r, clipW: float,
                               grouping: WidgetGrouping = wgNone) =
-
   alias(vg, g_nvgContext)
 
   vg.beginPath()
 
-  if clipW < r:
-    let da = arccos((r - clipW) / r)
-    vg.arc(x+r, y+r, r, PI, PI + da, pwCW)
-    vg.arc(x+r, y+h-r, r, PI - da, PI, pwCW)
-    vg.closePath()
-
-  elif clipW < r*2:
-    vg.arc(x+r, y+r, r, PI, 1.5*PI, pwCW)
-
-    # end cap
-    vg.lineTo(x+clipW, y)
-    vg.lineTo(x+clipW, y+h)
-    vg.lineTo(x+r, y+h)
-
-    vg.arc(x+r, y+h-r, r, PI*0.5, PI, pwCW)
-    vg.closePath()
-
-  elif clipW > w-r:
-    vg.arc(x+r, y+r, r, PI, 1.5*PI, pwCW)
-    vg.lineTo(x+w-r, y)
-
-    # end cap
-    let dx = clipW - (w-r)
-    var da = arccos(dx / r)
-    vg.arc(x+w-r, y+r, r, 1.5*PI, 1.5*PI + (PI*0.5-da), pwCW)
-    vg.arc(x+w-r, y+h-r, r, da, PI*0.5, pwCW)
-
-    vg.lineTo(x+r, y+h)
-    vg.arc(x+r, y+h-r, r, PI*0.5, PI, pwCW)
-    vg.closePath()
-
+  if grouping == wgMiddle:
+    vg.rect(x, y, clipW, h)
   else:
-    vg.roundedRect(x, y, clipW, h, r, 0, 0, r)
+    if clipW < r:
+      # top left
+      if grouping == wgEnd:
+        vg.moveTo(x, y)
+        vg.lineTo(x+clipW, y)
+      else:
+        let da = arccos((r - clipW) / r)
+        vg.arc(x+r, y+r, r, PI, PI + da, pwCW)
+
+      # bottom left
+      if grouping == wgStart:
+        vg.lineTo(x+clipW, y+h)
+        vg.lineTo(x, y+h)
+      else:
+        let da = arccos((r - clipW) / r)
+        vg.arc(x+r, y+h-r, r, PI - da, PI, pwCW)
+      vg.closePath()
+
+    elif clipW <= w-r:
+      # top left
+      if grouping == wgEnd:
+        vg.moveTo(x, y)
+      else:
+        vg.arc(x+r, y+r, r, PI, 1.5*PI, pwCW)
+
+      # flat end cap
+      vg.lineTo(x+clipW, y)
+      vg.lineTo(x+clipW, y+h)
+
+      # bottom left
+      if grouping == wgStart:
+        vg.lineTo(x, y+h)
+      else:
+        vg.lineTo(x+r, y+h)
+        vg.arc(x+r, y+h-r, r, PI*0.5, PI, pwCW)
+      vg.closePath()
+
+    else:
+      # top left
+      if grouping == wgEnd:
+        vg.moveTo(x, y)
+      else:
+        vg.arc(x+r, y+r, r, PI, 1.5*PI, pwCW)
+
+      # top right
+      if grouping == wgEnd:
+        vg.lineTo(x+clipW, y)
+      else:
+        let dx = clipW - (w-r)
+        let da = arccos(dx / r)
+        vg.arc(x+w-r, y+r, r, 1.5*PI, 1.5*PI + (PI*0.5-da), pwCW)
+
+      # bottom right
+      if grouping == wgStart:
+        vg.lineTo(x+clipW, y+h)
+      else:
+        let dx = clipW - (w-r)
+        let da = arccos(dx / r)
+        vg.arc(x+w-r, y+h-r, r, da, PI*0.5, pwCW)
+
+      # bottom left
+      if grouping == wgStart:
+        vg.lineTo(x, y+h)
+      else:
+        vg.arc(x+r, y+h-r, r, PI*0.5, PI, pwCW)
+      vg.closePath()
 
 # }}}
 
@@ -1777,26 +1813,27 @@ proc sectionHeader(id:           ItemId,
   alias(ui, g_uiState)
   alias(s, style)
 
-  let (ox, oy) = addDrawOffset(x, y)
+  let (ox, oy) = (x, y)
+  let (x, y) = addDrawOffset(x, y)
 
   let buttonWidth = h
 
   addDrawLayer(ui.currentLayer, vg):
-    let (x, y, w, h) = snapToGrid(ox, oy, w, h, 0)
+    let (x, y, w, h) = snapToGrid(x, y, w, h, 0)
 
     vg.fillColor(gray(0.2))
     vg.beginPath()
     vg.rect(x, y-2, w, h+2)
     vg.fill()
 
+    alias(vg, g_nvgContext)
+    vg.drawLabel(x+buttonWidth, y, w-buttonWidth, h, padHoriz=0, label,
+                 color=white(), fontSize=13.0, fontFace="sans", align=haLeft)
+
 
   let cbId = hashId(lastIdString() & ":checkBox")
-  checkBox(cbId, x, y, buttonWidth, expanded_out, tooltip,
+  checkBox(cbId, ox, oy, buttonWidth, expanded_out, tooltip,
            SectionHeaderCheckboxStyle)
-
-  alias(vg, g_nvgContext)
-  vg.drawLabel(x+buttonWidth, y, w-buttonWidth, h, padHoriz=0, label,
-               color=white(), fontSize=13.0, fontFace="sans", align=haLeft)
 
   result = expanded_out
 
@@ -4693,9 +4730,10 @@ type SliderStyle* = ref object
   labelColor*:             Color
   labelColorHover*:        Color
   labelColorActive*:       Color
+  cursorFollowsValue*:     bool
 
 var DefaultSliderStyle = SliderStyle(
-  trackCornerRadius      : 5,
+  trackCornerRadius      : 10,
   trackPad:                3,
   trackStrokeWidth       : 0,
   trackStrokeColor       : black(),
@@ -4705,7 +4743,7 @@ var DefaultSliderStyle = SliderStyle(
   trackFillColorHover    : GRAY_HI,
   trackFillColorActive   : GRAY_MID,
   valuePrecision         : 3,
-  valueCornerRadius      : 3.0,
+  valueCornerRadius      : 8.0,
   valueColor             : GRAY_LO,
   valueColorHover        : GRAY_LOHI,
   valueColorActive       : HILITE,
@@ -4715,7 +4753,8 @@ var DefaultSliderStyle = SliderStyle(
   labelAlign             : haCenter,
   labelColor             : white(),
   labelColorHover        : white(),
-  labelColorActive       : white()
+  labelColorActive       : white(),
+  cursorFollowsValue     : true
 )
 
 proc horizSlider(id:         ItemId,
@@ -4759,8 +4798,7 @@ proc horizSlider(id:         ItemId,
       setActive(id)
 
   # New position & value calculation
-  var
-    newPosX = posX
+  var newPosX = posX
 
   if isActive(id):
     case ss.state:
@@ -4784,6 +4822,7 @@ proc horizSlider(id:         ItemId,
 
         ss.editModeItem = id
         showCursor()
+
       else:
         # Technically, the cursor can move outside the widget when it's
         # disabled in "drag hidden" mode, and then it will cease to be "hot".
@@ -4803,6 +4842,9 @@ proc horizSlider(id:         ItemId,
         value = lerp(startVal, endVal, t)
         ui.x0 = ui.dx
 
+        ss.cursorPosX = if s.cursorFollowsValue: newPosX
+                        else: ui.dragX
+
     of ssEditValue:
       discard
 
@@ -4818,22 +4860,16 @@ proc horizSlider(id:         ItemId,
     var sw = s.trackStrokeWidth
     var (x, y, w, h) = snapToGrid(x, y, w, h, sw)
 
-    let (trackFillColor, trackStrokeColor,
-         valueColor, labelColor) =
+    let (trackFillColor, trackStrokeColor, valueColor, labelColor) =
       case state
       of wsNormal, wsDisabled:
-        (s.trackFillColor, s.trackStrokeColor,
-         s.valueColor, s.labelColor)
+        (s.trackFillColor, s.trackStrokeColor, s.valueColor, s.labelColor)
       of wsHover:
         (s.trackFillColorHover, s.trackStrokeColorHover,
          s.valueColorHover, s.labelColorHover)
       of wsActive:
         (s.trackFillColorActive, s.trackStrokeColorActive,
          s.valueColorActive, s.labelColorActive)
-
-    vg.fillColor(trackFillColor)
-    vg.strokeColor(trackStrokeColor)
-    vg.strokeWidth(sw)
 
     # Draw track background
     proc drawTrackShape() =
@@ -4844,43 +4880,47 @@ proc horizSlider(id:         ItemId,
       of wgMiddle: vg.rect(x, y, w, h)
       of wgEnd:    vg.roundedRect(x, y, w, h, 0, 0, cr, cr)
 
+    vg.fillColor(trackFillColor)
+
     vg.beginPath()
     drawTrackShape()
     vg.fill()
 
     # Draw value
     if not (ss.editModeItem == id and ss.state == ssEditValue):
-      if value > 0:
-        vg.beginPath()
+      let
+        vx = x + s.trackPad
+        vy = y + s.trackPad
+        vw = w - s.trackPad*2
+        vh = h - s.trackPad*2
+        cr = s.valueCornerRadius
+        clipW = round(newPosX - x - s.trackPad)
 
-        let
-          cr = s.valueCornerRadius
-          vx = x + s.trackPad
-          vy = y + s.trackPad
-          vw = w - s.trackPad*2
-          vh = h - s.trackPad*2
-          clipW = round(newPosX - x - s.trackPad)
+      vg.fillColor(valueColor)
+      vg.beginPath()
 
-        case grouping
-        of wgNone:
-          vg.rightClippedRoundedRect(vx, vy, vw, vh, cr, clipW, wgNone)
-        of wgStart:
-          vg.rightClippedRoundedRect(vx, vy, vw, vh, cr, clipW, wgStart)
-        of wgMiddle:
-          vg.rect(x, y, w, h)
-        of wgEnd:
-          vg.rightClippedRoundedRect(vx, vy, vw, vh, cr, clipW, wgEnd)
+      case grouping
+      of wgNone:
+        vg.rightClippedRoundedRect(vx, vy, vw, vh, cr, clipW, wgNone)
+      of wgStart:
+        vg.rightClippedRoundedRect(vx, vy, vw, vh, cr, clipW, wgStart)
+      of wgMiddle:
+        vg.rightClippedRoundedRect(vx, vy, vw, vh, cr, clipW, wgMiddle)
+      of wgEnd:
+        vg.rightClippedRoundedRect(vx, vy, vw, vh, cr, clipW, wgEnd)
 
-        vg.fillColor(valueColor)
-        vg.fill()
+      vg.fill()
 
-      # Draw slider text
-      let valueString = value.formatFloat(ffDecimal, s.valuePrecision)
+    # Draw slider text
+    let valueString = value.formatFloat(ffDecimal, s.valuePrecision)
 
-      vg.drawLabel(x, y, w, h, s.labelPadHoriz, valueString, labelColor,
-                   s.labelFontSize, s.labelFontFace, s.labelAlign)
+    vg.drawLabel(x, y, w, h, s.labelPadHoriz, valueString, labelColor,
+                 s.labelFontSize, s.labelFontFace, s.labelAlign)
 
     # Draw track outline
+    vg.strokeColor(trackStrokeColor)
+    vg.strokeWidth(sw)
+
     vg.beginPath()
     drawTrackShape()
     vg.stroke()
@@ -4919,12 +4959,13 @@ template horizSlider*(x, y, w, h: float,
                       endVal:     float = 1.0,
                       value:      float,
                       tooltip:    string = "",
-                      style:      SliderStyle = DefaultSliderStyle) =
+                      style:      SliderStyle = DefaultSliderStyle,
+                      grouping:   WidgetGrouping = wgNone) =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  horizSlider(id, x, y, w, h, startVal, endVal, value, tooltip, style)
+  horizSlider(id, x, y, w, h, startVal, endVal, value, tooltip, style, grouping)
 
 # }}}
 # {{{ vertSlider
@@ -4934,7 +4975,8 @@ proc vertSlider(id:         ItemId,
                 startVal:   float,
                 endVal:     float,
                 value_out:  var float,
-                tooltip:    string = "") =
+                tooltip:    string = "",
+                style:      SliderStyle = DefaultSliderStyle) =
 
   var value = value_out
 
@@ -4943,14 +4985,13 @@ proc vertSlider(id:         ItemId,
 
   alias(ui, g_uiState)
   alias(ss, ui.sliderState)
+  alias(s,  style)
 
   let (x, y) = addDrawOffset(x, y)
 
-  const SliderPad = 3
-
   let
-    posMinY = y + h - SliderPad
-    posMaxY = y + SliderPad
+    posMinY = y + h - s.trackPad
+    posMaxY = y + s.trackPad
 
   # Calculate current slider position
   proc calcPosY(val: float): float =
@@ -4997,37 +5038,61 @@ proc vertSlider(id:         ItemId,
       value = lerp(startVal, endVal, t)
       ui.y0 = ui.dy
 
+      ss.cursorPosY = if s.cursorFollowsValue: newPosY
+                      else: ui.dragY
+
     of ssEditValue:
       discard
 
   value_out = value
 
-  # Draw slider track
-  let state = if isHot(id) and hasNoActiveItem(): wsHover
-              elif isActive(id): wsActive
-              else: wsNormal
-
-  let fillColor = case state
-    of wsHover: GRAY_HI
-    else:       GRAY_MID
-
+  # Draw slider
   addDrawLayer(ui.currentLayer, vg):
+    let state = if isHot(id) and hasNoActiveItem(): wsHover
+                elif isActive(id): wsActive
+                else: wsNormal
+
+    var sw = s.trackStrokeWidth
+    var (x, y, w, h) = snapToGrid(x, y, w, h, sw)
+
+    let (trackFillColor, trackStrokeColor, valueColor) =
+      case state
+      of wsNormal, wsDisabled:
+        (s.trackFillColor, s.trackStrokeColor, s.valueColor)
+      of wsHover:
+        (s.trackFillColorHover, s.trackStrokeColorHover, s.valueColorHover)
+      of wsActive:
+        (s.trackFillColorActive, s.trackStrokeColorActive, s.valueColorActive)
+
+
+    # Draw track background
+    vg.fillColor(trackFillColor)
+
     vg.beginPath()
-    vg.roundedRect(x, y, w, h, 5)
-    vg.fillColor(fillColor)
+    vg.roundedRect(x, y, w, h, s.trackCornerRadius)
     vg.fill()
 
-    # Draw slider
-    let sliderColor = case state
-      of wsHover:  GRAY_LOHI
-      of wsActive: HILITE
-      else:        GRAY_LO
+    # Draw value
+    let
+      vx = x + s.trackPad
+      vy = newPosY
+      vw = w - s.trackPad*2
+      vh = y + h - newPosY - s.trackPad
+      cr = s.valueCornerRadius
+
+    vg.fillColor(valueColor)
 
     vg.beginPath()
-    vg.roundedRect(x + SliderPad, newPosY,
-                   w - SliderPad*2, y + h - newPosY - SliderPad, 5)
-    vg.fillColor(sliderColor)
+    vg.roundedRect(vx, vy, vw, vh, cr)
     vg.fill()
+
+    # Draw track outline
+    vg.strokeColor(trackStrokeColor)
+    vg.strokeWidth(sw)
+
+    vg.beginPath()
+    vg.roundedRect(x, y, w, h, s.trackCornerRadius)
+    vg.stroke()
 
   if isHot(id):
     handleTooltip(id, tooltip)
@@ -5036,13 +5101,14 @@ proc vertSlider(id:         ItemId,
 template vertSlider*(x, y, w, h: float,
                      startVal:   float,
                      endVal:     float,
-                     value:      var float,
-                     tooltip:    string = "") =
+                     value:      float,
+                     tooltip:    string = "",
+                     style:      SliderStyle = DefaultSliderStyle) =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  vertSlider(id, x, y, w, h, startVal, endVal, value, tooltip)
+  vertSlider(id, x, y, w, h, startVal, endVal, value, tooltip, style)
 
 # }}}
 # {{{ sliderPost
@@ -5057,9 +5123,9 @@ proc sliderPost() =
       ss.state = ssDefault
       showCursor()
       if ui.dragX > -1.0:
-        setCursorPosX(ui.dragX)
+        setCursorPosX(ss.cursorPosX)
       else:
-        setCursorPosY(ui.dragY)
+        setCursorPosY(ss.cursorPosY)
 
     ui.widgetMouseDrag = false
 
@@ -5128,31 +5194,22 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
         cs.mode)
 
       y += 29
-      horizSlider(
-        x, y, w, h,
-        startVal = 0, endVal = 255,
-        r)
+      horizSlider(x, y, w, h, startVal = 0, endVal = 255, r, grouping=wgStart)
       label(x+7, y, w, h, "R")
 
       y += 18
       horizSlider(
         x, y, w, h,
         startVal = 0, endVal = 255,
-        g)
+        g, grouping=wgMiddle)
       label(x+7, y, w, h, "G")
 
       y += 18
-      horizSlider(
-        x, y, w, h,
-        startVal = 0, endVal = 255,
-        b)
+      horizSlider(x, y, w, h, startVal = 0, endVal = 255, b, grouping=wgEnd)
       label(x+7, y, w, h, "B")
 
       y += 26
-      horizSlider(
-        x, y, w, h,
-        startVal = 0, endVal = 255,
-        a)
+      horizSlider(x, y, w, h, startVal = 0, endVal = 255, a)
       label(x+7, y, w, h, "A")
 
       color_out = rgba(r.int, g.int, b.int, a.int)
