@@ -4730,6 +4730,13 @@ type SliderStyle* = ref object
   labelColor*:             Color
   labelColorHover*:        Color
   labelColorActive*:       Color
+  valueLabelPadHoriz*:     float
+  valueLabelFontSize*:     float
+  valueLabelFontFace*:     string
+  valueLabelAlign*:        HorizontalAlign
+  valueLabelColor*:        Color
+  valueLabelColorHover*:   Color
+  valueLabelColorActive*:  Color
   cursorFollowsValue*:     bool
 
 var DefaultSliderStyle = SliderStyle(
@@ -4754,8 +4761,22 @@ var DefaultSliderStyle = SliderStyle(
   labelColor             : white(),
   labelColorHover        : white(),
   labelColorActive       : white(),
+  valueLabelPadHoriz     : 5.0,
+  valueLabelFontSize     : 14.0,
+  valueLabelFontFace     : "sans-bold",
+  valueLabelAlign        : haLeft,
+  valueLabelColor        : white(),
+  valueLabelColorHover   : white(),
+  valueLabelColorActive  : white(),
   cursorFollowsValue     : true
 )
+
+proc getDefaultSliderStyle*(): SliderStyle =
+  DefaultSliderStyle.deepCopy
+
+proc setDefaultSliderStyle*(style: SliderStyle) =
+  DefaultSliderStyle = style.deepCopy
+
 
 proc horizSlider(id:         ItemId,
                  x, y, w, h: float,
@@ -4763,6 +4784,7 @@ proc horizSlider(id:         ItemId,
                  endVal:     float,
                  value_out:  var float,
                  tooltip:    string = "",
+                 label:      string = "",
                  style:      SliderStyle = DefaultSliderStyle,
                  grouping:   WidgetGrouping = wgNone) =
 
@@ -4860,16 +4882,18 @@ proc horizSlider(id:         ItemId,
     var sw = s.trackStrokeWidth
     var (x, y, w, h) = snapToGrid(x, y, w, h, sw)
 
-    let (trackFillColor, trackStrokeColor, valueColor, labelColor) =
+    let (trackFillColor, trackStrokeColor, valueColor,
+         labelColor, valueLabelColor) =
       case state
       of wsNormal, wsDisabled:
-        (s.trackFillColor, s.trackStrokeColor, s.valueColor, s.labelColor)
+        (s.trackFillColor, s.trackStrokeColor, s.valueColor,
+         s.labelColor, s.valueLabelColor)
       of wsHover:
         (s.trackFillColorHover, s.trackStrokeColorHover,
-         s.valueColorHover, s.labelColorHover)
+         s.valueColorHover, s.labelColorHover, s.valueLabelColorHover)
       of wsActive:
         (s.trackFillColorActive, s.trackStrokeColorActive,
-         s.valueColorActive, s.labelColorActive)
+         s.valueColorActive, s.labelColorActive, s.valueLabelColorActive)
 
     # Draw track background
     proc drawTrackShape() =
@@ -4894,7 +4918,9 @@ proc horizSlider(id:         ItemId,
         vw = w - s.trackPad*2
         vh = h - s.trackPad*2
         cr = s.valueCornerRadius
-        clipW = round(newPosX - x - s.trackPad)
+        # TODO hacky
+        clipW = (newPosX - x - s.trackPad).int +
+                (if sw mod 2 == 1: 0.5 else: 0)
 
       vg.fillColor(valueColor)
       vg.beginPath()
@@ -4911,11 +4937,18 @@ proc horizSlider(id:         ItemId,
 
       vg.fill()
 
-    # Draw slider text
-    let valueString = value.formatFloat(ffDecimal, s.valuePrecision)
+      # Draw label text
+      if label != "":
+        vg.drawLabel(x, y, w, h, s.labelPadHoriz, label, labelColor,
+                     s.labelFontSize, s.labelFontFace, s.labelAlign)
 
-    vg.drawLabel(x, y, w, h, s.labelPadHoriz, valueString, labelColor,
-                 s.labelFontSize, s.labelFontFace, s.labelAlign)
+      # Draw value text
+      let valueString = if s.valuePrecision == 0: $value.int
+                        else: value.formatFloat(ffDecimal, s.valuePrecision)
+
+      vg.drawLabel(x, y, w, h, s.labelPadHoriz, valueString, valueLabelColor,
+                   s.valueLabelFontSize, s.valueLabelFontFace,
+                   s.valueLabelAlign)
 
     # Draw track outline
     vg.strokeColor(trackStrokeColor)
@@ -4959,13 +4992,15 @@ template horizSlider*(x, y, w, h: float,
                       endVal:     float = 1.0,
                       value:      float,
                       tooltip:    string = "",
+                      label:      string = "",
                       style:      SliderStyle = DefaultSliderStyle,
                       grouping:   WidgetGrouping = wgNone) =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  horizSlider(id, x, y, w, h, startVal, endVal, value, tooltip, style, grouping)
+  horizSlider(id, x, y, w, h, startVal, endVal, value, tooltip, label,
+              style, grouping)
 
 # }}}
 # {{{ vertSlider
@@ -5133,6 +5168,63 @@ proc sliderPost() =
 # }}}
 # {{{ Color
 
+var ColorPickerRadioButtonStyle = RadioButtonsStyle(
+  buttonPadHoriz           : 2,
+  buttonPadVert            : 3,
+  buttonCornerRadius       : 4,
+  buttonStrokeWidth        : 0,
+  buttonStrokeColor        : black(),
+  buttonStrokeColorHover   : black(),
+  buttonStrokeColorDown    : black(),
+  buttonStrokeColorActive  : black(),
+  buttonFillColor          : gray(0.25),
+  buttonFillColorHover     : gray(0.25),
+  buttonFillColorDown      : gray(0.45),
+  buttonFillColorActive    : gray(0.45),
+  labelPadHoriz            : 0,
+  labelFontSize            : 13.0,
+  labelFontFace            : "sans-bold",
+  labelOnly                : false,
+  labelAlign               : haCenter,
+  labelColor               : gray(0.6),
+  labelColorHover          : gray(0.6),
+  labelColorActive         : gray(1.0),
+  labelColorDown           : gray(0.8)
+)
+
+var ColorPickerSliderStyle = SliderStyle(
+  trackCornerRadius      : 4,
+  trackPad               : 0,
+  trackStrokeWidth       : 1,
+  trackStrokeColor       : gray(0.1),
+  trackStrokeColorHover  : gray(0.1),
+  trackStrokeColorActive : gray(0.1),
+  trackFillColor         : gray(0.25),
+  trackFillColorHover    : gray(0.30),
+  trackFillColorActive   : gray(0.25),
+  valuePrecision         : 0,
+  valueCornerRadius      : 4,
+  valueColor             : gray(0.45),
+  valueColorHover        : gray(0.55),
+  valueColorActive       : gray(0.45),
+  labelPadHoriz          : 5.0,
+  labelFontSize          : 13.0,
+  labelFontFace          : "sans-bold",
+  labelAlign             : haLeft,
+  labelColor             : white(),
+  labelColorHover        : white(),
+  labelColorActive       : white(),
+  valueLabelPadHoriz     : 5.0,
+  valueLabelFontSize     : 13.0,
+  valueLabelFontFace     : "sans",
+  valueLabelAlign        : haRight,
+  valueLabelColor        : white(),
+  valueLabelColorHover   : white(),
+  valueLabelColorActive  : white(),
+  cursorFollowsValue     : true
+)
+
+
 proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
   alias(ui, g_uiState)
   alias(cs, ui.colorPickerState)
@@ -5154,34 +5246,32 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
       hw = w/2
       cr = 5.0
 
-    vg.strokeColor(gray(0.1))
-    vg.strokeWidth(sw)
-
-    vg.beginPath()
     vg.fillColor(color.withAlpha(1.0))
-    vg.roundedRect(x,    y, hw, h, cr, 0, 0, cr)
+    vg.beginPath()
+    vg.roundedRect(x, y, hw, h, cr, 0, 0, cr)
     vg.fill()
 
-    vg.beginPath()
     vg.fillColor(color)
+    vg.beginPath()
     vg.roundedRect(x+hw, y, hw, h, 0, cr, cr, 0)
     vg.fill()
 
+    vg.strokeColor(gray(0.1))
+    vg.strokeWidth(sw)
     vg.beginPath()
     vg.roundedRect(x, y, w, h, cr)
     vg.stroke()
 
 
   if cs.activeItem == id:
-    if not beginPopup(origX, origY+h, w=140, h=242):
+    if not beginPopup(origX, origY+h, w=150, h=260):
       cs.activeItem = 0
     else:
       var
-        x = 12.0
-        y = 120.0
-        w = 140.0 - 24.0
+        x = 14.0
+        y = 136.0
+        w = 150.0 - 2*x
         h = 19.0
-        labelW = 15.0
 
         r = color.r.float * 255
         g = color.g.float * 255
@@ -5191,26 +5281,27 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
       radioButtons(
         x, y, w+3, 22,
         labels = @["RGB", "HSV", "Hex"],
-        cs.mode)
+        cs.mode, style=ColorPickerRadioButtonStyle)
+
+      let (label1, label2, label3) = if cs.mode == cmRGB: ("R", "G", "B")
+                                     else: ("H", "S", "V")
+
 
       y += 29
-      horizSlider(x, y, w, h, startVal = 0, endVal = 255, r, grouping=wgStart)
-      label(x+7, y, w, h, "R")
+      horizSlider(x, y, w, h, startVal = 0, endVal = 255, r, grouping=wgStart,
+                  label=label1, style=ColorPickerSliderStyle)
 
       y += 18
-      horizSlider(
-        x, y, w, h,
-        startVal = 0, endVal = 255,
-        g, grouping=wgMiddle)
-      label(x+7, y, w, h, "G")
+      horizSlider(x, y, w, h, startVal = 0, endVal = 255, g, grouping=wgMiddle,
+                  label=label2, style=ColorPickerSliderStyle)
 
       y += 18
-      horizSlider(x, y, w, h, startVal = 0, endVal = 255, b, grouping=wgEnd)
-      label(x+7, y, w, h, "B")
+      horizSlider(x, y, w, h, startVal = 0, endVal = 255, b, grouping=wgEnd,
+                  label=label3, style=ColorPickerSliderStyle)
 
       y += 26
-      horizSlider(x, y, w, h, startVal = 0, endVal = 255, a)
-      label(x+7, y, w, h, "A")
+      horizSlider(x, y, w, h, startVal = 0, endVal = 255, a,
+                  label="A", style=ColorPickerSliderStyle)
 
       color_out = rgba(r.int, g.int, b.int, a.int)
 
