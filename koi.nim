@@ -44,8 +44,11 @@ type
     cmRGB, cmHSV, cmHex
 
   ColorPickerStateVars = object
-    mode:       ColorPickerMode
-    activeItem: ItemId
+    opened:         bool
+    mode, lastMode: ColorPickerMode
+    activeItem:     ItemId
+    h, s, v:        float
+    hexString:      string
 
 # }}}
 # {{{ DropDownState
@@ -603,6 +606,72 @@ proc toClipboard*(s: string) =
 
 proc fromClipboard*(): string =
   $glfw.currentContext().clipboardString
+
+# {{{ toHSV*()
+proc toHSV*(c: Color): (float, float, float) =
+  let
+    r = c.r
+    g = c.g
+    b = c.b
+    xmax = max(r, max(g, b))
+    xmin = min(r, min(g, b))
+    v = xmax
+    c = xmax - xmin
+
+  let h = if   c == 0: 0.0
+          elif v == r: ((60 * (g-b)/c + 360) mod 360) / 360
+          elif v == g: ((60 * (b-r)/c + 120) mod 360) / 360
+          else:        ((60 * (r-g)/c + 240) mod 360) / 360  # v == b
+
+  let s = if v == 0.0: 0.0 else: c/v
+
+  result = (h.float, s.float, v.float)
+
+# }}}
+# {{{ hsva*()
+proc hsva(h, s, v, a: float): Color =
+  var r, g, b: float
+  if s == 0.0:
+    r = v
+    g = v
+    b = v
+  else:
+    let
+      hf = if h >= 1.0: 0.0 else: h*6
+      i = hf.int  # should be in the range 0..5
+      f = hf - i  # fractional part
+
+      m = v * (1 - s)
+      n = v * (1 - s*f)
+      k = v * (1 - s*(1-f))
+
+    (r, g, b) = if   i == 0: (v, k, m)
+                elif i == 1: (n, v, m)
+                elif i == 2: (m, v, k)
+                elif i == 3: (m, n, v)
+                elif i == 4: (k, m, v)
+                else:        (v, m, n)
+
+  result = rgba(r, g, b, a)
+# }}}
+# {{{ toHex*()
+proc toHex*(c: Color): string =
+  (c.r * 255).int.toHex(2) &
+  (c.g * 255).int.toHex(2) &
+  (c.b * 255).int.toHex(2)
+
+# }}}
+# {{{ colorFromHex*()
+proc colorFromHexStr*(s: string): Color =
+  try:
+    let r = parseHexInt(s.substr(0, 1)) / 255
+    let g = parseHexInt(s.substr(2, 3)) / 255
+    let b = parseHexInt(s.substr(4, 5)) / 255
+    result = rgb(r, g, b)
+  except CatchableError:
+    discard
+
+# }}}
 
 # }}}
 # {{{ Draw layers
@@ -2662,10 +2731,12 @@ proc horizScrollBar(id:         ItemId,
 
       sb.state = sbsTrackClickDelay
       ui.t0 = getTime()
+      setFramesLeft()
 
     of sbsTrackClickDelay:
       if getTime() - ui.t0 > ScrollBarTrackClickRepeatDelay:
         sb.state = sbsTrackClickRepeat
+      setFramesLeft()
 
     of sbsTrackClickRepeat:
       if isHot(id):
@@ -2685,6 +2756,7 @@ proc horizScrollBar(id:         ItemId,
           ui.t0 = getTime()
       else:
         ui.t0 = getTime()
+      setFramesLeft()
 
   value_out = newValue
 
@@ -2896,10 +2968,12 @@ proc vertScrollBar(id:         ItemId,
 
       sb.state = sbsTrackClickDelay
       ui.t0 = getTime()
+      setFramesLeft()
 
     of sbsTrackClickDelay:
       if getTime() - ui.t0 > ScrollBarTrackClickRepeatDelay:
         sb.state = sbsTrackClickRepeat
+      setFramesLeft()
 
     of sbsTrackClickRepeat:
       if isHot(id):
@@ -2919,6 +2993,7 @@ proc vertScrollBar(id:         ItemId,
           ui.t0 = getTime()
       else:
         ui.t0 = getTime()
+      setFramesLeft()
 
   value_out = newValue
 
@@ -3582,7 +3657,7 @@ proc textField(
   text_out:   var string,
   tooltip:    string = "",
   activate:   bool = false,
-  drawWidget: bool = false,
+  drawWidget: bool = true,
   constraint: Option[TextFieldConstraint] = TextFieldConstraint.none,
   style:      TextFieldStyle = DefaultTextFieldStyle
 ) =
@@ -5224,6 +5299,138 @@ var ColorPickerSliderStyle = SliderStyle(
   cursorFollowsValue     : true
 )
 
+var ColorPickerTextFieldStyle = TextFieldStyle(
+  bgCornerRadius      : 4,
+  bgStrokeWidth       : 1,
+  bgStrokeColor       : gray(0.1),
+  bgStrokeColorHover  : gray(0.1),
+  bgStrokeColorActive : gray(0.1),
+  bgFillColor         : gray(0.25),
+  bgFillColorHover    : gray(0.30),
+  bgFillColorActive   : gray(0.25),
+  textPadHoriz        : 8.0,
+  textPadVert         : 2.0,
+  textFontSize        : 13.0,
+  textFontFace        : "sans-bold",
+  textColor           : gray(0.8),
+  textColorHover      : gray(0.8),
+  textColorActive     : gray(0.8),
+  cursorColor         : rgb(1.0, 0.8, 0.0),
+  cursorWidth         : 1.0,
+  selectionColor      : rgb(0.5, 0.15, 0.15)
+)
+
+
+proc colorwheel*(x, y, w, h, hue, sat, val: float) =
+  alias(ui, g_uiState)
+  alias(vg, g_nvgContext)
+
+  let (x, y) = addDrawOffset(x, y)
+
+  addDrawLayer(ui.currentLayer, vg):
+    let
+      cx = x + w*0.5
+      cy = y + h*0.5
+      r1 = (if w < h: w else: h) * 0.5
+      r0 = r1 - r1*0.20
+      da = 0.5 / r1
+
+    # Triangle
+    let
+      x1 = cx + r0 * cos(5*PI/6)
+      y1 = cy + r0 * sin(5*PI/6)
+      x2 = cx + r0 * cos(PI/6)
+      y2 = cy + r0 * sin(PI/6)
+      x3 = cx + r0 * cos(1.5*PI)
+      y3 = cy + r0 * sin(1.5*PI)
+
+    vg.strokeColor(black)
+    vg.strokeWidth(1.0)
+    vg.beginPath()
+    vg.moveTo(x1, y1)
+    vg.lineTo(x2, y2)
+    vg.lineTo(x3, y3)
+    vg.closePath()
+
+    var paint = vg.linearGradient(x3, y3, x2, y2,
+                                  hsla(hue, 1.0, 0.5, 1.0), white())
+    vg.fillPaint(paint)
+    vg.fill()
+
+    paint = vg.linearGradient(x1, y1, x3+(x2-x3)*0.5, y3+(y2-y3)*0.5,
+                              black(), black(0))
+    vg.fillPaint(paint)
+    vg.fill()
+
+    # Triangle marker
+    let xs = lerp(x3, x1, val)
+    let xe = lerp(x3, x2, val)
+
+    var my = lerp(y3, y1, val)
+    var mx = lerp(xs, xe, sat)
+
+    vg.save()
+    vg.translate(cx, cy)
+    vg.rotate(-2*PI/3)
+
+    vg.strokeWidth(1.0)
+    vg.beginPath()
+    vg.circle(mx-cx, my-cy, 5)
+    vg.strokeColor(black(0.8))
+    vg.stroke()
+
+    vg.beginPath()
+    vg.circle(mx-cx, my-cy, 4)
+    vg.strokeColor(white(0.8))
+    vg.stroke()
+
+    vg.restore()
+
+    # Wheel
+    const Segments = 6
+
+    for i in 0..<Segments:
+      var
+        a0 =  float(i)        / Segments * 2*PI - da
+        a1 = (float(i) + 1.0) / Segments * 2*PI + da
+
+      vg.beginPath()
+      vg.arc(cx, cy, r0, a0, a1, pwCW)
+      vg.arc(cx, cy, r1, a1, a0, pwCCW)
+      vg.closePath()
+
+      let
+        r = r0 + r1
+        ax = cx + cos(a0) * r * 0.5
+        ay = cy + sin(a0) * r * 0.5
+        bx = cx + cos(a1) * r * 0.5
+        by = cy + sin(a1) * r * 0.5
+
+        paint = vg.linearGradient(ax, ay, bx, by,
+                                  hsla(0.5 + a0 / (2*PI), 1.0, 0.50, 1.00),
+                                  hsla(0.5 + a1 / (2*PI), 1.0, 0.50, 1.00))
+      vg.fillPaint(paint)
+      vg.fill()
+
+    # Wheel marker
+    vg.save()
+    vg.translate(cx, cy)
+    vg.rotate(PI + hue * 2*PI)
+
+    mx = (r0 + r1)*0.5
+    vg.strokeWidth(1.0)
+    vg.beginPath()
+    vg.circle(mx, 0, 5)
+    vg.strokeColor(black(0.8))
+    vg.stroke()
+
+    vg.beginPath()
+    vg.circle(mx, 0, 4)
+    vg.strokeColor(white(0.8))
+    vg.stroke()
+
+    vg.restore()
+
 
 proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
   alias(ui, g_uiState)
@@ -5237,6 +5444,7 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
   if isHit(x, y, w, h):
     if ui.mbLeftDown and hasNoActiveItem():
       cs.activeItem = id
+      cs.opened = true
 
   # Draw color widget
   addDrawLayer(ui.currentLayer, vg):
@@ -5264,46 +5472,111 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
 
 
   if cs.activeItem == id:
-    if not beginPopup(origX, origY+h, w=150, h=260):
+    if not beginPopup(origX, origY+h, w=180, h=311):
       cs.activeItem = 0
     else:
+      const startY = 14.0
       var
         x = 14.0
-        y = 136.0
-        w = 150.0 - 2*x
-        h = 19.0
+        y = 14.0
+        w = 180.0 - 2*x
+        h = 20.0
 
-        r = color.r.float * 255
-        g = color.g.float * 255
-        b = color.b.float * 255
-        a = color.a.float * 255
+      y = 178.0
+
+      cs.lastMode = cs.mode
 
       radioButtons(
-        x, y, w+3, 22,
+        x, y, w+2, 22,
         labels = @["RGB", "HSV", "Hex"],
         cs.mode, style=ColorPickerRadioButtonStyle)
 
-      let (label1, label2, label3) = if cs.mode == cmRGB: ("R", "G", "B")
-                                     else: ("H", "S", "V")
+      y += 30
+
+      case cs.mode
+      of cmRGB:
+        var
+          r = color.r.float * 255
+          g = color.g.float * 255
+          b = color.b.float * 255
+          a = color.a.float * 255
+
+        horizSlider(x, y, w, h, startVal = 0, endVal = 255, r, grouping=wgStart,
+                    label="R", style=ColorPickerSliderStyle)
+
+        y += 20
+        horizSlider(x, y, w, h, startVal = 0, endVal = 255, g, grouping=wgMiddle,
+                    label="G", style=ColorPickerSliderStyle)
+
+        y += 20
+        horizSlider(x, y, w, h, startVal = 0, endVal = 255, b, grouping=wgEnd,
+                    label="B", style=ColorPickerSliderStyle)
+
+        y += 30
+        horizSlider(x, y, w, h-1, startVal = 0, endVal = 255, a,
+                    label="A", style=ColorPickerSliderStyle)
+
+        let (hue, sat, val) = color.toHSV
+        colorwheel(x, startY, w+0.5, w+0.5, hue, sat, val)
+
+        color_out = rgba(r.int, g.int, b.int, a.int)
 
 
-      y += 29
-      horizSlider(x, y, w, h, startVal = 0, endVal = 255, r, grouping=wgStart,
-                  label=label1, style=ColorPickerSliderStyle)
+      of cmHSV:
+        if cs.opened or cs.lastMode != cmHSV:
+          (cs.h, cs.s, cs.v) = color.toHSV
 
-      y += 18
-      horizSlider(x, y, w, h, startVal = 0, endVal = 255, g, grouping=wgMiddle,
-                  label=label2, style=ColorPickerSliderStyle)
+        var
+          hue = cs.h * 360
+          sat = cs.s * 100
+          val = cs.v * 100
 
-      y += 18
-      horizSlider(x, y, w, h, startVal = 0, endVal = 255, b, grouping=wgEnd,
-                  label=label3, style=ColorPickerSliderStyle)
+        var a = color.a.float * 255
 
-      y += 26
-      horizSlider(x, y, w, h, startVal = 0, endVal = 255, a,
-                  label="A", style=ColorPickerSliderStyle)
+        horizSlider(x, y, w, h, startVal = 0, endVal = 360, hue, grouping=wgStart,
+                    label="H", style=ColorPickerSliderStyle)
 
-      color_out = rgba(r.int, g.int, b.int, a.int)
+        y += 18
+        horizSlider(x, y, w, h, startVal = 0, endVal = 100, sat, grouping=wgMiddle,
+                    label="S", style=ColorPickerSliderStyle)
+
+        y += 18
+        horizSlider(x, y, w, h, startVal = 0, endVal = 100, val, grouping=wgEnd,
+                    label="V", style=ColorPickerSliderStyle)
+
+        y += 26
+        horizSlider(x, y, w, h, startVal = 0, endVal = 255, a,
+                    label="A", style=ColorPickerSliderStyle)
+
+        (cs.h, cs.s, cs.v) = (hue/360, sat/100, val/100)
+
+        colorwheel(x, startY, w+0.5, w+0.5, cs.h, cs.s, cs.v)
+
+        color_out = hsva(cs.h, cs.s, cs.v, a/255)
+
+
+      of cmHex:
+        if cs.opened or cs.lastMode != cmHex:
+          cs.hexString = color.toHex
+
+        var a = color.a.float * 255
+
+        textField(x, y, w, h, cs.hexString, style=ColorPickerTextFieldStyle)
+
+        y += 18 + 18 + 26
+        horizSlider(x, y, w, h, startVal = 0, endVal = 255, a,
+                    label="A", style=ColorPickerSliderStyle)
+
+        color = colorFromHexStr(cs.hexString).withAlpha(a/255)
+
+        let (hue, sat, val) = color.toHSV
+        colorwheel(x, startY, w+0.5, w+0.5, hue, sat, val)
+
+        color_out = hsva(hue, sat, val, a/255)
+
+      # make sure opened is only true in the first frame after opening the
+      # color picker
+      cs.opened = false
 
       endPopup()
 
