@@ -2360,6 +2360,7 @@ proc dropDown[T](id:               ItemId,
         ds.state = dsOpenLMBPressed
         ds.activeItem = id
         ui.focusCaptured = true
+        ui.t0 = getTime()
 
   # We 'fall through' to the open state to avoid a 1-frame delay when clicking
   # the button
@@ -2418,7 +2419,8 @@ proc dropDown[T](id:               ItemId,
     # the dropDown
     if ds.state == dsOpenLMBPressed:
       if not ui.mbLeftDown:
-        if hoverItem >= 0:
+        let dt = getTime() - ui.t0  # protection against fast click & drag
+        if hoverItem >= 0 and dt > 0.1:
           selectedItem = T(hoverItem)
           closeDropDown()
         else:
