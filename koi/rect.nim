@@ -7,6 +7,15 @@ type
   Rect*[T: RectType] = object
     r1*,c1*, r2*,c2*: T
 
+proc rectF*(r1,c1, r2,c2: float): Rect[float] =
+  assert r1 < r2
+  assert c1 < c2
+
+  result.r1 = r1
+  result.c1 = c1
+  result.r2 = r2
+  result.c2 = c2
+
 proc rectN*(r1,c1, r2,c2: Natural): Rect[Natural] =
   assert r1 < r2
   assert c1 < c2

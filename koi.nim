@@ -1430,11 +1430,21 @@ proc closePopup() =
   ps.closed = true
 
 
-proc beginPopup(x, y, w, h: float): bool =
+proc beginPopup(w, h: float,
+                ax, ay, aw, ah: float): bool =
   alias(ui, g_uiState)
   alias(ps, ui.popupState)
 
-  let (x, y) = addDrawOffset(x, y)
+  var x = ax
+  var y = ay+ah
+
+  (x, y) = addDrawOffset(x, y)
+
+  if x + w + WindowEdgePad > ui.winWidth:
+    x -= w - aw
+
+  if y + h + WindowEdgePad > ui.winHeight:
+    y -= ah + h
 
   # Hit testing
   const hitBorder = 35  # TODO make it configurable
@@ -5430,7 +5440,7 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
 
   var color = color_out
 
-  let (origX, origY) = (x, y)
+  let (ox, oy) = (x, y)
   let (x, y) = addDrawOffset(x, y)
 
   if isHit(x, y, w, h):
@@ -5466,7 +5476,7 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
   const PopupWidth = 180.0
 
   if cs.activeItem == id:
-    if not beginPopup(origX, origY+h, w=PopupWidth, h=311):
+    if not beginPopup(w=PopupWidth, h=311, ax=ox-1, ay=oy, aw=w+2, ah=h):
       cs.activeItem = 0
     else:
       const startY = 14.0
