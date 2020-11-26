@@ -5471,15 +5471,17 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
     vg.stroke()
 
 
+  const PopupWidth = 180.0
+
   if cs.activeItem == id:
-    if not beginPopup(origX, origY+h, w=180, h=311):
+    if not beginPopup(origX, origY+h, w=PopupWidth, h=311):
       cs.activeItem = 0
     else:
       const startY = 14.0
       var
         x = 14.0
-        y = 14.0
-        w = 180.0 - 2*x
+        y = x
+        w = PopupWidth - 2*x
         h = 20.0
 
       y = 178.0
@@ -5487,7 +5489,7 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
       cs.lastMode = cs.mode
 
       radioButtons(
-        x, y, w+2, 22,
+        x, y, w+2, h+2,
         labels = @["RGB", "HSV", "Hex"],
         cs.mode, style=ColorPickerRadioButtonStyle)
 
@@ -5501,16 +5503,16 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
           b = color.b.float * 255
           a = color.a.float * 255
 
-        horizSlider(x, y, w, h, startVal = 0, endVal = 255, r, grouping=wgStart,
-                    label="R", style=ColorPickerSliderStyle)
+        horizSlider(x, y, w, h, startVal = 0, endVal = 255, r,
+                    grouping=wgStart, label="R", style=ColorPickerSliderStyle)
 
         y += 20
-        horizSlider(x, y, w, h, startVal = 0, endVal = 255, g, grouping=wgMiddle,
-                    label="G", style=ColorPickerSliderStyle)
+        horizSlider(x, y, w, h, startVal = 0, endVal = 255, g,
+                    grouping=wgMiddle, label="G", style=ColorPickerSliderStyle)
 
         y += 20
-        horizSlider(x, y, w, h, startVal = 0, endVal = 255, b, grouping=wgEnd,
-                    label="B", style=ColorPickerSliderStyle)
+        horizSlider(x, y, w, h, startVal = 0, endVal = 255, b,
+                    grouping=wgEnd, label="B", style=ColorPickerSliderStyle)
 
         y += 30
         horizSlider(x, y, w, h-1, startVal = 0, endVal = 255, a,
@@ -5533,19 +5535,19 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
 
         var a = color.a.float * 255
 
-        horizSlider(x, y, w, h, startVal = 0, endVal = 360, hue, grouping=wgStart,
-                    label="H", style=ColorPickerSliderStyle)
+        horizSlider(x, y, w, h, startVal = 0, endVal = 360, hue,
+                    grouping=wgStart, label="H", style=ColorPickerSliderStyle)
 
-        y += 18
-        horizSlider(x, y, w, h, startVal = 0, endVal = 100, sat, grouping=wgMiddle,
-                    label="S", style=ColorPickerSliderStyle)
+        y += 20
+        horizSlider(x, y, w, h, startVal = 0, endVal = 100, sat,
+                    grouping=wgMiddle, label="S", style=ColorPickerSliderStyle)
 
-        y += 18
-        horizSlider(x, y, w, h, startVal = 0, endVal = 100, val, grouping=wgEnd,
-                    label="V", style=ColorPickerSliderStyle)
+        y += 20
+        horizSlider(x, y, w, h, startVal = 0, endVal = 100, val,
+                    grouping=wgEnd, label="V", style=ColorPickerSliderStyle)
 
-        y += 26
-        horizSlider(x, y, w, h, startVal = 0, endVal = 255, a,
+        y += 30
+        horizSlider(x, y, w, h-1, startVal = 0, endVal = 255, a,
                     label="A", style=ColorPickerSliderStyle)
 
         (cs.h, cs.s, cs.v) = (hue/360, sat/100, val/100)
@@ -5561,10 +5563,10 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
 
         var a = color.a.float * 255
 
-        textField(x, y, w, h, cs.hexString, style=ColorPickerTextFieldStyle)
+        textField(x, y, w, h-1, cs.hexString, style=ColorPickerTextFieldStyle)
 
-        y += 18 + 18 + 26
-        horizSlider(x, y, w, h, startVal = 0, endVal = 255, a,
+        y += 20 + 20 + 30
+        horizSlider(x, y, w, h-1, startVal = 0, endVal = 255, a,
                     label="A", style=ColorPickerSliderStyle)
 
         color = colorFromHexStr(cs.hexString).withAlpha(a/255)
@@ -5574,16 +5576,14 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
 
         color_out = hsva(hue, sat, val, a/255)
 
-      # make sure opened is only true in the first frame after opening the
+      # Make sure 'opened' is only true in the first frame after opening the
       # color picker
       cs.opened = false
 
       endPopup()
 
 
-template color*(x, y, w, h: float,
-                color:  var Color) =
-
+template color*(x, y, w, h: float, color: var Color) =
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
