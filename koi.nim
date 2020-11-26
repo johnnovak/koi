@@ -409,16 +409,6 @@ type
 
 # }}}
 
-# {{{ Property names
-const
-  PropScrollBarVal = "scrollBarVal"
-  PropViewX = "viewX"
-  PropViewY = "viewY"
-  PropViewWidth = "viewWidth"
-  PropViewHeight = "viewHeight"
-
-# }}}
-
 # }}}
 # {{{ Globals
 
@@ -467,6 +457,8 @@ const
   DoubleClickMaxDelay = 0.1
   DoubleClickMaxXOffs = 4
   DoubleClickMaxYOffs = 4
+
+  WindowEdgePad = 10
 
 # }}}
 
@@ -2382,8 +2374,6 @@ proc dropDown[T](id:               ItemId,
     of haLeft:   x
     of haRight:  x + w - itemListW
     of haCenter: x + (w - itemListW)*0.5
-
-    const WindowEdgePad = 5
 
     if itemListX < WindowEdgePad:
       itemListX = WindowEdgePad
