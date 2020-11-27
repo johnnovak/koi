@@ -40,15 +40,20 @@ type
 # {{{ ColorPickerState
 
 type
-  ColorPickerMode = enum
-    cmRGB, cmHSV, cmHex
+  ColorPickerColorMode = enum
+    ccmRGB, ccmHSV, ccmHex
+
+  ColorPickerMouseMode = enum
+    cmmNormal, cmmDragWheel, cmmDragTriangle
 
   ColorPickerStateVars = object
-    opened:         bool
-    mode, lastMode: ColorPickerMode
-    activeItem:     ItemId
-    h, s, v:        float
-    hexString:      string
+    opened:        bool
+    colorMode:     ColorPickerColorMode
+    lastColorMode: ColorPickerColorMode
+    mouseMode:     ColorPickerMouseMode
+    activeItem:    ItemId
+    h, s, v:       float
+    hexString:     string
 
 # }}}
 # {{{ DropDownState
@@ -431,7 +436,6 @@ var
   GRAY_LO    = gray(0.25)
   GRAY_LOHI  = gray(0.35)
 
-
 # }}}
 # {{{ Configuration
 
@@ -462,8 +466,9 @@ const
 
 # }}}
 
-# {{{ Utils
+# {{{ Misc utils
 
+# {{{ snapToGrid*()
 func snapToGrid*(x, y, w, h, sw: float): (float, float, float, float) =
   let s = (sw mod 2) / 2
   let
@@ -473,45 +478,14 @@ func snapToGrid*(x, y, w, h, sw: float): (float, float, float, float) =
     h = h + s*2
   result = (x, y, w, h)
 
+# }}}
+# {{{ setFont*()
 proc setFont*(vg: NVGContext, size: float, name: string = "sans-bold",
               horizAlign: HorizontalAlign = haLeft,
               vertAlign: VerticalAlign = vaMiddle) =
   vg.fontFace(name)
   vg.fontSize(size)
   vg.textAlign(horizAlign, vertAlign)
-
-# {{{ drawLabel()
-proc drawLabel(vg: NVGContext, x, y, w, h, padHoriz: float,
-               label: string, color: Color,
-               fontSize: float, fontFace: string, align: HorizontalAlign,
-               multiLine: bool = false, lineHeight: float = 1.4) =
-  let
-    textBoxX = x + padHoriz
-    textBoxW = w - padHoriz*2
-    textBoxY = y
-    textBoxH = h
-
-  let tx = case align:
-  of haLeft:   textBoxX
-  of haCenter: textBoxX + textBoxW*0.5
-  of haRight:  textBoxX + textBoxW
-
-  let ty = y + h*TextVertAlignFactor
-
-  vg.save()
-
-  vg.intersectScissor(textBoxX, textBoxY, textBoxW, textBoxH)
-
-  vg.setFont(fontSize, fontFace, align)
-  vg.fillColor(color)
-
-  if multiLine:
-    vg.textLineHeight(lineHeight)
-    vg.textBox(tx, ty, textBoxW, label)
-  else:
-    discard vg.text(tx, ty, label)
-
-  vg.restore()
 
 # }}}
 # {{{ rightClippedRoundedRect*()
@@ -592,13 +566,16 @@ proc rightClippedRoundedRect*(vg: NVGContext, x, y, w, h, r, clipW: float,
       vg.closePath()
 
 # }}}
-
+# {{{ toClipboard*()
 proc toClipboard*(s: string) =
   glfw.currentContext().clipboardString = s
 
+# }}}
+# {{{ fromClipboard*()
 proc fromClipboard*(): string =
   $glfw.currentContext().clipboardString
 
+# }}}
 # {{{ toHSV*()
 proc toHSV*(c: Color): (float, float, float) =
   let
@@ -645,6 +622,7 @@ proc hsva(h, s, v, a: float): Color =
                 else:        (v, m, n)
 
   result = rgba(r, g, b, a)
+
 # }}}
 # {{{ toHex*()
 proc toHex*(c: Color): string =
@@ -664,41 +642,6 @@ proc colorFromHexStr*(s: string): Color =
     discard
 
 # }}}
-
-# }}}
-# {{{ Draw layers
-
-type
-  DrawProc = proc (vg: NVGContext)
-
-  DrawLayers = object
-    layers:        array[0..ord(DrawLayer.high), seq[DrawProc]]
-    lastUsedLayer: Natural
-
-var
-  g_drawLayers: DrawLayers
-
-proc init(dl: var DrawLayers) =
-  for i in 0..dl.layers.high:
-    dl.layers[i] = @[]
-
-proc add(dl: var DrawLayers, layer: Natural, p: DrawProc) =
-  dl.layers[layer].add(p)
-  dl.lastUsedLayer = layer
-
-template addDrawLayer(layer: DrawLayer, vg, body: untyped) =
-  g_drawLayers.add(ord(layer), proc (vg: NVGContext) =
-    body
-  )
-
-proc removeLastAdded(dl: var DrawLayers) =
-  discard dl.layers[dl.lastUsedLayer].pop()
-
-proc draw(dl: DrawLayers, vg: NVGContext) =
-  # Draw all layers on top of each other
-  for layer in dl.layers:
-    for drawProc in layer:
-      drawProc(vg)
 
 # }}}
 # {{{ UI helpers
@@ -817,6 +760,41 @@ proc drawOffset(): DrawOffset =
 proc addDrawOffset(x, y: float): (float, float) =
   let offs = drawOffset()
   result = (offs.ox + x, offs.oy + y)
+
+# }}}
+# {{{ Draw layers
+
+type
+  DrawProc = proc (vg: NVGContext)
+
+  DrawLayers = object
+    layers:        array[0..ord(DrawLayer.high), seq[DrawProc]]
+    lastUsedLayer: Natural
+
+var
+  g_drawLayers: DrawLayers
+
+proc init(dl: var DrawLayers) =
+  for i in 0..dl.layers.high:
+    dl.layers[i] = @[]
+
+proc add(dl: var DrawLayers, layer: Natural, p: DrawProc) =
+  dl.layers[layer].add(p)
+  dl.lastUsedLayer = layer
+
+template addDrawLayer(layer: DrawLayer, vg, body: untyped) =
+  g_drawLayers.add(ord(layer), proc (vg: NVGContext) =
+    body
+  )
+
+proc removeLastAdded(dl: var DrawLayers) =
+  discard dl.layers[dl.lastUsedLayer].pop()
+
+proc draw(dl: DrawLayers, vg: NVGContext) =
+  # Draw all layers on top of each other
+  for layer in dl.layers:
+    for drawProc in layer:
+      drawProc(vg)
 
 # }}}
 # {{{ Keyboard handling
@@ -1193,7 +1171,7 @@ proc disableCursor*() =
 proc setCursorShape*(cs: CursorShape) =
   g_uiState.cursorShape = cs
 
-proc setCursorMode(cs: CursorShape) =
+proc setCursorMode*(cs: CursorShape) =
   let win = glfw.currentContext()
 
   var c: Cursor
@@ -1217,7 +1195,6 @@ proc setCursorPosY*(y: float) =
   let (currX, _) = win.cursorPos()
   win.cursorPos = (currX, y)
 
-
 proc isDoubleClick*(): bool =
   alias(ui, g_uiState)
 
@@ -1228,6 +1205,7 @@ proc isDoubleClick*(): bool =
 
 # }}}
 # {{{ Tooltip handling
+
 # {{{ handleTooltip
 
 proc handleTooltip(id: ItemId, tooltip: string) =
@@ -1344,8 +1322,8 @@ proc tooltipPost() =
   tt.lastHotItem = ui.hotItem
 
 # }}}
-# }}}
 
+# }}}
 # {{{ Layout handling
 
 # {{{ initAutoLayout()
@@ -1359,6 +1337,32 @@ proc initAutoLayout() =
   a.nextItemHeight = ap.defaultRowHeight
 
 # }}}
+# {{{ handleAutoLayout()
+proc handleAutoLayout(height: float = -1, forceNextRow: bool = false) =
+  alias(a, g_uiState.autoLayoutState)
+  alias(ap, g_uiState.autoLayoutParams)
+
+  inc(a.currColIndex)
+
+  let h = if height >= 0: height else: ap.defaultRowHeight
+
+  if a.currColIndex == ap.itemsPerRow or forceNextRow:
+    a.currColIndex = 0
+    a.nextItemWidth = ap.labelWidth
+    a.x = 0
+
+    a.y += h
+    a.yNoPad = a.y
+    a.y += (if a.insideGroup: ap.rowPad else: ap.rowGroupPad)
+
+  # TODO this only works for the default 2-column layout
+  else:
+    a.x = ap.labelWidth
+    a.nextItemWidth = ap.rowWidth - ap.labelWidth
+    a.nextItemHeight = h
+
+# }}}
+
 # {{{ setAutoLayoutParams*()
 #
 const DefaultAutoLayoutParams = AutoLayoutParams(
@@ -1391,36 +1395,14 @@ proc endGroup*() =
   a.insideGroup = false
 
 # }}}
-# {{{ handleAutoLayout()
-proc handleAutoLayout(height: float = -1, forceNextRow: bool = false) =
-  alias(a, g_uiState.autoLayoutState)
-  alias(ap, g_uiState.autoLayoutParams)
-
-  inc(a.currColIndex)
-
-  let h = if height >= 0: height else: ap.defaultRowHeight
-
-  if a.currColIndex == ap.itemsPerRow or forceNextRow:
-    a.currColIndex = 0
-    a.nextItemWidth = ap.labelWidth
-    a.x = 0
-
-    a.y += h
-    a.yNoPad = a.y
-    a.y += (if a.insideGroup: ap.rowPad else: ap.rowGroupPad)
-
-  # TODO this only works for the default 2-column layout
-  else:
-    a.x = ap.labelWidth
-    a.nextItemWidth = ap.rowWidth - ap.labelWidth
-    a.nextItemHeight = h
 
 # }}}
-# }}}
+
+# {{{ Widgets
 
 # {{{ Popup
 
-# TODO needed?
+# {{{ closePopup()
 proc closePopup() =
   alias(ui, g_uiState)
   alias(ps, ui.popupState)
@@ -1429,7 +1411,8 @@ proc closePopup() =
   ps.state = psOpenLMBDown  # just resetting the default state
   ps.closed = true
 
-
+# }}}
+# {{{  beginPopup()
 proc beginPopup(w, h: float,
                 ax, ay, aw, ah: float): bool =
   alias(ui, g_uiState)
@@ -1490,7 +1473,8 @@ proc beginPopup(w, h: float,
 
     result = true
 
-
+# }}}
+# {{{ endPopup()
 proc endPopup() =
   alias(ui, g_uiState)
   alias(ps, ui.popupState)
@@ -1501,6 +1485,8 @@ proc endPopup() =
   if not ps.closed:
     ui.focusCaptured = true
     ui.currentLayer = ps.prevLayer
+
+# }}}
 
 # }}}
 
@@ -1530,7 +1516,41 @@ proc getDefaultLabelStyle*(): LabelStyle =
 proc setDefaultLabelStyle*(style: LabelStyle) =
   DefaultLabelStyle = style.deepCopy
 
+# {{{ drawLabel()
+proc drawLabel(vg: NVGContext, x, y, w, h, padHoriz: float,
+               label: string, color: Color,
+               fontSize: float, fontFace: string, align: HorizontalAlign,
+               multiLine: bool = false, lineHeight: float = 1.4) =
+  let
+    textBoxX = x + padHoriz
+    textBoxW = w - padHoriz*2
+    textBoxY = y
+    textBoxH = h
 
+  let tx = case align:
+  of haLeft:   textBoxX
+  of haCenter: textBoxX + textBoxW*0.5
+  of haRight:  textBoxX + textBoxW
+
+  let ty = y + h*TextVertAlignFactor
+
+  vg.save()
+
+  vg.intersectScissor(textBoxX, textBoxY, textBoxW, textBoxH)
+
+  vg.setFont(fontSize, fontFace, align)
+  vg.fillColor(color)
+
+  if multiLine:
+    vg.textLineHeight(lineHeight)
+    vg.textBox(tx, ty, textBoxW, label)
+  else:
+    discard vg.text(tx, ty, label)
+
+  vg.restore()
+
+# }}}
+# {{{ label()
 proc label*(x, y, w, h: float,
            labelText:  string,
            style:      LabelStyle = DefaultLabelStyle) =
@@ -1544,6 +1564,7 @@ proc label*(x, y, w, h: float,
     vg.drawLabel(x, y, w, h, padHoriz = 0, labelText, s.color,
                  s.fontSize, s.fontFace, s.align, s.multiLine, s.lineHeight)
 
+# }}}
 
 proc label*(labelText: string, style: LabelStyle = DefaultLabelStyle) =
   alias(ui, g_uiState)
@@ -1605,7 +1626,7 @@ proc getDefaultButtonStyle*(): ButtonStyle =
 proc setDefaultButtonStyle*(style: ButtonStyle) =
   DefaultButtonStyle = style.deepCopy
 
-
+# {{{ button()
 proc button(id:         ItemId,
             x, y, w, h: float,
             label:      string,
@@ -1665,6 +1686,7 @@ proc button(id:         ItemId,
   if isHot(id):
     handleTooltip(id, tooltip)
 
+# }}}
 
 template button*(x, y, w, h: float,
                  label:      string,
@@ -1727,7 +1749,7 @@ proc getDefaultCheckBoxStyle*(): CheckBoxStyle =
 proc setDefaultCheckBoxStyle*(style: CheckBoxStyle) =
   DefaultCheckBoxStyle = style.deepCopy
 
-
+# {{{ checkBox()
 proc checkBox(id:         ItemId,
               x, y, w:    float,
               active_out: var bool,
@@ -1792,6 +1814,7 @@ proc checkBox(id:         ItemId,
   if isHot(id):
     handleTooltip(id, tooltip)
 
+# }}}
 
 template checkBox*(x, y, w: float,
                    active:  var bool,
@@ -1874,6 +1897,7 @@ proc setDefaultSectionHeaderStyle*(style: SectionHeaderStyle) =
 
 let SectionHeaderCheckboxStyle = getDefaultCheckBoxStyle()
 
+# {{{ sectionHeader()
 proc sectionHeader(id:           ItemId,
                    x, y, w, h:   float,
                    label:        string,
@@ -1908,6 +1932,7 @@ proc sectionHeader(id:           ItemId,
 
   result = expanded_out
 
+# }}}
 
 template sectionHeader*(
   x, y, w, h: float,
@@ -2000,7 +2025,6 @@ proc getDefaultRadioButtonsStyle*(): RadioButtonsStyle =
 proc setDefaultRadioButtonsStyle*(style: RadioButtonsStyle) =
   DefaultRadioButtonsStyle = style.deepCopy
 
-
 type
   RadioButtonsLayoutKind* = enum
     rblHoriz, rblGridHoriz, rblGridVert
@@ -2017,7 +2041,7 @@ type
                                 x, y, w, h: float,
                                 style: RadioButtonsStyle)
 
-
+# {{{ DefaultRadioButtonDrawProc
 let DefaultRadioButtonDrawProc: RadioButtonsDrawProc =
   proc (vg: NVGContext, buttonIdx: Natural, label: string,
         hover, active, down, first, last: bool,  # TODO use enum for state?
@@ -2061,7 +2085,8 @@ let DefaultRadioButtonDrawProc: RadioButtonsDrawProc =
     vg.drawLabel(bx, y, bw, bh, s.labelPadHoriz, label, labelColor,
                  s.labelFontSize, s.labelFontFace, s.labelAlign)
 
-
+# }}}
+# {{{ radioButtons()
 proc radioButtons[T](
   id:               ItemId,
   x, y, w, h:       float,
@@ -2205,6 +2230,7 @@ proc radioButtons[T](
     let tt = if hotButton <= tooltips.high: tooltips[hotButton] else: ""
     handleTooltip(id, tt)
 
+# }}}
 
 template radioButtons*[T](
   x, y, w, h:   float,
@@ -2314,13 +2340,13 @@ var DefaultDropDownStyle = DropDownStyle(
   itemBackgroundColorHover  : HILITE
 )
 
-
 proc getDefaultDropDownStyle*(): DropDownStyle =
   DefaultDropDownStyle.deepCopy
 
 proc setDefaultDropDownStyle*(style: DropDownStyle) =
   DefaultDropDownStyle = style.deepCopy
 
+# {{{ dropDown()
 
 proc dropDown[T](id:               ItemId,
                  x, y, w, h:       float,
@@ -2507,6 +2533,7 @@ proc dropDown[T](id:               ItemId,
   if isHot(id):
     handleTooltip(id, tooltip)
 
+# }}}
 
 template dropDown*(
   x, y, w, h:   float,
@@ -2592,7 +2619,6 @@ var DefaultScrollBarStyle = ScrollBarStyle(
   labelColorHover        : white(),
   labelColorActive       : white()
 )
-
 
 proc getDefaultScrollBarStyle*(): ScrollBarStyle =
   DefaultScrollBarStyle.deepCopy
@@ -2822,22 +2848,6 @@ proc horizScrollBar(id:         ItemId,
   if isHot(id):
     handleTooltip(id, tooltip)
 
-
-template horizScrollBar*(x, y, w, h: float,
-                         startVal:  float,
-                         endVal:    float,
-                         value:     var float,
-                         tooltip:   string = "",
-                         thumbSize: float = -1.0,
-                         clickStep: float = -1.0,
-                         style:     ScrollBarStyle = DefaultScrollBarStyle) =
-
-  let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
-
-  horizScrollBar(id, x, y, w, h, startVal, endVal, value, tooltip, thumbSize,
-                 clickStep, style)
-
 # }}}
 # {{{ vertScrollBar
 
@@ -3056,22 +3066,6 @@ proc vertScrollBar(id:         ItemId,
   if isHot(id):
     handleTooltip(id, tooltip)
 
-
-template vertScrollBar*(x, y, w, h: float,
-                        startVal:   float,
-                        endVal:     float,
-                        value:      var float,
-                        tooltip:    string = "",
-                        thumbSize:  float = -1.0,
-                        clickStep:  float = -1.0,
-                        style:      ScrollBarStyle = DefaultScrollBarStyle) =
-
-  let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
-
-  vertScrollBar(id, x, y, w, h, startVal, endVal, value, tooltip, thumbSize,
-                clickStep, style)
-
 # }}}
 # {{{ scrollBarPost
 
@@ -3096,6 +3090,38 @@ proc scrollBarPost() =
     ui.widgetMouseDrag = false
 
 # }}}
+
+template horizScrollBar*(x, y, w, h: float,
+                         startVal:  float,
+                         endVal:    float,
+                         value:     var float,
+                         tooltip:   string = "",
+                         thumbSize: float = -1.0,
+                         clickStep: float = -1.0,
+                         style:     ScrollBarStyle = DefaultScrollBarStyle) =
+
+  let i = instantiationInfo(fullPaths=true)
+  let id = generateId(i.filename, i.line, "")
+
+  horizScrollBar(id, x, y, w, h, startVal, endVal, value, tooltip, thumbSize,
+                 clickStep, style)
+
+
+template vertScrollBar*(x, y, w, h: float,
+                        startVal:   float,
+                        endVal:     float,
+                        value:      var float,
+                        tooltip:    string = "",
+                        thumbSize:  float = -1.0,
+                        clickStep:  float = -1.0,
+                        style:      ScrollBarStyle = DefaultScrollBarStyle) =
+
+  let i = instantiationInfo(fullPaths=true)
+  let id = generateId(i.filename, i.line, "")
+
+  vertScrollBar(id, x, y, w, h, startVal, endVal, value, tooltip, thumbSize,
+                clickStep, style)
+
 # }}}
 
 # {{{ Text functions
@@ -3107,10 +3133,12 @@ type TextEditResult = object
 
 const NoSelection = TextSelection(startPos: -1, endPos: 0)
 
-
+# {{{ hasSelection()
 proc hasSelection(sel: TextSelection): bool =
   sel.startPos > -1 and sel.startPos != sel.endPos
 
+# }}}
+# {{{ normaliseSelection()
 proc normaliseSelection(sel: TextSelection): TextSelection =
   if (sel.startPos < sel.endPos):
     TextSelection(
@@ -3123,6 +3151,8 @@ proc normaliseSelection(sel: TextSelection): TextSelection =
       endPos:   sel.startPos
     )
 
+# }}}
+# {{{ updateSelection()
 proc updateSelection(sel: TextSelection,
                      cursorPos, newCursorPos: Natural): TextSelection =
   var sel = sel
@@ -3132,23 +3162,31 @@ proc updateSelection(sel: TextSelection,
   sel.endPos = newCursorPos
   result = sel
 
+# }}}
+# {{{ isAlphanumeric()
 proc isAlphanumeric(r: Rune): bool =
   if r.isAlpha: return true
   let s = $r
   if s[0] == '_' or s[0].isDigit: return true
 
+# }}}
+# {{{ findNextWordEnd()
 proc findNextWordEnd(text: string, cursorPos: Natural): Natural =
   var p = cursorPos
   while p < text.runeLen and     text.runeAtPos(p).isAlphanumeric: inc(p)
   while p < text.runeLen and not text.runeAtPos(p).isAlphanumeric: inc(p)
   result = p
 
+# }}}
+# {{{ findPrevWordStart()
 proc findPrevWordStart(text: string, cursorPos: Natural): Natural =
   var p = cursorPos
   while p > 0 and not text.runeAtPos(p-1).isAlphanumeric: dec(p)
   while p > 0 and     text.runeAtPos(p-1).isAlphanumeric: dec(p)
   result = p
 
+# }}}
+# {{{ drawCursor()
 proc drawCursor(vg: NVGContext, x, y1, y2: float, color: Color, width: float) =
   vg.beginPath()
   vg.strokeColor(color)
@@ -3157,6 +3195,7 @@ proc drawCursor(vg: NVGContext, x, y1, y2: float, color: Color, width: float) =
   vg.lineTo(x+0.5, y2)
   vg.stroke()
 
+# }}}
 # {{{ insertString()
 proc insertString(
   text: string, cursorPos: Natural, selection: TextSelection, toInsert: string
@@ -3334,6 +3373,7 @@ proc handleCommonTextEditingShortcuts(
   result = if eventHandled: res.some else: TextEditResult.none
 
 # }}}
+
 # {{{ breakLines*()
 type
   TextRow* = object
@@ -3567,6 +3607,7 @@ proc textBreakLines*(text: string, maxWidth: float,
     inc(glyphPos)
 
 # }}}
+
 # }}}
 # {{{ TextField
 
@@ -3617,7 +3658,20 @@ proc getDefaultTextFieldStyle*(): TextFieldStyle =
 proc setDefaultTextFieldStyle*(style: TextFieldStyle) =
   DefaultTextFieldStyle = style.deepCopy
 
+type
+  TextFieldConstraintKind* = enum
+    tckString, tckInteger
 
+  TextFieldConstraint* = object
+    case kind*: TextFieldConstraintKind
+    of tckString:
+      minLen*: Natural
+      maxLen*: int
+
+    of tckInteger:
+      min*, max*: int
+
+# {{{ textFieldEnterEditMode()
 proc textFieldEnterEditMode(id: ItemId, text: string, startX: float) =
   alias(ui, g_uiState)
   alias(tf, ui.textFieldState)
@@ -3638,21 +3692,8 @@ proc textFieldEnterEditMode(id: ItemId, text: string, startX: float) =
 
   ui.focusCaptured = true
 
-
-type
-  TextFieldConstraintKind* = enum
-    tckString, tckInteger
-
-  TextFieldConstraint* = object
-    case kind*: TextFieldConstraintKind
-    of tckString:
-      minLen*: Natural
-      maxLen*: int
-
-    of tckInteger:
-      min*, max*: int
-
-
+# }}}
+# {{{ textField()
 proc textField(
   id:         ItemId,
   x, y, w, h: float,
@@ -4106,6 +4147,7 @@ proc textField(
 
   tf.prevItem = id
 
+# }}}
 
 template rawTextField*(
   x, y, w, h: float,
@@ -4210,7 +4252,6 @@ proc getDefaultTextAreaStyle*(): TextAreaStyle =
 proc setDefaultTextAreaStyle*(style: TextAreaStyle) =
   DefaultTextAreaStyle = style.deepCopy
 
-
 type
   TextAreaConstraint* = object
     minLen*: Natural
@@ -4228,9 +4269,7 @@ DefaultTextAreaScrollBarStyle.thumbFillColorActive = gray(0, 0.35)
 
 var DefaultTextAreaScrollBarStyle_EditMode = DefaultTextAreaScrollBarStyle.deepCopy()
 
-var textAreaScrollBarPos: float
-
-
+# {{{ textArea()
 proc textArea(
   id:         ItemId,
   x, y, w, h: float,
@@ -4762,6 +4801,7 @@ proc textArea(
 
   ta.prevItem = id
 
+# }}}
 
 template textArea*(
   x, y, w, h: float,
@@ -4778,12 +4818,9 @@ template textArea*(
   textArea(id, x, y, w, h, text, tooltip, activate, drawWidget = true,
            constraint, style)
 
-
 # }}}
 
 # {{{ Slider
-
-# {{{ horizSlider
 
 type SliderStyle* = ref object
   trackCornerRadius*:      float
@@ -4854,7 +4891,7 @@ proc getDefaultSliderStyle*(): SliderStyle =
 proc setDefaultSliderStyle*(style: SliderStyle) =
   DefaultSliderStyle = style.deepCopy
 
-
+# {{{ horizSlider
 proc horizSlider(id:         ItemId,
                  x, y, w, h: float,
                  startVal:   float,
@@ -5242,6 +5279,7 @@ proc sliderPost() =
     ui.widgetMouseDrag = false
 
 # }}}
+
 # }}}
 # {{{ Color
 
@@ -5322,30 +5360,51 @@ var ColorPickerTextFieldStyle = TextFieldStyle(
   selectionColor      : rgb(0.5, 0.15, 0.15)
 )
 
-
-proc colorwheel*(x, y, w, h, hue, sat, val: float) =
+# {{{ colorwheel()
+proc colorwheel(x, y, w, h, hue, sat, val: float) =
   alias(ui, g_uiState)
-  alias(vg, g_nvgContext)
+  alias(cs, ui.colorPickerState)
 
   let (x, y) = addDrawOffset(x, y)
 
-  addDrawLayer(ui.currentLayer, vg):
-    let
-      cx = x + w*0.5
-      cy = y + h*0.5
-      r1 = (if w < h: w else: h) * 0.5
-      r0 = r1 - r1*0.20
-      da = 0.5 / r1
+  let
+    # Circle
+    cx = x + w*0.5
+    cy = y + h*0.5
+    r1 = (if w < h: w else: h) * 0.5
+    r0 = r1 - r1*0.20
 
     # Triangle
-    let
-      x1 = cx + r0 * cos(5*PI/6)
-      y1 = cy + r0 * sin(5*PI/6)
-      x2 = cx + r0 * cos(PI/6)
-      y2 = cy + r0 * sin(PI/6)
-      x3 = cx + r0 * cos(1.5*PI)
-      y3 = cy + r0 * sin(1.5*PI)
+    x1 = cx + r0 * cos(5*PI/6)
+    y1 = cy + r0 * sin(5*PI/6)
+    x2 = cx + r0 * cos(PI/6)
+    y2 = cy + r0 * sin(PI/6)
+    x3 = cx + r0 * cos(1.5*PI)
+    y3 = cy + r0 * sin(1.5*PI)
 
+  # Hit testing
+  if isHit(x, y, w, h) and ui.mbLeftDown:
+    let
+      dx = ui.mx - cx
+      dy = ui.my - cy
+      a = arctan2(dy, dx)
+      r = dy / sin(a)
+
+    if r >= r0 and r <= r1:
+      cs.mouseMode = cmmDragWheel
+
+  case cs.mouseMode
+  of cmmNormal:
+    discard
+  of cmmDragWheel:
+    discard
+  of cmmDragTriangle:
+    discard
+
+  addDrawLayer(ui.currentLayer, vg):
+    let da = 0.5 / r1
+
+    # Draw triangle
     vg.strokeColor(black)
     vg.strokeWidth(1.0)
     vg.beginPath()
@@ -5364,7 +5423,7 @@ proc colorwheel*(x, y, w, h, hue, sat, val: float) =
     vg.fillPaint(paint)
     vg.fill()
 
-    # Triangle marker
+    # Draw triangle marker
     let xs = lerp(x3, x1, val)
     let xe = lerp(x3, x2, val)
 
@@ -5388,7 +5447,7 @@ proc colorwheel*(x, y, w, h, hue, sat, val: float) =
 
     vg.restore()
 
-    # Wheel
+    # Draw wheel
     const Segments = 6
 
     for i in 0..<Segments:
@@ -5414,7 +5473,7 @@ proc colorwheel*(x, y, w, h, hue, sat, val: float) =
       vg.fillPaint(paint)
       vg.fill()
 
-    # Wheel marker
+    # Draw wheel marker
     vg.save()
     vg.translate(cx, cy)
     vg.rotate(PI + hue * 2*PI)
@@ -5433,7 +5492,8 @@ proc colorwheel*(x, y, w, h, hue, sat, val: float) =
 
     vg.restore()
 
-
+# }}}
+# {{{ color()
 proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
   alias(ui, g_uiState)
   alias(cs, ui.colorPickerState)
@@ -5447,6 +5507,7 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
     if ui.mbLeftDown and hasNoActiveItem():
       cs.activeItem = id
       cs.opened = true
+      cs.mouseMode = cmmNormal
 
   # Draw color widget
   addDrawLayer(ui.currentLayer, vg):
@@ -5488,17 +5549,17 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
 
       y = 178.0
 
-      cs.lastMode = cs.mode
+      cs.lastColorMode = cs.colorMode
 
       radioButtons(
         x, y, w+2, h+2,
         labels = @["RGB", "HSV", "Hex"],
-        cs.mode, style=ColorPickerRadioButtonStyle)
+        cs.colorMode, style=ColorPickerRadioButtonStyle)
 
       y += 30
 
-      case cs.mode
-      of cmRGB:
+      case cs.colorMode
+      of ccmRGB:
         var
           r = color.r.float * 255
           g = color.g.float * 255
@@ -5526,8 +5587,8 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
         color_out = rgba(r.int, g.int, b.int, a.int)
 
 
-      of cmHSV:
-        if cs.opened or cs.lastMode != cmHSV:
+      of ccmHSV:
+        if cs.opened or cs.lastColorMode != ccmHSV:
           (cs.h, cs.s, cs.v) = color.toHSV
 
         var
@@ -5559,8 +5620,8 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
         color_out = hsva(cs.h, cs.s, cs.v, a/255)
 
 
-      of cmHex:
-        if cs.opened or cs.lastMode != cmHex:
+      of ccmHex:
+        if cs.opened or cs.lastColorMode != ccmHex:
           cs.hexString = color.toHex
 
         var a = color.a.float * 255
@@ -5584,6 +5645,7 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
 
       endPopup()
 
+# }}}
 
 template color*(x, y, w, h: float, color: var Color) =
   let i = instantiationInfo(fullPaths=true)
@@ -5634,7 +5696,7 @@ proc getDefaultDialogStyle*(): DialogStyle =
 proc setDefaultDialogStyle*(style: DialogStyle) =
   DefaultDialogStyle = style.deepCopy
 
-
+# {{{ beginDialog()
 proc beginDialog*(w, h: float, title: string,
                   style: DialogStyle = DefaultDialogStyle) =
 
@@ -5696,7 +5758,8 @@ proc beginDialog*(w, h: float, title: string,
     DrawOffset(ox: x, oy: y)
   )
 
-
+# }}}
+# {{{ endDialog()
 proc endDialog*() =
   alias(ui, g_uiState)
 
@@ -5705,13 +5768,15 @@ proc endDialog*() =
   if ui.dialogOpen:
     ui.focusCaptured = true
 
-
+# }}}
+# {{{ closeDialog()
 proc closeDialog*() =
   alias(ui, g_uiState)
 
   ui.focusCaptured = false
   ui.dialogOpen = false
 
+# }}}
 
 # }}}
 # {{{ ScrollView
@@ -5942,6 +6007,10 @@ proc menuItemSeparator*() =
 # }}}
 ]#
 
+# }}}
+
+# {{{ General
+
 # {{{ init*()
 
 proc init*(nvg: NVGContext) =
@@ -6082,10 +6151,13 @@ proc endFrame*() =
 proc shouldRenderNextFrame*(): bool =
   alias(ui, g_uiState)
   ui.framesLeft > 0
+
 # }}}
 # {{{ nvgContext*()
 proc nvgContext*(): NVGContext =
   g_nvgContext
+
+# }}}
 
 # }}}
 
