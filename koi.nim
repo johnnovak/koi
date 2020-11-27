@@ -1395,6 +1395,13 @@ proc endGroup*() =
   a.insideGroup = false
 
 # }}}
+# {{{
+template group*(body: untyped) =
+  beginGroup()
+  body
+  endGroup()
+
+# }}}
 
 # }}}
 
@@ -5360,8 +5367,8 @@ var ColorPickerTextFieldStyle = TextFieldStyle(
   selectionColor      : rgb(0.5, 0.15, 0.15)
 )
 
-# {{{ colorwheel()
-proc colorwheel(x, y, w, h, hue, sat, val: float) =
+# {{{ colorWheel()
+proc colorWheel(x, y, w, h: float; hue, sat, val: var float) =
   alias(ui, g_uiState)
   alias(cs, ui.colorPickerState)
 
@@ -5382,24 +5389,43 @@ proc colorwheel(x, y, w, h, hue, sat, val: float) =
     x3 = cx + r0 * cos(1.5*PI)
     y3 = cy + r0 * sin(1.5*PI)
 
+
+  proc wheelAngleFromCursor(): float =
+    let dx = ui.mx - cx
+    let dy = ui.my - cy
+    result = arctan2(dy, dx)
+
+  proc hueFromWheelAngle(a: float): float =
+    let aa = if a > 0: a else: 2*PI + a
+    result = (aa / (2*PI) + 0.5) mod 1.0
+
   # Hit testing
-  if isHit(x, y, w, h) and ui.mbLeftDown:
-    let
-      dx = ui.mx - cx
-      dy = ui.my - cy
-      a = arctan2(dy, dx)
-      r = dy / sin(a)
+  if cs.mouseMode == cmmNormal:
+    if isHit(x, y, w, h) and ui.mbLeftDown:
+      let
+        dy = ui.my - cy
+        a = wheelAngleFromCursor()
+        r = dy / sin(a)
 
-    if r >= r0 and r <= r1:
-      cs.mouseMode = cmmDragWheel
+      if r >= r0 and r <= r1:
+        hue = hueFromWheelAngle(a)
+        cs.mouseMode = cmmDragWheel
 
-  case cs.mouseMode
-  of cmmNormal:
+  if cs.mouseMode == cmmDragWheel:
+    if not ui.mbLeftDown:
+      cs.mouseMode = cmmNormal
+    else:
+      let a = wheelAngleFromCursor()
+      hue = hueFromWheelAngle(a)
     discard
-  of cmmDragWheel:
+
+  elif cs.mouseMode == cmmDragTriangle:
     discard
-  of cmmDragTriangle:
-    discard
+
+
+  let hue = hue
+  let sat = sat
+  let val = val
 
   addDrawLayer(ui.currentLayer, vg):
     let da = 0.5 / r1
@@ -5581,10 +5607,10 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
         horizSlider(x, y, w, h-1, startVal = 0, endVal = 255, a,
                     label="A", style=ColorPickerSliderStyle)
 
-        let (hue, sat, val) = color.toHSV
-        colorwheel(x, startY, w+0.5, w+0.5, hue, sat, val)
+        var (hue, sat, val) = rgba(r/255, g/255, b/255, a/255).toHSV
+        colorWheel(x, startY, w+0.5, w+0.5, hue, sat, val)
 
-        color_out = rgba(r.int, g.int, b.int, a.int)
+        color_out = hsva(hue, sat, val, a/255)
 
 
       of ccmHSV:
@@ -5615,7 +5641,7 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
 
         (cs.h, cs.s, cs.v) = (hue/360, sat/100, val/100)
 
-        colorwheel(x, startY, w+0.5, w+0.5, cs.h, cs.s, cs.v)
+        colorWheel(x, startY, w+0.5, w+0.5, cs.h, cs.s, cs.v)
 
         color_out = hsva(cs.h, cs.s, cs.v, a/255)
 
@@ -5634,8 +5660,8 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
 
         color = colorFromHexStr(cs.hexString).withAlpha(a/255)
 
-        let (hue, sat, val) = color.toHSV
-        colorwheel(x, startY, w+0.5, w+0.5, hue, sat, val)
+        var (hue, sat, val) = color.toHSV
+        colorWheel(x, startY, w+0.5, w+0.5, hue, sat, val)
 
         color_out = hsva(hue, sat, val, a/255)
 

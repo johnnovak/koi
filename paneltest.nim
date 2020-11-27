@@ -100,164 +100,148 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
   koi.setAutoLayoutParams(lp)
 
   if koi.sectionHeader("General", sectionGeneral):
-    koi.beginGroup()
-    koi.label("Theme name")
-    koi.textfield(themeName)
+    koi.group:
+      koi.label("Theme name")
+      koi.textfield(themeName)
 
-    koi.label("Theme author")
-    koi.textfield(themeAuthor)
+      koi.label("Theme author")
+      koi.textfield(themeAuthor)
 
-    koi.label("Background")
-    koi.color(currTheme.general.backgroundColor)
+      koi.label("Background")
+      koi.color(currTheme.general.backgroundColor)
 
-    koi.label("Highlight")
-    koi.color(currTheme.general.highlightColor)
-    koi.endGroup()
+      koi.label("Highlight")
+      koi.color(currTheme.general.highlightColor)
 
   if koi.sectionHeader("Widget", sectionWidget):
-    koi.beginGroup()
-    koi.label("Background")
-    koi.color(currTheme.widget.bgColor)
+    koi.group:
+      koi.label("Background")
+      koi.color(currTheme.widget.bgColor)
 
-    koi.label("Background hover")
-    koi.color(currTheme.widget.bgColorHover)
+      koi.label("Background hover")
+      koi.color(currTheme.widget.bgColorHover)
 
-    koi.label("Background disabled")
-    koi.color(currTheme.widget.bgColorDisabled)
-    koi.endGroup()
+      koi.label("Background disabled")
+      koi.color(currTheme.widget.bgColorDisabled)
 
-    koi.beginGroup()
-    koi.label("Text")
-    koi.color(currTheme.widget.textColor)
+    koi.group:
+      koi.label("Text")
+      koi.color(currTheme.widget.textColor)
 
-    koi.label("Text disabled")
-    koi.color(currTheme.widget.textColorDisabled)
-    koi.endGroup()
+      koi.label("Text disabled")
+      koi.color(currTheme.widget.textColorDisabled)
 
   if koi.sectionHeader("Text field", sectionTextField):
-    koi.beginGroup()
-    koi.label("Background active")
-    koi.color(currTheme.textField.bgColorActive)
+    koi.group:
+      koi.label("Background active")
+      koi.color(currTheme.textField.bgColorActive)
 
-    koi.label("Text active")
-    koi.color(currTheme.textField.textColorActive)
+      koi.label("Text active")
+      koi.color(currTheme.textField.textColorActive)
 
-    koi.label("Cursor")
-    koi.color(currTheme.textField.cursorColor)
+      koi.label("Cursor")
+      koi.color(currTheme.textField.cursorColor)
 
-    koi.label("Selection")
-    koi.color(currTheme.textField.selectionColor)
-    koi.endGroup()
+      koi.label("Selection")
+      koi.color(currTheme.textField.selectionColor)
 
   if koi.sectionHeader("Dialog", sectionDialog):
-    koi.beginGroup()
-    koi.label("Title bar background")
-    koi.color(currTheme.dialog.titleBarBgColor)
+    koi.group:
+      koi.label("Title bar background")
+      koi.color(currTheme.dialog.titleBarBgColor)
 
-    koi.label("Title bar text")
-    koi.color(currTheme.dialog.titleBarTextColor)
+      koi.label("Title bar text")
+      koi.color(currTheme.dialog.titleBarTextColor)
 
-    koi.label("Background")
-    koi.color(currTheme.dialog.backgroundColor)
+      koi.label("Background")
+      koi.color(currTheme.dialog.backgroundColor)
 
-    koi.label("Text")
-    koi.color(currTheme.dialog.textColor)
+      koi.label("Text")
+      koi.color(currTheme.dialog.textColor)
 
-    koi.label("Warning text")
-    koi.color(currTheme.dialog.warningTextColor)
-    koi.endGroup()
+      koi.label("Warning text")
+      koi.color(currTheme.dialog.warningTextColor)
 
   if koi.sectionHeader("Title bar", sectionTitleBar):
-    koi.beginGroup()
-    koi.label("Background")
-    koi.color(currTheme.titleBar.backgroundColor)
+    koi.group:
+      koi.label("Background")
+      koi.color(currTheme.titleBar.backgroundColor)
 
-    koi.label("Background unfocused")
-    koi.color(currTheme.titleBar.bgColorUnfocused)
-    koi.endGroup()
+      koi.label("Background unfocused")
+      koi.color(currTheme.titleBar.bgColorUnfocused)
 
-    koi.beginGroup()
-    koi.label("Text")
-    koi.color(currTheme.titleBar.textColor)
+    koi.group:
+      koi.label("Text")
+      koi.color(currTheme.titleBar.textColor)
 
-    koi.label("Text unfocused")
-    koi.color(currTheme.titleBar.textColorUnfocused)
-    koi.endGroup()
+      koi.label("Text unfocused")
+      koi.color(currTheme.titleBar.textColorUnfocused)
 
-    koi.beginGroup()
-    koi.label("Modified flag")
-    koi.color(currTheme.titleBar.modifiedFlagColor)
-    koi.endGroup()
+    koi.group:
+      koi.label("Modified flag")
+      koi.color(currTheme.titleBar.modifiedFlagColor)
 
-    koi.beginGroup()
-    koi.label("Button")
-    koi.color(currTheme.titleBar.buttonColor)
+    koi.group:
+      koi.label("Button")
+      koi.color(currTheme.titleBar.buttonColor)
 
-    koi.label("Button hover")
-    koi.color(currTheme.titleBar.buttonColorHover)
+      koi.label("Button hover")
+      koi.color(currTheme.titleBar.buttonColorHover)
 
-    koi.label("Button down")
-    koi.color(currTheme.titleBar.buttonColorDown)
-    koi.endGroup()
+      koi.label("Button down")
+      koi.color(currTheme.titleBar.buttonColorDown)
 
   if koi.sectionHeader("Status bar", sectionStatusBar):
-    koi.beginGroup()
-    koi.label("Background")
-    koi.color(currTheme.statusBar.backgroundColor)
+    koi.group:
+      koi.label("Background")
+      koi.color(currTheme.statusBar.backgroundColor)
 
-    koi.label("Text")
-    koi.color(currTheme.statusBar.textColor)
-    koi.endGroup()
+      koi.label("Text")
+      koi.color(currTheme.statusBar.textColor)
 
-    koi.beginGroup()
-    koi.label("Command background")
-    koi.color(currTheme.statusBar.commandBgColor)
+    koi.group:
+      koi.label("Command background")
+      koi.color(currTheme.statusBar.commandBgColor)
 
-    koi.label("Command")
-    koi.color(currTheme.statusBar.commandColor)
-    koi.endGroup()
+      koi.label("Command")
+      koi.color(currTheme.statusBar.commandColor)
 
-    koi.beginGroup()
-    koi.label("Coordinates")
-    koi.color(currTheme.statusBar.coordsColor)
-    koi.endGroup()
+    koi.group:
+      koi.label("Coordinates")
+      koi.color(currTheme.statusBar.coordsColor)
 
   if koi.sectionHeader("Level dropDown", sectionLeveldropDown):
-    koi.beginGroup()
-    koi.label("Button")
-    koi.color(currTheme.leveldropDown.buttonColor)
+    koi.group:
+      koi.label("Button")
+      koi.color(currTheme.leveldropDown.buttonColor)
 
-    koi.label("Button hover")
-    koi.color(currTheme.leveldropDown.buttonColorHover)
-    koi.endGroup()
+      koi.label("Button hover")
+      koi.color(currTheme.leveldropDown.buttonColorHover)
 
-    koi.beginGroup()
-    koi.label("Text")
-    koi.color(currTheme.leveldropDown.textColor)
-    koi.endGroup()
+    koi.group:
+      koi.label("Text")
+      koi.color(currTheme.leveldropDown.textColor)
 
-    koi.beginGroup()
-    koi.label("Item list")
-    koi.color(currTheme.leveldropDown.itemListColor)
+    koi.group:
+      koi.label("Item list")
+      koi.color(currTheme.leveldropDown.itemListColor)
 
-    koi.label("Item")
-    koi.color(currTheme.leveldropDown.itemColor)
+      koi.label("Item")
+      koi.color(currTheme.leveldropDown.itemColor)
 
-    koi.label("Item hover")
-    koi.color(currTheme.leveldropDown.itemColorHover)
-    koi.endGroup()
+      koi.label("Item hover")
+      koi.color(currTheme.leveldropDown.itemColorHover)
 
   if koi.sectionHeader("About button", sectionAboutButton):
-    koi.beginGroup()
-    koi.label("Color")
-    koi.color(currTheme.aboutButton.color)
+    koi.group:
+      koi.label("Color")
+      koi.color(currTheme.aboutButton.color)
 
-    koi.label("Hover")
-    koi.color(currTheme.aboutButton.colorHover)
+      koi.label("Hover")
+      koi.color(currTheme.aboutButton.colorHover)
 
-    koi.label("Active")
-    koi.color(currTheme.aboutButton.colorActive)
-    koi.endGroup()
+      koi.label("Active")
+      koi.color(currTheme.aboutButton.colorActive)
 
 #-----------------------------------------------------------------------------
 
