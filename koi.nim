@@ -79,6 +79,7 @@ type
     state:     PopupState
     prevLayer: DrawLayer
     closed:    bool
+    widgetInsidePopupCapturedFocus: bool
 
 # }}}
 # {{{ RadioButtonState
@@ -1449,11 +1450,11 @@ proc beginPopup(w, h: float,
     if not ui.mbLeftDown:
       ps.state = psOpen
 
-  if not (inside or insideHitBorder) or
-     (ps.state == psOpen and ui.mbLeftDown and not inside):
+  if not ps.widgetInsidePopupCapturedFocus and
+     (not (inside or insideHitBorder) or
+      (ps.state == psOpen and ui.mbLeftDown and not inside)):
     closePopup()
     result = false
-
   else:
     ps.prevLayer = ui.currentLayer
 
@@ -1475,7 +1476,7 @@ proc beginPopup(w, h: float,
       DrawOffset(ox: x, oy: y)
     )
 
-    ui.focusCaptured = false
+    ui.focusCaptured = ps.widgetInsidePopupCapturedFocus
     ui.currentLayer = layerPopup
 
     result = true
@@ -1485,6 +1486,11 @@ proc beginPopup(w, h: float,
 proc endPopup() =
   alias(ui, g_uiState)
   alias(ps, ui.popupState)
+
+  if ui.focusCaptured:
+    ps.widgetInsidePopupCapturedFocus = true
+  else:
+    ps.widgetInsidePopupCapturedFocus = false
 
   popDrawOffset()
 
@@ -5291,27 +5297,27 @@ proc sliderPost() =
 # {{{ Color
 
 var ColorPickerRadioButtonStyle = RadioButtonsStyle(
-  buttonPadHoriz           : 2,
-  buttonPadVert            : 3,
-  buttonCornerRadius       : 4,
-  buttonStrokeWidth        : 0,
-  buttonStrokeColor        : black(),
-  buttonStrokeColorHover   : black(),
-  buttonStrokeColorDown    : black(),
-  buttonStrokeColorActive  : black(),
-  buttonFillColor          : gray(0.25),
-  buttonFillColorHover     : gray(0.25),
-  buttonFillColorDown      : gray(0.45),
-  buttonFillColorActive    : gray(0.45),
-  labelPadHoriz            : 0,
-  labelFontSize            : 13.0,
-  labelFontFace            : "sans-bold",
-  labelOnly                : false,
-  labelAlign               : haCenter,
-  labelColor               : gray(0.6),
-  labelColorHover          : gray(0.6),
-  labelColorActive         : gray(1.0),
-  labelColorDown           : gray(0.8)
+  buttonPadHoriz          : 2,
+  buttonPadVert           : 3,
+  buttonCornerRadius      : 4,
+  buttonStrokeWidth       : 0,
+  buttonStrokeColor       : black(),
+  buttonStrokeColorHover  : black(),
+  buttonStrokeColorDown   : black(),
+  buttonStrokeColorActive : black(),
+  buttonFillColor         : gray(0.25),
+  buttonFillColorHover    : gray(0.25),
+  buttonFillColorDown     : gray(0.45),
+  buttonFillColorActive   : gray(0.45),
+  labelPadHoriz           : 0,
+  labelFontSize           : 13.0,
+  labelFontFace           : "sans-bold",
+  labelOnly               : false,
+  labelAlign              : haCenter,
+  labelColor              : gray(0.6),
+  labelColorHover         : gray(0.6),
+  labelColorActive        : gray(1.0),
+  labelColorDown          : gray(0.8)
 )
 
 var ColorPickerSliderStyle = SliderStyle(
@@ -5410,10 +5416,12 @@ proc colorWheel(x, y, w, h: float; hue, sat, val: var float) =
       if r >= r0 and r <= r1:
         hue = hueFromWheelAngle(a)
         cs.mouseMode = cmmDragWheel
+        ui.focusCaptured = true
 
   if cs.mouseMode == cmmDragWheel:
     if not ui.mbLeftDown:
       cs.mouseMode = cmmNormal
+      ui.focusCaptured = false
     else:
       let a = wheelAngleFromCursor()
       hue = hueFromWheelAngle(a)
