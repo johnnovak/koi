@@ -12,6 +12,7 @@ import unicode
 
 import glfw
 from glfw/wrapper import setCursor, createStandardCursor, CursorShape
+import glm
 import nanovg
 
 import koi/ringbuffer
@@ -4917,6 +4918,7 @@ proc horizSlider(id:         ItemId,
 
   var value = value_out
 
+  echo "startVal: ", startVal, ", endVal: ", endVal, ", value: ", value
   assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
          (endVal   < startVal and value >= endVal   and value <= startVal)
 
@@ -5405,6 +5407,20 @@ proc colorWheel(x, y, w, h: float; hue, sat, val: var float) =
     let aa = if a > 0: a else: 2*PI + a
     result = (aa / (2*PI) + 0.5) mod 1.0
 
+  proc calcTriangleHalfPlaneDeterminants(): (float, float, float) =
+    let m1 = (y3-y1)/(x3-x1)
+    var mx = ui.mx - x1
+    var my = ui.my - y1
+    let i1 = m1*mx - my
+
+    let m2 = (y3-y2)/(x3-x2)
+    mx = ui.mx - x2
+    my = ui.my - y2
+    let i2 = m2*mx - my
+
+    let i3 = if ui.my < y1: -1.0 else: 1.0
+    result = (i1, i2, i3)
+
   # Hit testing
   if cs.mouseMode == cmmNormal:
     if isHit(x, y, w, h) and ui.mbLeftDown:
@@ -5417,6 +5433,12 @@ proc colorWheel(x, y, w, h: float; hue, sat, val: var float) =
         hue = hueFromWheelAngle(a)
         cs.mouseMode = cmmDragWheel
         ui.focusCaptured = true
+      else:
+        let (i1, i2, i3) = calcTriangleHalfPlaneDeterminants()
+        let insideTriangle = i1 < 0 and i2 < 0 and i3 < 0
+        if insideTriangle:
+          cs.mouseMode = cmmDragTriangle
+          ui.focusCaptured = true
 
   if cs.mouseMode == cmmDragWheel:
     if not ui.mbLeftDown:
@@ -5425,10 +5447,58 @@ proc colorWheel(x, y, w, h: float; hue, sat, val: var float) =
     else:
       let a = wheelAngleFromCursor()
       hue = hueFromWheelAngle(a)
-    discard
 
   elif cs.mouseMode == cmmDragTriangle:
-    discard
+    if not ui.mbLeftDown:
+      cs.mouseMode = cmmNormal
+      ui.focusCaptured = false
+    else:
+      var mx, my: float
+      let (i1, i2, i3) = calcTriangleHalfPlaneDeterminants()
+      let insideTriangle = i1 < 0 and i2 < 0 and i3 < 0
+
+      if insideTriangle:
+        mx = ui.mx
+        my = ui.my
+      # Cursor is to the left of the left side -> project Y coord to the side
+      elif i1 > 0:
+        my = clamp(ui.my, y3, y1)
+        let dy = y1-y3
+        mx = lerp(x1, x3, (y1-my)/dy)
+      # Cursor is to the right of the right side -> project Y coord to the side
+      elif i2 > 0:
+        my = clamp(ui.my, y3, y1)
+        let dy = y1-y3
+        mx = lerp(x2, x3, (y1-my)/dy)
+      # Cursor below the bottom side -> project the X coord to the side
+      elif i3 > 0:
+        mx = clamp(ui.mx, x1, x2)
+        my = y1
+
+      # Convert screen-coordinates into "local" coordinates (triangle within
+      # the unit-circle), so we can rotate them.
+      mx -= cx
+      my -= cy
+
+      # The angle is negative because the Y-axis in NanoVG is flipped, and
+      # we're dealing with an "unflipped" transform matrix here
+      const M = mat3f().rotate(-2*PI/3)
+      let vm = M * vec3f(mx, my, 1)
+
+      # Because of the rotation trick, we can easily calculate the saturation
+      # and value from the "local" mouse coordinates (value runs along the
+      # Y axis, saturation along the X axis)
+      let dy = y1-y3
+      val = ((vm.y)-(y3-cy)) / dy
+      val = clamp(val, 0, 1)  # there's a chance to over/undershoot
+
+      sat = if val < 0.0001: 0.0
+            else:
+              let xs = lerp(x3-cx, x1-cx, val)
+              let xe = lerp(x3-cx, x2-cx, val)
+              invLerp(xs, xe, vm.x)
+
+      sat = clamp(sat, 0, 1)  # there's a chance to over/undershoot
 
 
   let hue = hue
