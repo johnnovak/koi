@@ -45,7 +45,7 @@ type
     ccmRGB, ccmHSV, ccmHex
 
   ColorPickerMouseMode = enum
-    cmmNormal, cmmDragWheel, cmmDragTriangle
+    cmmNormal, cmmLMBDown, cmmDragWheel, cmmDragTriangle
 
   ColorPickerStateVars = object
     opened:        bool
@@ -5439,7 +5439,14 @@ proc colorWheel(x, y, w, h: float; hue, sat, val: var float) =
         if insideTriangle:
           cs.mouseMode = cmmDragTriangle
           ui.focusCaptured = true
+        else:
+          cs.mouseMode = cmmLMBDown  # LMB down outside of any active area
 
+  elif cs.mouseMode == cmmLMBDown:
+    if not ui.mbLeftDown:
+      cs.mouseMode = cmmNormal
+
+  # "Fall-through" from hit testing stage
   if cs.mouseMode == cmmDragWheel:
     if not ui.mbLeftDown:
       cs.mouseMode = cmmNormal
