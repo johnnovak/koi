@@ -55,6 +55,7 @@ type
     activeItem:    ItemId
     h, s, v:       float
     hexString:     string
+    lastHue:       float
 
 # }}}
 # {{{ DropDownState
@@ -4918,7 +4919,6 @@ proc horizSlider(id:         ItemId,
 
   var value = value_out
 
-  echo "startVal: ", startVal, ", endVal: ", endVal, ", value: ", value
   assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
          (endVal   < startVal and value >= endVal   and value <= startVal)
 
@@ -5411,15 +5411,15 @@ proc colorWheel(x, y, w, h: float; hue, sat, val: var float) =
     let m1 = (y3-y1)/(x3-x1)
     var mx = ui.mx - x1
     var my = ui.my - y1
-    let i1 = m1*mx - my
+    let dLeft = m1*mx - my
 
     let m2 = (y3-y2)/(x3-x2)
     mx = ui.mx - x2
     my = ui.my - y2
-    let i2 = m2*mx - my
+    let dRight = m2*mx - my
 
-    let i3 = if ui.my < y1: -1.0 else: 1.0
-    result = (i1, i2, i3)
+    let dBottom = if ui.my < y1: -1.0 else: 1.0
+    result = (dLeft, dRight, dBottom)
 
   # Hit testing
   if cs.mouseMode == cmmNormal:
@@ -5434,8 +5434,8 @@ proc colorWheel(x, y, w, h: float; hue, sat, val: var float) =
         cs.mouseMode = cmmDragWheel
         ui.focusCaptured = true
       else:
-        let (i1, i2, i3) = calcTriangleHalfPlaneDeterminants()
-        let insideTriangle = i1 < 0 and i2 < 0 and i3 < 0
+        let (dLeft, dRight, dBottom) = calcTriangleHalfPlaneDeterminants()
+        let insideTriangle = dLeft < 0 and dRight < 0 and dBottom < 0
         if insideTriangle:
           cs.mouseMode = cmmDragTriangle
           ui.focusCaptured = true
@@ -5454,24 +5454,24 @@ proc colorWheel(x, y, w, h: float; hue, sat, val: var float) =
       ui.focusCaptured = false
     else:
       var mx, my: float
-      let (i1, i2, i3) = calcTriangleHalfPlaneDeterminants()
-      let insideTriangle = i1 < 0 and i2 < 0 and i3 < 0
+      let (dLeft, dRight, dBottom) = calcTriangleHalfPlaneDeterminants()
+      let insideTriangle = dLeft < 0 and dRight < 0 and dBottom < 0
 
       if insideTriangle:
         mx = ui.mx
         my = ui.my
       # Cursor is to the left of the left side -> project Y coord to the side
-      elif i1 > 0:
+      elif dLeft > 0:
         my = clamp(ui.my, y3, y1)
         let dy = y1-y3
         mx = lerp(x1, x3, (y1-my)/dy)
       # Cursor is to the right of the right side -> project Y coord to the side
-      elif i2 > 0:
+      elif dRight > 0:
         my = clamp(ui.my, y3, y1)
         let dy = y1-y3
         mx = lerp(x2, x3, (y1-my)/dy)
       # Cursor below the bottom side -> project the X coord to the side
-      elif i3 > 0:
+      elif dBottom > 0:
         mx = clamp(ui.mx, x1, x2)
         my = y1
 
@@ -5492,7 +5492,8 @@ proc colorWheel(x, y, w, h: float; hue, sat, val: var float) =
       val = ((vm.y)-(y3-cy)) / dy
       val = clamp(val, 0, 1)  # there's a chance to over/undershoot
 
-      sat = if val < 0.0001: 0.0
+      const Eps = 0.0001
+      sat = if val < Eps: 0.0
             else:
               let xs = lerp(x3-cx, x1-cx, val)
               let xe = lerp(x3-cx, x2-cx, val)
@@ -5685,9 +5686,14 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
         horizSlider(x, y, w, h-1, startVal = 0, endVal = 255, a,
                     label="A", style=ColorPickerSliderStyle)
 
+        const Eps = 0.0001
         var (hue, sat, val) = rgba(r/255, g/255, b/255, a/255).toHSV
+        if sat < Eps or r < Eps and g < Eps and b < Eps:
+          hue = cs.lastHue
+
         colorWheel(x, startY, w+0.5, w+0.5, hue, sat, val)
 
+        cs.lastHue = hue
         color_out = hsva(hue, sat, val, a/255)
 
 
