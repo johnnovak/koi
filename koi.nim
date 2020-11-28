@@ -1764,12 +1764,58 @@ proc getDefaultCheckBoxStyle*(): CheckBoxStyle =
 proc setDefaultCheckBoxStyle*(style: CheckBoxStyle) =
   DefaultCheckBoxStyle = style.deepCopy
 
+type
+  CheckBoxDrawProc* = proc (vg: NVGContext,
+                            x, y, w: float, active: bool, state: WidgetState,
+                            style: CheckBoxStyle)
+
+let DefaultCheckBoxDrawProc: CheckBoxDrawProc =
+  proc (vg: NVGContext,
+        x, y, w: float, active: bool, state: WidgetState,
+        style: CheckBoxStyle) =
+
+    alias(ui, g_uiState)
+    alias(s, style)
+
+    var (fillColor, strokeColor, iconColor) =
+      if active:
+        (s.fillColorActive, s.strokeColorActive, s.iconColorActive)
+      else:
+        case state
+        of wsNormal:
+          (s.fillColor, s.strokeColor, s.iconColor)
+        of wsHover:
+          (s.fillColorHover, s.strokeColorHover, s.iconColorHover)
+        of wsActive:
+          (s.fillColorDown, s.strokeColorDown, s.iconColorDown)
+        of wsDisabled:
+          # TODO disabled colours
+          (s.fillColorDown, s.strokeColorDown, s.iconColorDown)
+
+    let sw = s.strokeWidth
+    let (x, y, w, _) = snapToGrid(x, y, w, w, sw)
+
+    vg.fillColor(fillColor)
+    vg.strokeColor(strokeColor)
+    vg.strokeWidth(sw)
+    vg.beginPath()
+    vg.roundedRect(x, y, w, w, s.cornerRadius)
+    vg.fill()
+    vg.stroke()
+
+    let icon = if active: s.iconActive else: s.iconInactive
+    if icon != "":
+      vg.drawLabel(x, y, w, w, 0, icon, iconColor,
+                   s.iconFontSize, s.iconFontFace, haCenter)
+
+
 # {{{ checkBox()
 proc checkBox(id:         ItemId,
               x, y, w:    float,
               active_out: var bool,
               tooltip:    string,
-              style:      CheckBoxStyle) =
+              drawProc:   CheckBoxDrawProc = DefaultCheckBoxDrawProc,
+              style:      CheckBoxStyle = DefaultCheckBoxStyle) =
 
   var active = active_out
 
@@ -1791,60 +1837,34 @@ proc checkBox(id:         ItemId,
   active_out = active
 
   addDrawLayer(ui.currentLayer, vg):
-    let sw = s.strokeWidth
-    let (x, y, w, _) = snapToGrid(x, y, w, w, sw)
-
     let state = if   isHot(id) and hasNoActiveItem(): wsHover
                 elif isHot(id) and isActive(id): wsActive
                 else: wsNormal
 
-    var (fillColor, strokeColor, iconColor) =
-      if active:
-        (s.fillColorActive, s.strokeColorActive, s.iconColorActive)
-      else:
-        case state
-        of wsNormal:
-          (s.fillColor, s.strokeColor, s.iconColor)
-        of wsHover:
-          (s.fillColorHover, s.strokeColorHover, s.iconColorHover)
-        of wsActive:
-          (s.fillColorDown, s.strokeColorDown, s.iconColorDown)
-        of wsDisabled:
-          # TODO disabled colours
-          (s.fillColorDown, s.strokeColorDown, s.iconColorDown)
+    drawProc(vg, x, y, w, active, state, style)
 
-    vg.fillColor(fillColor)
-    vg.strokeColor(strokeColor)
-    vg.strokeWidth(sw)
-    vg.beginPath()
-    vg.roundedRect(x, y, w, w, s.cornerRadius)
-    vg.fill()
-    vg.stroke()
-
-    let icon = if active: s.iconActive else: s.iconInactive
-    if icon != "":
-      vg.drawLabel(x, y, w, w, 0, icon, iconColor,
-                   s.iconFontSize, s.iconFontFace, haCenter)
 
   if isHot(id):
     handleTooltip(id, tooltip)
 
 # }}}
 
-template checkBox*(x, y, w: float,
-                   active:  var bool,
-                   tooltip: string = "",
-                   style:   CheckBoxStyle = DefaultCheckBoxStyle) =
+template checkBox*(x, y, w:  float,
+                   active:   var bool,
+                   tooltip:  string = "",
+                   drawProc: CheckBoxDrawProc = DefaultCheckBoxDrawProc,
+                   style:    CheckBoxStyle = DefaultCheckBoxStyle) =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  checkbox(id, x, y, w, active, tooltip, style)
+  checkbox(id, x, y, w, active, tooltip, drawProc, style)
 
 
-template checkBox*(active:  var bool,
-                   tooltip: string = "",
-                   style:   CheckBoxStyle = DefaultCheckBoxStyle) =
+template checkBox*(active:   var bool,
+                   tooltip:  string = "",
+                   drawProc: CheckBoxDrawProc = DefaultCheckBoxDrawProc,
+                   style:    CheckBoxStyle = DefaultCheckBoxStyle) =
 
   alias(ui, g_uiState)
   alias(a, ui.autoLayoutState)
@@ -1852,7 +1872,7 @@ template checkBox*(active:  var bool,
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  checkbox(id, a.x, a.y, a.nextItemHeight, active, tooltip, style)
+  checkbox(id, a.x, a.y, a.nextItemHeight, active, tooltip, drawProc, style)
 
   handleAutoLayout()
 
@@ -1895,12 +1915,10 @@ var DefaultSectionHeaderStyle = SectionHeaderStyle(
   labelPadHoriz             : 8,
   labelFontSize             : 14.0,
   labelFontFace             : "sans-bold",
-  labelOnly                 : false,
-  labelAlign                : haCenter,
-  labelColor                : GRAY_LO,
-  labelColorHover           : GRAY_LO,
-  labelColorDown            : GRAY_LO,
-  labelColorDisabled        : GRAY_MID
+  labelAlign                : haLeft,
+  labelColor                : white(),
+  labelColorHover           : white(),
+  labelColorDown            : white()
 )
 
 proc getDefaultSectionHeaderStyle*(): SectionHeaderStyle =
@@ -1933,17 +1951,20 @@ proc sectionHeader(id:           ItemId,
 
     vg.fillColor(gray(0.2))
     vg.beginPath()
-    vg.rect(x, y-2, w, h+2)
+    vg.rect(x, y-2, w, h+4)
     vg.fill()
 
-    alias(vg, g_nvgContext)
-    vg.drawLabel(x+buttonWidth, y, w-buttonWidth, h, padHoriz=0, label,
-                 color=white(), fontSize=13.0, fontFace="sans", align=haLeft)
+    let labelColor = s.labelColor
 
+    alias(vg, g_nvgContext)
+    vg.drawLabel(x+buttonWidth, y, w-buttonWidth, h, padHoriz=s.labelPadHoriz,
+                 label,
+                 color=labelColor, fontSize=s.labelFontSize,
+                 fontFace=s.labelFontFace, align=s.labelAlign)
 
   let cbId = hashId(lastIdString() & ":checkBox")
   checkBox(cbId, ox, oy, buttonWidth, expanded_out, tooltip,
-           SectionHeaderCheckboxStyle)
+           style=SectionHeaderCheckboxStyle)
 
   result = expanded_out
 
