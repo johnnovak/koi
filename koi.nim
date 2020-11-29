@@ -463,10 +463,10 @@ const
   TextVertAlignFactor = 0.55
 
   DoubleClickMaxDelay = 0.1
-  DoubleClickMaxXOffs = 4
-  DoubleClickMaxYOffs = 4
+  DoubleClickMaxXOffs = 4.0
+  DoubleClickMaxYOffs = 4.0
 
-  WindowEdgePad = 10
+  WindowEdgePad = 10.0
 
 # }}}
 
@@ -474,7 +474,7 @@ const
 
 # {{{ snapToGrid*()
 func snapToGrid*(x, y, w, h, strokeWidth: float): (float, float, float, float) =
-  let s = (strokeWidth mod 2) / 2
+  let s = (strokeWidth mod 2) * 0.5
   let
     x = x - s
     y = y - s
@@ -1718,8 +1718,8 @@ type ButtonStyle* = ref object
   label*:               LabelStyle
 
 var DefaultButtonStyle = ButtonStyle(
-  cornerRadius        : 5,
-  strokeWidth         : 0,
+  cornerRadius        : 5.0,
+  strokeWidth         : 0.0,
   strokeColor         : black(),
   strokeColorHover    : black(),
   strokeColorDown     : black(),
@@ -1837,8 +1837,8 @@ type CheckBoxStyle* = ref object
   iconInactive*:        string
 
 var DefaultCheckBoxStyle = CheckBoxStyle(
-  cornerRadius      : 5,
-  strokeWidth       : 0,
+  cornerRadius      : 5.0,
+  strokeWidth       : 0.0,
   strokeColor       : black(),
   strokeColorHover  : black(),
   strokeColorDown   : black(),
@@ -2085,10 +2085,10 @@ type RadioButtonsStyle* = ref object
   label*:                        LabelStyle
 
 var DefaultRadioButtonsStyle = RadioButtonsStyle(
-  buttonPadHoriz               : 3,
-  buttonPadVert                : 3,
-  buttonCornerRadius           : 5,
-  buttonStrokeWidth            : 0,
+  buttonPadHoriz               : 3.0,
+  buttonPadVert                : 3.0,
+  buttonCornerRadius           : 5.0,
+  buttonStrokeWidth            : 0.0,
   buttonStrokeColor            : black(),
   buttonStrokeColorHover       : black(),
   buttonStrokeColorDown        : black(),
@@ -2387,8 +2387,8 @@ type DropDownStyle* = ref object
   itemBackgroundColorHover*:  Color
 
 var DefaultDropDownStyle = DropDownStyle(
-  buttonCornerRadius        : 5,
-  buttonStrokeWidth         : 0,
+  buttonCornerRadius        : 5.0,
+  buttonStrokeWidth         : 0.0,
   buttonStrokeColor         : black(),
   buttonStrokeColorHover    : black(),
   buttonStrokeColorDown     : black(),
@@ -2399,10 +2399,10 @@ var DefaultDropDownStyle = DropDownStyle(
   buttonFillColorDisabled   : GRAY_LO,
   label                     : getDefaultLabelStyle(),
   itemListAlign             : haCenter,
-  itemListPadHoriz          : 7,
-  itemListPadVert           : 7,
-  itemListCornerRadius      : 5,
-  itemListStrokeWidth       : 0,
+  itemListPadHoriz          : 7.0,
+  itemListPadVert           : 7.0,
+  itemListCornerRadius      : 5.0,
+  itemListStrokeWidth       : 0.0,
   itemListStrokeColor       : black(),
   itemListFillColor         : GRAY_LO,
   item                      : getDefaultLabelStyle(),
@@ -2666,18 +2666,18 @@ type ScrollBarStyle* = ref object
   thumbFillColorDown*:     Color
 
 var DefaultScrollBarStyle = ScrollBarStyle(
-  trackCornerRadius      : 5,
-  trackStrokeWidth       : 0,
+  trackCornerRadius      : 5.0,
+  trackStrokeWidth       : 0.0,
   trackStrokeColor       : black(),
   trackStrokeColorHover  : black(),
   trackStrokeColorDown   : black(),
   trackFillColor         : GRAY_MID,
   trackFillColorHover    : GRAY_HI,
   trackFillColorDown     : GRAY_MID,
-  thumbCornerRadius      : 5,
-  thumbPad               : 3,
-  thumbMinSize           : 10,
-  thumbStrokeWidth       : 0,
+  thumbCornerRadius      : 5.0,
+  thumbPad               : 3.0,
+  thumbMinSize           : 10.0,
+  thumbStrokeWidth       : 0.0,
   thumbStrokeColor       : black(),
   thumbStrokeColorHover  : black(),
   thumbStrokeColorDown   : black(),
@@ -2727,7 +2727,7 @@ proc horizScrollBar(id:         ItemId,
     thumbW = max((w - s.thumbPad*2) / (abs(startVal - endVal) / thumbSize),
                  s.thumbMinSize)
 
-    thumbH = h - s.thumbPad * 2
+    thumbH = h - s.thumbPad*2
     thumbMinX = x + s.thumbPad
     thumbMaxX = x + w - s.thumbPad - thumbW
 
@@ -2937,7 +2937,7 @@ proc vertScrollBar(id:         ItemId,
   # Calculate current thumb position
   let
     thumbSize = if thumbSize < 0: 0.000001 else: thumbSize
-    thumbW = w - s.thumbPad * 2
+    thumbW = w - s.thumbPad*2
 
     thumbH = max((h - s.thumbPad*2) / (abs(startVal - endVal) / thumbSize),
                  s.thumbMinSize)
@@ -3665,44 +3665,50 @@ proc textBreakLines*(text: string, maxWidth: float,
 # {{{ TextField
 
 type TextFieldStyle* = ref object
-  bgCornerRadius*:     float
-  bgStrokeWidth*:      float
-  bgStrokeColor*:      Color
-  bgStrokeColorHover*: Color
-  bgStrokeColorDown*:  Color
-  bgFillColor*:        Color
-  bgFillColorHover*:   Color
-  bgFillColorDown*:    Color
-  textPadHoriz*:       float
-  textPadVert*:        float
-  textFontSize*:       float
-  textFontFace*:       string
-  textColor*:          Color
-  textColorHover*:     Color
-  textColorDown*:      Color
-  cursorWidth*:        float
-  cursorColor*:        Color
-  selectionColor*:     Color
+  bgCornerRadius*:      float
+  bgStrokeWidth*:       float
+  bgStrokeColor*:       Color
+  bgStrokeColorHover*:  Color
+  bgStrokeColorActive*: Color
+  bgFillColor*:         Color
+  bgFillColorHover*:    Color
+  bgFillColorActive*:   Color
+
+  # TODO use labelstyle?
+  textPadHoriz*:        float
+  textPadVert*:         float
+  textFontSize*:        float
+  textFontFace*:        string
+  textColor*:           Color
+  textColorHover*:      Color
+  textColorActive*:     Color
+
+  cursorWidth*:         float
+  cursorColor*:         Color
+  selectionColor*:      Color
 
 var DefaultTextFieldStyle = TextFieldStyle(
-  bgCornerRadius     : 5,
-  bgStrokeWidth      : 0, # TODO
-  bgStrokeColor      : black(),
-  bgStrokeColorHover : black(),
-  bgStrokeColorDown  : black(),
-  bgFillColor        : GRAY_MID,
-  bgFillColorHover   : GRAY_HI,
-  bgFillColorDown    : GRAY_LO,
-  textPadHoriz       : 8.0,
-  textPadVert        : 2.0,
-  textFontSize       : 14.0,
-  textFontFace       : "sans-bold",
-  textColor          : GRAY_LO,
-  textColorHover     : GRAY_LO, # TODO
-  textColorDown      : GRAY_HI,
-  cursorColor        : HILITE,
-  cursorWidth        : 1.0,
-  selectionColor     : rgb(0.5, 0.15, 0.15)
+  bgCornerRadius      : 5.0,
+  bgStrokeWidth       : 0.0, # TODO
+  bgStrokeColor       : black(),
+  bgStrokeColorHover  : black(),
+  bgStrokeColorActive : black(),
+  bgFillColor         : GRAY_MID,
+  bgFillColorHover    : GRAY_HI,
+  bgFillColorActive   : GRAY_LO,
+
+  # TODO use labelstyle?
+  textPadHoriz        : 8.0,
+  textPadVert         : 2.0,
+  textFontSize        : 14.0,
+  textFontFace        : "sans-bold",
+  textColor           : GRAY_LO,
+  textColorHover      : GRAY_LO, # TODO
+  textColorActive     : GRAY_HI,
+
+  cursorColor         : HILITE,
+  cursorWidth         : 1.0,
+  selectionColor      : rgb(0.5, 0.15, 0.15)
 )
 
 proc getDefaultTextFieldStyle*(): TextFieldStyle =
@@ -4121,13 +4127,13 @@ proc textField(
     vg.save()
 
     let state = if isHot(id) and hasNoActiveItem(): wsHover
-      elif editing: wsDown
+      elif editing: wsActive
       else: wsNormal
 
     let (fillColor, strokeColor) = case state
-      of wsHover:  (s.bgFillColorHover, s.bgStrokeColorHover)
-      of wsDown:   (s.bgFillColorDown,  s.bgStrokeColorDown)
-      else:        (s.bgFillColor,      s.bgStrokeColor)
+      of wsHover:  (s.bgFillColorHover,  s.bgStrokeColorHover)
+      of wsActive: (s.bgFillColorActive, s.bgStrokeColorActive)
+      else:        (s.bgFillColor,       s.bgStrokeColor)
 
     var
       textX = textBoxX
@@ -4183,7 +4189,7 @@ proc textField(
 
     # Draw text
     # TODO text color hover
-    let textColor = if editing: s.textColorDown else: s.textColor
+    let textColor = if editing: s.textColorActive else: s.textColor
 
     setFont()
     vg.fillColor(textColor)
@@ -4257,35 +4263,40 @@ template textField*(
 # {{{ TextArea
 
 type TextAreaStyle* = object
-  bgCornerRadius*:     float
-  bgStrokeWidth*:      float
-  bgStrokeColor*:      Color
-  bgStrokeColorHover*: Color
-  bgStrokeColorDown*:  Color
-  bgFillColor*:        Color
-  bgFillColorHover*:   Color
-  bgFillColorDown*:    Color
-  textPadHoriz*:       float
-  textPadVert*:        float
-  textFontSize*:       float
-  textFontFace*:       string
-  textLineHeight*:     float
-  textColor*:          Color
-  textColorHover*:     Color
-  textColorDown*:      Color
-  cursorWidth*:        float
-  cursorColor*:        Color
-  selectionColor*:     Color
+  bgCornerRadius*:      float
+  bgStrokeWidth*:       float
+  bgStrokeColor*:       Color
+  bgStrokeColorHover*:  Color
+  bgStrokeColorActive*: Color
+  bgFillColor*:         Color
+  bgFillColorHover*:    Color
+  bgFillColorActive*:   Color
+
+  # TODO use labelStyle?
+  textPadHoriz*:        float
+  textPadVert*:         float
+  textFontSize*:        float
+  textFontFace*:        string
+  textLineHeight*:      float
+  textColor*:           Color
+  textColorHover*:      Color
+  textColorActive*:     Color
+
+  cursorWidth*:         float
+  cursorColor*:         Color
+  selectionColor*:      Color
 
 var DefaultTextAreaStyle = TextAreaStyle(
-  bgCornerRadius     : 5,
-  bgStrokeWidth      : 0, # TODO
-  bgStrokeColor      : black(),
-  bgStrokeColorHover : black(),
-  bgStrokeColorDown  : black(),
-  bgFillColor        : GRAY_MID,
-  bgFillColorHover   : GRAY_HI,
-  bgFillColorDown    : GRAY_LO,
+  bgCornerRadius      : 5.0,
+  bgStrokeWidth       : 0.0, # TODO
+  bgStrokeColor       : black(),
+  bgStrokeColorHover  : black(),
+  bgStrokeColorActive : black(),
+  bgFillColor         : GRAY_MID,
+  bgFillColorHover    : GRAY_HI,
+  bgFillColorActive   : GRAY_LO,
+
+  # TODO use labelStyle?
   textPadHoriz       : 8.0,
   textPadVert        : 2.0,
   textFontSize       : 14.0,
@@ -4293,7 +4304,8 @@ var DefaultTextAreaStyle = TextAreaStyle(
   textLineHeight     : 1.4,
   textColor          : GRAY_LO,
   textColorHover     : GRAY_LO, # TODO
-  textColorDown      : GRAY_HI,
+  textColorActive    : GRAY_HI,
+
   cursorColor        : HILITE,
   cursorWidth        : 1.0,
   selectionColor     : rgb(0.5, 0.15, 0.15)
@@ -4313,11 +4325,11 @@ type
 var DefaultTextAreaScrollBarStyle = getDefaultScrollBarStyle()
 
 with DefaultTextAreaScrollBarStyle:
-  trackCornerRadius   = 3
+  trackCornerRadius   = 3.0
   trackFillColor      = gray(0, 0)
   trackFillColorHover = gray(0, 0)
   trackFillColorDown  = gray(0, 0)
-  thumbCornerRadius   = 3
+  thumbCornerRadius   = 3.0
   thumbFillColor      = gray(0, 0.4)
   thumbFillColorHover = gray(0, 0.43)
   thumbFillColorDown  = gray(0, 0.35)
@@ -4723,13 +4735,13 @@ proc textArea(
     vg.save()
 
     let state = if isHot(id) and hasNoActiveItem(): wsHover
-      elif editing: wsDown
+      elif editing: wsActive
       else: wsNormal
 
     let (fillColor, strokeColor) = case state
-      of wsHover: (s.bgFillColorHover, s.bgStrokeColorHover)
-      of wsDown:  (s.bgFillColorDown,  s.bgStrokeColorDown)
-      else:       (s.bgFillColor,      s.bgStrokeColor)
+      of wsHover:  (s.bgFillColorHover,  s.bgStrokeColorHover)
+      of wsActive: (s.bgFillColorActive, s.bgStrokeColorActive)
+      else:        (s.bgFillColor,       s.bgStrokeColor)
 
     # Draw text field background
     if drawWidget:
@@ -4796,7 +4808,7 @@ proc textArea(
             vg.fill()
 
       # Draw text
-      let textColor = if editing: s.textColorDown else: s.textColor
+      let textColor = if editing: s.textColorActive else: s.textColor
       vg.fillColor(textColor)
       discard vg.text(textX, textY, text, row.startBytePos, row.endBytePos)
 
@@ -5341,7 +5353,7 @@ var ColorPickerRadioButtonStyle = RadioButtonsStyle(
 with ColorPickerRadioButtonStyle.label:
   fontSize         = 13.0
   fontFace         = "sans-bold"
-  padHoriz         = 0
+  padHoriz         = 0.0
   align            = haCenter
   color            = gray(0.6)
   colorHover       = gray(0.6)
@@ -5351,9 +5363,9 @@ with ColorPickerRadioButtonStyle.label:
 
 
 var ColorPickerSliderStyle = SliderStyle(
-  trackCornerRadius      : 4,
-  trackPad               : 0,
-  trackStrokeWidth       : 1,
+  trackCornerRadius      : 4.0,
+  trackPad               : 0.0,
+  trackStrokeWidth       : 1.0,
   trackStrokeColor       : gray(0.1),
   trackStrokeColorHover  : gray(0.1),
   trackStrokeColorDown   : gray(0.1),
@@ -5389,24 +5401,24 @@ with ColorPickerSliderStyle:
 
 
 var ColorPickerTextFieldStyle = TextFieldStyle(
-  bgCornerRadius     : 4.0,
-  bgStrokeWidth      : 1.0,
-  bgStrokeColor      : gray(0.1),
-  bgStrokeColorHover : gray(0.1),
-  bgStrokeColorDown  : gray(0.1),
-  bgFillColor        : gray(0.25),
-  bgFillColorHover   : gray(0.30),
-  bgFillColorDown    : gray(0.25),
-  textPadHoriz       : 8.0,
-  textPadVert        : 2.0,
-  textFontSize       : 13.0,
-  textFontFace       : "sans-bold",
-  textColor          : gray(0.8),
-  textColorHover     : gray(0.8),
-  textColorDown      : gray(0.8),
-  cursorColor        : rgb(1.0, 0.8, 0.0),
-  cursorWidth        : 1.0,
-  selectionColor     : rgb(0.5, 0.15, 0.15)
+  bgCornerRadius      : 4.0,
+  bgStrokeWidth       : 1.0,
+  bgStrokeColor       : gray(0.1),
+  bgStrokeColorHover  : gray(0.1),
+  bgStrokeColorActive : gray(0.1),
+  bgFillColor         : gray(0.25),
+  bgFillColorHover    : gray(0.30),
+  bgFillColorActive   : gray(0.25),
+  textPadHoriz        : 8.0,
+  textPadVert         : 2.0,
+  textFontSize        : 13.0,
+  textFontFace        : "sans-bold",
+  textColor           : gray(0.8),
+  textColorHover      : gray(0.8),
+  textColorActive     : gray(0.8),
+  cursorColor         : rgb(1.0, 0.8, 0.0),
+  cursorWidth         : 1.0,
+  selectionColor      : rgb(0.5, 0.15, 0.15)
 )
 
 # {{{ colorWheel()
@@ -5831,14 +5843,14 @@ type DialogStyle* = ref object
   innerBorderWidth*:   float
 
 var DefaultDialogStyle = DialogStyle(
-  cornerRadius:       7,
-  backgroundColor:    gray(0.2),
-  titleBarBgColor:    gray(0.05),
-  titleBarTextColor:  gray(0.85),
-  outerBorderColor:   black(),
-  innerBorderColor:   white(),
-  outerBorderWidth:   0,
-  innerBorderWidth:   0
+  cornerRadius:      7.0,
+  backgroundColor:   gray(0.2),
+  titleBarBgColor:   gray(0.05),
+  titleBarTextColor: gray(0.85),
+  outerBorderColor:  black(),
+  innerBorderColor:  white(),
+  outerBorderWidth:  0.0,
+  innerBorderWidth:  0.0
 )
 
 proc getDefaultDialogStyle*(): DialogStyle =
