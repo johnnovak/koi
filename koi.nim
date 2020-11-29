@@ -1614,7 +1614,7 @@ var DefaultLabelStyle = LabelStyle(
   fontSize         : 14.0,
   fontFace         : "sans-bold",
   vertAlignFactor  : 0.55,
-  padHoriz         : 8.0,
+  padHoriz         : 0.0,
   align            : haLeft,
   multiLine        : false,
   lineHeight       : 1.4,
@@ -1733,6 +1733,8 @@ var DefaultButtonStyle = ButtonStyle(
 )
 
 with DefaultButtonStyle.label:
+  align         = haCenter
+  padHoriz      = 8.0
   color         = GRAY_LO
   colorHover    = GRAY_LO
   colorDown     = GRAY_LO
@@ -1854,7 +1856,7 @@ var DefaultCheckBoxStyle = CheckBoxStyle(
 )
 
 with DefaultCheckBoxStyle.icon:
-  padHoriz    = 0.0
+  align       = haCenter
   color       = GRAY_LO
   colorHover  = GRAY_LO
   colorDown   = GRAY_HI
@@ -2103,6 +2105,8 @@ var DefaultRadioButtonsStyle = RadioButtonsStyle(
 )
 
 with DefaultRadioButtonsStyle.label:
+  align            = haCenter
+  padHoriz         = 8.0
   color            = GRAY_LO
   colorHover       = GRAY_LO
   colorDown        = GRAY_LO
@@ -2410,6 +2414,7 @@ var DefaultDropDownStyle = DropDownStyle(
 )
 
 with DefaultDropDownStyle:
+  label.padHoriz    = 8.0
   label.color       = GRAY_LO
   label.colorHover  = GRAY_LO
   label.colorDown   = GRAY_LO # TODO
@@ -4929,11 +4934,13 @@ var DefaultSliderStyle = SliderStyle(
 )
 
 with DefaultSliderStyle:
+  label.padHoriz    = 8.0
   label.align       = haLeft
   label.color       = white()
   label.colorHover  = white()
   label.colorDown   = white()
 
+  label.padHoriz    = 8.0
   value.align       = haCenter
   value.color       = white()
   value.colorHover  = white()
