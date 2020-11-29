@@ -1413,24 +1413,24 @@ template group*(body: untyped) =
 # {{{ Shadow
 
 type ShadowStyle* = ref object
-  shadowEnabled*:      bool
-  shadowCornerRadius*: float
-  shadowXOffset*:      float
-  shadowYOffset*:      float
-  shadowWidthOffset*:  float
-  shadowHeightOffset*: float
-  shadowFeather*:      float
-  shadowColor*:        Color
+  enabled*:      bool
+  cornerRadius*: float
+  xOffset*:      float
+  yOffset*:      float
+  widthOffset*:  float
+  heightOffset*: float
+  feather*:      float
+  color*:        Color
 
 var DefaultShadowStyle = ShadowStyle(
-  shadowEnabled      : true,
-  shadowCornerRadius : 10,
-  shadowXOffset      : 1,
-  shadowYOffset      : 2,
-  shadowWidthOffset  : 0,
-  shadowHeightOffset : 0,
-  shadowFeather      : 10,
-  shadowColor        : black(0.4)
+  enabled      : true,
+  cornerRadius : 10.0,
+  xOffset      : 1.0,
+  yOffset      : 2.0,
+  widthOffset  : 0.0,
+  heightOffset : 0.0,
+  feather      : 10.0,
+  color        : black(0.4)
 )
 
 proc getDefaultShadowStyle*(): ShadowStyle =
@@ -1444,24 +1444,23 @@ proc drawShadow*(vg: NVGContext, x, y, w, h: float,
                  style: ShadowStyle = DefaultShadowStyle) =
   alias(s, style)
 
-  if s.shadowEnabled:
+  if s.enabled:
     let (x, y, w, h) = snapToGrid(x, y, w, h, strokeWidth=0)
 
-    let shadow = vg.boxGradient(x + s.shadowXOffset,
-                                y + s.shadowYOffset,
-                                w + s.shadowWidthOffset,
-                                h + s.shadowHeightOffset,
-                                s.shadowCornerRadius,
-                                s.shadowFeather,
-                                s.shadowColor, black(0.0))
+    let shadow = vg.boxGradient(x + s.xOffset,
+                                y + s.yOffset,
+                                w + s.widthOffset,
+                                h + s.heightOffset,
+                                s.cornerRadius, s.feather,
+                                s.color, black(0.0))
     vg.fillPaint(shadow)
 
     vg.beginPath()
     vg.rect(
-      x + s.shadowXOffset - s.shadowFeather/2,
-      y + s.shadowYOffset - s.shadowFeather/2,
-      w + s.shadowWidthOffset + s.shadowFeather,
-      h + s.shadowHeightOffset + s.shadowFeather,
+      x + s.xOffset - s.feather*0.5,
+      y + s.yOffset - s.feather*0.5,
+      w + s.widthOffset + s.feather,
+      h + s.heightOffset + s.feather,
     )
     vg.fill()
 
@@ -1495,9 +1494,8 @@ proc getDefaultPopupStyle*(): PopupStyle =
 proc setDefaultPopupStyle*(style: PopupStyle) =
   DefaultPopupStyle = style.deepCopy
 
-
-# {{{ closePopup()
-proc closePopup() =
+# {{{ closePopup*()
+proc closePopup*() =
   alias(ui, g_uiState)
   alias(ps, ui.popupState)
 
@@ -1506,8 +1504,8 @@ proc closePopup() =
   ps.closed = true
 
 # }}}
-# {{{  beginPopup()
-proc beginPopup(w, h: float,
+# {{{  beginPopup*()
+proc beginPopup*(w, h: float,
                 ax, ay, aw, ah: float,
                 style: PopupStyle = DefaultPopupStyle): bool =
   alias(ui, g_uiState)
@@ -1573,8 +1571,8 @@ proc beginPopup(w, h: float,
     result = true
 
 # }}}
-# {{{ endPopup()
-proc endPopup() =
+# {{{ endPopup*()
+proc endPopup*() =
   alias(ui, g_uiState)
   alias(ps, ui.popupState)
 
@@ -3845,7 +3843,7 @@ proc textField(
   # The text is displayed within this rectangle (used for drawing later)
   let
     textBoxX = x + s.textPadHoriz
-    textBoxW = w - s.textPadhOriz*2
+    textBoxW = w - s.textPadHoriz*2
     textBoxY = y
     textBoxH = h
 
@@ -5424,7 +5422,6 @@ var ColorPickerRadioButtonStyle = RadioButtonsStyle(
   labelPadHoriz           : 0,
   labelFontSize           : 13.0,
   labelFontFace           : "sans-bold",
-  labelOnly               : false,
   labelAlign              : haCenter,
   labelColor              : gray(0.6),
   labelColorHover         : gray(0.6),
