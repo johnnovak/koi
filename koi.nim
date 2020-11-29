@@ -17,8 +17,8 @@ import nanovg
 import with
 
 import koi/ringbuffer
-import koi/utils
 import koi/undomanager
+import koi/utils
 
 export CursorShape
 
@@ -470,185 +470,7 @@ const
 
 # }}}
 
-# {{{ Misc utils
-
-# {{{ snapToGrid*()
-func snapToGrid*(x, y, w, h, strokeWidth: float): (float, float, float, float) =
-  let s = (strokeWidth mod 2) * 0.5
-  let
-    x = round(x) - s
-    y = round(y) - s
-    w = round(w) + s*2
-    h = round(h) + s*2
-  result = (x, y, w, h)
-
-# }}}
-# {{{ setFont*()
-proc setFont*(vg: NVGContext, size: float, name: string = "sans-bold",
-              horizAlign: HorizontalAlign = haLeft,
-              vertAlign: VerticalAlign = vaMiddle) =
-  vg.fontFace(name)
-  vg.fontSize(size)
-  vg.textAlign(horizAlign, vertAlign)
-
-# }}}
-# {{{ rightClippedRoundedRect*()
-proc rightClippedRoundedRect*(vg: NVGContext, x, y, w, h, r, clipW: float,
-                              grouping: WidgetGrouping = wgNone) =
-  alias(vg, g_nvgContext)
-
-  vg.beginPath()
-
-  if grouping == wgMiddle:
-    vg.rect(x, y, clipW, h)
-  else:
-    if clipW < r:
-      # top left
-      if grouping == wgEnd:
-        vg.moveTo(x, y)
-        vg.lineTo(x+clipW, y)
-      else:
-        let da = arccos((r - clipW) / r)
-        vg.arc(x+r, y+r, r, PI, PI + da, pwCW)
-
-      # bottom left
-      if grouping == wgStart:
-        vg.lineTo(x+clipW, y+h)
-        vg.lineTo(x, y+h)
-      else:
-        let da = arccos((r - clipW) / r)
-        vg.arc(x+r, y+h-r, r, PI - da, PI, pwCW)
-      vg.closePath()
-
-    elif clipW <= w-r:
-      # top left
-      if grouping == wgEnd:
-        vg.moveTo(x, y)
-      else:
-        vg.arc(x+r, y+r, r, PI, 1.5*PI, pwCW)
-
-      # flat end cap
-      vg.lineTo(x+clipW, y)
-      vg.lineTo(x+clipW, y+h)
-
-      # bottom left
-      if grouping == wgStart:
-        vg.lineTo(x, y+h)
-      else:
-        vg.lineTo(x+r, y+h)
-        vg.arc(x+r, y+h-r, r, PI*0.5, PI, pwCW)
-      vg.closePath()
-
-    else:
-      # top left
-      if grouping == wgEnd:
-        vg.moveTo(x, y)
-      else:
-        vg.arc(x+r, y+r, r, PI, 1.5*PI, pwCW)
-
-      # top right
-      if grouping == wgEnd:
-        vg.lineTo(x+clipW, y)
-      else:
-        let dx = clipW - (w-r)
-        let da = arccos(dx / r)
-        vg.arc(x+w-r, y+r, r, 1.5*PI, 1.5*PI + (PI*0.5-da), pwCW)
-
-      # bottom right
-      if grouping == wgStart:
-        vg.lineTo(x+clipW, y+h)
-      else:
-        let dx = clipW - (w-r)
-        let da = arccos(dx / r)
-        vg.arc(x+w-r, y+h-r, r, da, PI*0.5, pwCW)
-
-      # bottom left
-      if grouping == wgStart:
-        vg.lineTo(x, y+h)
-      else:
-        vg.arc(x+r, y+h-r, r, PI*0.5, PI, pwCW)
-      vg.closePath()
-
-# }}}
-# {{{ toClipboard*()
-proc toClipboard*(s: string) =
-  glfw.currentContext().clipboardString = s
-
-# }}}
-# {{{ fromClipboard*()
-proc fromClipboard*(): string =
-  $glfw.currentContext().clipboardString
-
-# }}}
-# {{{ toHSV*()
-proc toHSV*(c: Color): (float, float, float) =
-  let
-    r = c.r
-    g = c.g
-    b = c.b
-    xmax = max(r, max(g, b))
-    xmin = min(r, min(g, b))
-    v = xmax
-    c = xmax - xmin
-
-  let h = if   c == 0: 0.0
-          elif v == r: ((60 * (g-b)/c + 360) mod 360) / 360
-          elif v == g: ((60 * (b-r)/c + 120) mod 360) / 360
-          else:        ((60 * (r-g)/c + 240) mod 360) / 360  # v == b
-
-  let s = if v == 0.0: 0.0 else: c/v
-
-  result = (h.float, s.float, v.float)
-
-# }}}
-# {{{ hsva*()
-proc hsva(h, s, v, a: float): Color =
-  var r, g, b: float
-  if s == 0.0:
-    r = v
-    g = v
-    b = v
-  else:
-    let
-      hf = if h >= 1.0: 0.0 else: h*6
-      i = hf.int  # should be in the range 0..5
-      f = hf - i  # fractional part
-
-      m = v * (1 - s)
-      n = v * (1 - s*f)
-      k = v * (1 - s*(1-f))
-
-    (r, g, b) = if   i == 0: (v, k, m)
-                elif i == 1: (n, v, m)
-                elif i == 2: (m, v, k)
-                elif i == 3: (m, n, v)
-                elif i == 4: (k, m, v)
-                else:        (v, m, n)
-
-  result = rgba(r, g, b, a)
-
-# }}}
-# {{{ toHex*()
-proc toHex*(c: Color): string =
-  (c.r * 255).int.toHex(2) &
-  (c.g * 255).int.toHex(2) &
-  (c.b * 255).int.toHex(2)
-
-# }}}
-# {{{ colorFromHex*()
-proc colorFromHexStr*(s: string): Color =
-  try:
-    let r = parseHexInt(s.substr(0, 1)) / 255
-    let g = parseHexInt(s.substr(2, 3)) / 255
-    let b = parseHexInt(s.substr(4, 5)) / 255
-    result = rgb(r, g, b)
-  except CatchableError:
-    discard
-
-# }}}
-
-# }}}
-# {{{ UI helpers
+# {{{ Event helpers
 
 proc hashId*(id: string): ItemId =
   let hash32 = hash(id).uint32
@@ -749,21 +571,223 @@ proc altDown*():   bool = isKeyDown(keyLeftAlt)     or isKeyDown(keyRightAlt)
 proc ctrlDown*():  bool = isKeyDown(keyLeftControl) or isKeyDown(keyRightControl)
 proc superDown*(): bool = isKeyDown(keyLeftSuper)   or isKeyDown(keyRightSuper)
 
+# }}}
+# {{{ Drawing utils
+
+# {{{ snapToGrid*()
+func snapToGrid*(x, y, w, h, strokeWidth: float): (float, float, float, float) =
+  let s = (strokeWidth mod 2) * 0.5
+  let
+    x = round(x) - s
+    y = round(y) - s
+    w = round(w) + s*2
+    h = round(h) + s*2
+  result = (x, y, w, h)
+
+# }}}
+# {{{ positionRectWithinWindow*()
+proc positionRectWithinWindow*(w, h: float,
+                               ax, ay, aw, ah: float,
+                               align: HorizontalAlign): (float, float) =
+  alias(ui, g_uiState)
+
+  var x = case align
+          of haLeft:   ax
+          of haCenter: ax+aw*0.5 - w*0.5
+          of haRight:  ax+aw
+
+  var y = ay+ah
+
+  if x+w > ui.winWidth - WindowEdgePad: x = ax+aw - w
+  if x < WindowEdgePad: x = ax
+
+  if y+h > ui.winHeight - WindowEdgePad: y = ay-h
+  if y < WindowEdgePad: y = ay+h
+
+  result = (x, y)
+
+# }}}
+
+# {{{ setFont*()
+proc setFont*(vg: NVGContext, size: float, name: string = "sans-bold",
+              horizAlign: HorizontalAlign = haLeft,
+              vertAlign: VerticalAlign = vaMiddle) =
+  vg.fontFace(name)
+  vg.fontSize(size)
+  vg.textAlign(horizAlign, vertAlign)
+
+# }}}
+
+# {{{ pushDrawOffset*()
 proc pushDrawOffset*(ds: DrawOffset) =
   alias(ui, g_uiState)
   ui.drawOffsetStack.add(ds)
 
+# }}}
+# {{{ popDrawOffset*()
 proc popDrawOffset*() =
   alias(ui, g_uiState)
   if ui.drawOffsetStack.len > 1:
     discard ui.drawOffsetStack.pop()
 
+# }}}
+# {{{ drawOffset*()
 proc drawOffset(): DrawOffset =
   g_uiState.drawOffsetStack[^1]
 
-proc addDrawOffset(x, y: float): (float, float) =
+# }}}
+# {{{ addDrawOffset*()
+proc addDrawOffset*(x, y: float): (float, float) =
   let offs = drawOffset()
   result = (offs.ox + x, offs.oy + y)
+
+# }}}
+
+# {{{ toHSV*()
+proc toHSV*(c: Color): (float, float, float) =
+  let
+    r = c.r
+    g = c.g
+    b = c.b
+    xmax = max(r, max(g, b))
+    xmin = min(r, min(g, b))
+    v = xmax
+    c = xmax - xmin
+
+  let h = if   c == 0: 0.0
+          elif v == r: ((60 * (g-b)/c + 360) mod 360) / 360
+          elif v == g: ((60 * (b-r)/c + 120) mod 360) / 360
+          else:        ((60 * (r-g)/c + 240) mod 360) / 360  # v == b
+
+  let s = if v == 0.0: 0.0 else: c/v
+
+  result = (h.float, s.float, v.float)
+
+# }}}
+# {{{ hsva*()
+proc hsva(h, s, v, a: float): Color =
+  var r, g, b: float
+  if s == 0.0:
+    r = v
+    g = v
+    b = v
+  else:
+    let
+      hf = if h >= 1.0: 0.0 else: h*6
+      i = hf.int  # should be in the range 0..5
+      f = hf - i  # fractional part
+
+      m = v * (1 - s)
+      n = v * (1 - s*f)
+      k = v * (1 - s*(1-f))
+
+    (r, g, b) = if   i == 0: (v, k, m)
+                elif i == 1: (n, v, m)
+                elif i == 2: (m, v, k)
+                elif i == 3: (m, n, v)
+                elif i == 4: (k, m, v)
+                else:        (v, m, n)
+
+  result = rgba(r, g, b, a)
+
+# }}}
+# {{{ toHex*()
+proc toHex*(c: Color): string =
+  (c.r * 255).int.toHex(2) &
+  (c.g * 255).int.toHex(2) &
+  (c.b * 255).int.toHex(2)
+
+# }}}
+# {{{ colorFromHex*()
+proc colorFromHexStr*(s: string): Color =
+  try:
+    let r = parseHexInt(s.substr(0, 1)) / 255
+    let g = parseHexInt(s.substr(2, 3)) / 255
+    let b = parseHexInt(s.substr(4, 5)) / 255
+    result = rgb(r, g, b)
+  except CatchableError:
+    discard
+
+# }}}
+
+# {{{ rightClippedRoundedRect*()
+proc rightClippedRoundedRect*(vg: NVGContext, x, y, w, h, r, clipW: float,
+                              grouping: WidgetGrouping = wgNone) =
+  alias(vg, g_nvgContext)
+
+  vg.beginPath()
+
+  if grouping == wgMiddle:
+    vg.rect(x, y, clipW, h)
+  else:
+    if clipW < r:
+      # top left
+      if grouping == wgEnd:
+        vg.moveTo(x, y)
+        vg.lineTo(x+clipW, y)
+      else:
+        let da = arccos((r - clipW) / r)
+        vg.arc(x+r, y+r, r, PI, PI + da, pwCW)
+
+      # bottom left
+      if grouping == wgStart:
+        vg.lineTo(x+clipW, y+h)
+        vg.lineTo(x, y+h)
+      else:
+        let da = arccos((r - clipW) / r)
+        vg.arc(x+r, y+h-r, r, PI - da, PI, pwCW)
+      vg.closePath()
+
+    elif clipW <= w-r:
+      # top left
+      if grouping == wgEnd:
+        vg.moveTo(x, y)
+      else:
+        vg.arc(x+r, y+r, r, PI, 1.5*PI, pwCW)
+
+      # flat end cap
+      vg.lineTo(x+clipW, y)
+      vg.lineTo(x+clipW, y+h)
+
+      # bottom left
+      if grouping == wgStart:
+        vg.lineTo(x, y+h)
+      else:
+        vg.lineTo(x+r, y+h)
+        vg.arc(x+r, y+h-r, r, PI*0.5, PI, pwCW)
+      vg.closePath()
+
+    else:
+      # top left
+      if grouping == wgEnd:
+        vg.moveTo(x, y)
+      else:
+        vg.arc(x+r, y+r, r, PI, 1.5*PI, pwCW)
+
+      # top right
+      if grouping == wgEnd:
+        vg.lineTo(x+clipW, y)
+      else:
+        let dx = clipW - (w-r)
+        let da = arccos(dx / r)
+        vg.arc(x+w-r, y+r, r, 1.5*PI, 1.5*PI + (PI*0.5-da), pwCW)
+
+      # bottom right
+      if grouping == wgStart:
+        vg.lineTo(x+clipW, y+h)
+      else:
+        let dx = clipW - (w-r)
+        let da = arccos(dx / r)
+        vg.arc(x+w-r, y+h-r, r, da, PI*0.5, pwCW)
+
+      # bottom left
+      if grouping == wgStart:
+        vg.lineTo(x, y+h)
+      else:
+        vg.arc(x+r, y+h-r, r, PI*0.5, PI, pwCW)
+      vg.closePath()
+
+# }}}
 
 # }}}
 # {{{ Draw layers
@@ -1131,6 +1155,16 @@ proc keyCb(win: Window, key: Key, scanCode: int32, action: KeyAction,
 
 proc clearEventBuf*() = g_eventBuf.clear()
 
+# {{{ toClipboard*()
+proc toClipboard*(s: string) =
+  glfw.currentContext().clipboardString = s
+
+# }}}
+# {{{ fromClipboard*()
+proc fromClipboard*(): string =
+  $glfw.currentContext().clipboardString
+
+# }}}
 
 # }}}
 # {{{ Mouse handling
@@ -1210,7 +1244,7 @@ proc isDoubleClick*(): bool =
 # }}}
 # {{{ Tooltip handling
 
-# {{{ handleTooltip
+# {{{ handleTooltip()
 
 proc handleTooltip(id: ItemId, tooltip: string) =
   alias(ui, g_uiState)
@@ -1246,7 +1280,7 @@ proc handleTooltip(id: ItemId, tooltip: string) =
       setFramesLeft()
 
 # }}}
-# {{{ drawTooltip
+# {{{ drawTooltip()
 
 proc drawTooltip(x, y: float, text: string, alpha: float = 1.0) =
   alias(vg, g_nvgContext)
@@ -1269,7 +1303,7 @@ proc drawTooltip(x, y: float, text: string, alpha: float = 1.0) =
     discard vg.text(x + 10, y + 10, text)
 
 # }}}
-# {{{ tooltipPost
+# {{{ tooltipPost()
 
 proc tooltipPost() =
   alias(ui, g_uiState)
@@ -1399,7 +1433,7 @@ proc endGroup*() =
   a.insideGroup = false
 
 # }}}
-# {{{
+# {{{ group*()
 template group*(body: untyped) =
   beginGroup()
   body
@@ -1507,23 +1541,14 @@ proc closePopup*() =
 # }}}
 # {{{  beginPopup*()
 proc beginPopup*(w, h: float,
-                ax, ay, aw, ah: float,
-                style: PopupStyle = DefaultPopupStyle): bool =
+                 ax, ay, aw, ah: float,
+                 style: PopupStyle = DefaultPopupStyle): bool =
   alias(ui, g_uiState)
   alias(ps, ui.popupState)
   alias(s, style)
 
-  var x = ax
-  var y = ay+ah
-
-  (x, y) = addDrawOffset(x, y)
-
-  # TODO extract
-  if x + w + WindowEdgePad > ui.winWidth:
-    x -= w - aw
-
-  if y + h + WindowEdgePad > ui.winHeight:
-    y -= ah + h
+  var (x, y) = addDrawOffset(ax, ay)
+  (x, y) = positionRectWithinWindow(w, h, x, y, aw, ah, haLeft)
 
   # Hit testing
   let
@@ -1588,6 +1613,133 @@ proc endPopup*() =
   if not ps.closed:
     ui.focusCaptured = true
     ui.currentLayer = ps.prevLayer
+
+# }}}
+
+# }}}
+# {{{ Dialog
+
+type DialogStyle* = ref object
+  cornerRadius*:       float
+  backgroundColor*:    Color
+  titleBarBgColor*:    Color
+  titleBarTextColor*:  Color
+  outerBorderColor*:   Color
+  innerBorderColor*:   Color
+  outerBorderWidth*:   float
+  innerBorderWidth*:   float
+  shadow*:             ShadowStyle
+
+var DefaultDialogStyle = DialogStyle(
+  cornerRadius      : 7.0,
+  backgroundColor   : gray(0.2),
+  titleBarBgColor   : gray(0.05),
+  titleBarTextColor : gray(0.85),
+  outerBorderColor  : black(),
+  innerBorderColor  : white(),
+  outerBorderWidth  : 0.0,
+  innerBorderWidth  : 0.0
+)
+
+DefaultDialogStyle.shadow = ShadowStyle(
+  enabled      : true,
+  cornerRadius : 12.0,
+  xOffset      : 2.0,
+  yOffset      : 3.0,
+  widthOffset  : 0.0,
+  heightOffset : 0.0,
+  feather      : 25.0,
+  color        : black(0.4)
+)
+
+proc getDefaultDialogStyle*(): DialogStyle =
+  DefaultDialogStyle.deepCopy
+
+proc setDefaultDialogStyle*(style: DialogStyle) =
+  DefaultDialogStyle = style.deepCopy
+
+# {{{ beginDialog()
+proc beginDialog*(w, h: float, title: string,
+                  style: DialogStyle = DefaultDialogStyle) =
+
+  alias(ui, g_uiState)
+  alias(s, style)
+
+  ui.dialogOpen = true
+  ui.focusCaptured = false
+
+  let
+    x = floor((ui.winWidth - w) / 2)
+    y = floor((ui.winHeight - h) / 2)
+
+  ui.currentLayer = layerDialog
+
+  addDrawLayer(ui.currentLayer, vg):
+    const TitleBarHeight = 30.0
+
+    drawShadow(vg, x, y, w, h, s.shadow)
+
+    # Outer border
+    if s.outerBorderWidth > 0:
+      let bw = s.outerBorderWidth + s.innerBorderWidth
+      let cr = if s.cornerRadius > 0: s.cornerRadius+bw else: 0
+
+      vg.beginPath()
+      vg.fillColor(s.outerBorderColor)
+      vg.roundedRect(x-bw, y-bw, w+bw*2, h+bw*2, cr)
+      vg.fill()
+
+    # Inner border
+    if s.innerBorderWidth > 0:
+      let bw = s.innerBorderWidth
+      let cr = if s.cornerRadius > 0: s.cornerRadius+bw else: 0
+
+      vg.beginPath()
+      vg.fillColor(s.innerBorderColor)
+      vg.roundedRect(x-bw, y-bw, w+bw*2, h+bw*2, cr)
+      vg.fill()
+
+    # Dialog background
+    vg.beginPath()
+    vg.fillColor(s.backgroundColor)
+    vg.roundedRect(x, y, w, h, s.cornerRadius)
+    vg.fill()
+
+    # Title bar
+    vg.beginPath()
+    vg.fillColor(s.titleBarBgColor)
+    vg.roundedRect(x, y, w, TitleBarHeight,
+                   s.cornerRadius, s.cornerRadius, 0, 0)
+    vg.fill()
+
+    # TODO use label
+    vg.fontFace("sans-bold")
+    vg.fontSize(15.0)
+    vg.textAlign(haLeft, vaMiddle)
+    vg.fillColor(s.titleBarTextColor)
+    discard vg.text(x+10.0, y + TitleBarHeight * TextVertAlignFactor, title)
+
+  pushDrawOffset(
+    DrawOffset(ox: x, oy: y)
+  )
+
+# }}}
+# {{{ endDialog()
+proc endDialog*() =
+  alias(ui, g_uiState)
+
+  popDrawOffset()
+  ui.currentLayer = layerDefault
+  if ui.dialogOpen:
+    ui.focusCaptured = true
+
+# }}}
+# {{{ closeDialog()
+proc closeDialog*() =
+  alias(ui, g_uiState)
+
+  ui.focusCaptured = false
+  ui.dialogOpen = false
 
 # }}}
 
@@ -2491,19 +2643,9 @@ proc dropDown[T](id:               ItemId,
     itemListW = max(maxItemWidth + s.itemListPadHoriz*2, w)
     itemListH = float(items.len) * itemHeight + s.itemListPadVert*2
 
-    itemListX = case s.itemListAlign
-    of haLeft:   x
-    of haRight:  x + w - itemListW
-    of haCenter: x + (w - itemListW)*0.5
-
-    if itemListX < WindowEdgePad:
-      itemListX = WindowEdgePad
-
-    elif itemListX + itemListW > ui.winWidth - WindowEdgePad:
-      itemListX = ui.winWidth - itemListW - WindowEdgePad
-
-    itemListY = if y + h + itemListH < ui.winHeight: y + h
-                else: y - itemListH
+    (itemListX, itemListY) = positionRectWithinWindow(itemListW, itemListH,
+                                                      x, y, w, h,
+                                                      s.itemListAlign)
 
     let (itemListX, itemListY, itemListW, itemListH) = snapToGrid(
       itemListX, itemListY, itemListW, itemListH, s.itemListStrokeWidth
@@ -5841,132 +5983,6 @@ template color*(col: var Color) =
 
 # }}}
 
-# {{{ Dialog
-
-type DialogStyle* = ref object
-  cornerRadius*:       float
-  backgroundColor*:    Color
-  titleBarBgColor*:    Color
-  titleBarTextColor*:  Color
-  outerBorderColor*:   Color
-  innerBorderColor*:   Color
-  outerBorderWidth*:   float
-  innerBorderWidth*:   float
-  shadow*:             ShadowStyle
-
-var DefaultDialogStyle = DialogStyle(
-  cornerRadius      : 7.0,
-  backgroundColor   : gray(0.2),
-  titleBarBgColor   : gray(0.05),
-  titleBarTextColor : gray(0.85),
-  outerBorderColor  : black(),
-  innerBorderColor  : white(),
-  outerBorderWidth  : 0.0,
-  innerBorderWidth  : 0.0
-)
-
-DefaultDialogStyle.shadow = ShadowStyle(
-  enabled      : true,
-  cornerRadius : 12.0,
-  xOffset      : 2.0,
-  yOffset      : 3.0,
-  widthOffset  : 0.0,
-  heightOffset : 0.0,
-  feather      : 25.0,
-  color        : black(0.4)
-)
-
-proc getDefaultDialogStyle*(): DialogStyle =
-  DefaultDialogStyle.deepCopy
-
-proc setDefaultDialogStyle*(style: DialogStyle) =
-  DefaultDialogStyle = style.deepCopy
-
-# {{{ beginDialog()
-proc beginDialog*(w, h: float, title: string,
-                  style: DialogStyle = DefaultDialogStyle) =
-
-  alias(ui, g_uiState)
-  alias(s, style)
-
-  ui.dialogOpen = true
-  ui.focusCaptured = false
-
-  let
-    x = floor((ui.winWidth - w) / 2)
-    y = floor((ui.winHeight - h) / 2)
-
-  ui.currentLayer = layerDialog
-
-  addDrawLayer(ui.currentLayer, vg):
-    const TitleBarHeight = 30.0
-
-    drawShadow(vg, x, y, w, h, s.shadow)
-
-    # Outer border
-    if s.outerBorderWidth > 0:
-      let bw = s.outerBorderWidth + s.innerBorderWidth
-      let cr = if s.cornerRadius > 0: s.cornerRadius+bw else: 0
-
-      vg.beginPath()
-      vg.fillColor(s.outerBorderColor)
-      vg.roundedRect(x-bw, y-bw, w+bw*2, h+bw*2, cr)
-      vg.fill()
-
-    # Inner border
-    if s.innerBorderWidth > 0:
-      let bw = s.innerBorderWidth
-      let cr = if s.cornerRadius > 0: s.cornerRadius+bw else: 0
-
-      vg.beginPath()
-      vg.fillColor(s.innerBorderColor)
-      vg.roundedRect(x-bw, y-bw, w+bw*2, h+bw*2, cr)
-      vg.fill()
-
-    # Dialog background
-    vg.beginPath()
-    vg.fillColor(s.backgroundColor)
-    vg.roundedRect(x, y, w, h, s.cornerRadius)
-    vg.fill()
-
-    # Title bar
-    vg.beginPath()
-    vg.fillColor(s.titleBarBgColor)
-    vg.roundedRect(x, y, w, TitleBarHeight,
-                   s.cornerRadius, s.cornerRadius, 0, 0)
-    vg.fill()
-
-    vg.fontFace("sans-bold")
-    vg.fontSize(15.0)
-    vg.textAlign(haLeft, vaMiddle)
-    vg.fillColor(s.titleBarTextColor)
-    discard vg.text(x+10.0, y + TitleBarHeight * TextVertAlignFactor, title)
-
-  pushDrawOffset(
-    DrawOffset(ox: x, oy: y)
-  )
-
-# }}}
-# {{{ endDialog()
-proc endDialog*() =
-  alias(ui, g_uiState)
-
-  popDrawOffset()
-  ui.currentLayer = layerDefault
-  if ui.dialogOpen:
-    ui.focusCaptured = true
-
-# }}}
-# {{{ closeDialog()
-proc closeDialog*() =
-  alias(ui, g_uiState)
-
-  ui.focusCaptured = false
-  ui.dialogOpen = false
-
-# }}}
-
-# }}}
 # {{{ ScrollView
 
 var DefaultScrollViewScrollBarStyle = getDefaultScrollBarStyle()
