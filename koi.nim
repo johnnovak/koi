@@ -476,10 +476,10 @@ const
 func snapToGrid*(x, y, w, h, strokeWidth: float): (float, float, float, float) =
   let s = (strokeWidth mod 2) * 0.5
   let
-    x = x - s
-    y = y - s
-    w = w + s*2
-    h = h + s*2
+    x = round(x) - s
+    y = round(y) - s
+    w = round(w) + s*2
+    h = round(h) + s*2
   result = (x, y, w, h)
 
 # }}}
