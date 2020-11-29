@@ -472,8 +472,8 @@ const
 # {{{ Misc utils
 
 # {{{ snapToGrid*()
-func snapToGrid*(x, y, w, h, sw: float): (float, float, float, float) =
-  let s = (sw mod 2) / 2
+func snapToGrid*(x, y, w, h, strokeWidth: float): (float, float, float, float) =
+  let s = (strokeWidth mod 2) / 2
   let
     x = x - s
     y = y - s
@@ -1410,7 +1410,91 @@ template group*(body: untyped) =
 
 # {{{ Widgets
 
+# {{{ Shadow
+
+type ShadowStyle* = ref object
+  shadowEnabled*:      bool
+  shadowCornerRadius*: float
+  shadowXOffset*:      float
+  shadowYOffset*:      float
+  shadowWidthOffset*:  float
+  shadowHeightOffset*: float
+  shadowFeather*:      float
+  shadowColor*:        Color
+
+var DefaultShadowStyle = ShadowStyle(
+  shadowEnabled      : true,
+  shadowCornerRadius : 10,
+  shadowXOffset      : 1,
+  shadowYOffset      : 2,
+  shadowWidthOffset  : 0,
+  shadowHeightOffset : 0,
+  shadowFeather      : 10,
+  shadowColor        : black(0.4)
+)
+
+proc getDefaultShadowStyle*(): ShadowStyle =
+  DefaultShadowStyle.deepCopy
+
+proc setDefaultShadowStyle*(style: ShadowStyle) =
+  DefaultShadowStyle = style.deepCopy
+
+# {{{ drawShadow*()
+proc drawShadow*(vg: NVGContext, x, y, w, h: float,
+                 style: ShadowStyle = DefaultShadowStyle) =
+  alias(s, style)
+
+  if s.shadowEnabled:
+    let (x, y, w, h) = snapToGrid(x, y, w, h, strokeWidth=0)
+
+    let shadow = vg.boxGradient(x + s.shadowXOffset,
+                                y + s.shadowYOffset,
+                                w + s.shadowWidthOffset,
+                                h + s.shadowHeightOffset,
+                                s.shadowCornerRadius,
+                                s.shadowFeather,
+                                s.shadowColor, black(0.0))
+    vg.fillPaint(shadow)
+
+    vg.beginPath()
+    vg.rect(
+      x + s.shadowXOffset - s.shadowFeather/2,
+      y + s.shadowYOffset - s.shadowFeather/2,
+      w + s.shadowWidthOffset + s.shadowFeather,
+      h + s.shadowHeightOffset + s.shadowFeather,
+    )
+    vg.fill()
+
+# }}}
+
+# }}}
 # {{{ Popup
+
+type PopupStyle* = ref object
+  autoClose*:              bool
+  autoCloseBorder*:        float
+  backgroundCornerRadius*: float
+  backgroundStrokeWidth*:  float
+  backgroundStrokeColor*:  Color
+  backgroundFillColor*:    Color
+  shadowStyle*:            ShadowStyle
+
+var DefaultPopupStyle = PopupStyle(
+  autoClose              : true,
+  autoCloseBorder        : 40,
+  backgroundCornerRadius : 5,
+  backgroundStrokeWidth  : 0,
+  backgroundStrokeColor  : black(),
+  backgroundFillColor    : gray(0.1),
+  shadowStyle            : DefaultShadowStyle
+)
+
+proc getDefaultPopupStyle*(): PopupStyle =
+  DefaultPopupStyle.deepCopy
+
+proc setDefaultPopupStyle*(style: PopupStyle) =
+  DefaultPopupStyle = style.deepCopy
+
 
 # {{{ closePopup()
 proc closePopup() =
@@ -1424,15 +1508,18 @@ proc closePopup() =
 # }}}
 # {{{  beginPopup()
 proc beginPopup(w, h: float,
-                ax, ay, aw, ah: float): bool =
+                ax, ay, aw, ah: float,
+                style: PopupStyle = DefaultPopupStyle): bool =
   alias(ui, g_uiState)
   alias(ps, ui.popupState)
+  alias(s, style)
 
   var x = ax
   var y = ay+ah
 
   (x, y) = addDrawOffset(x, y)
 
+  # TODO extract
   if x + w + WindowEdgePad > ui.winWidth:
     x -= w - aw
 
@@ -1440,21 +1527,19 @@ proc beginPopup(w, h: float,
     y -= ah + h
 
   # Hit testing
-  const hitBorder = 35  # TODO make it configurable
   let
     inside = mouseInside(x, y, w, h)
-
-    insideHitBorder = mouseInside(x - hitBorder,   y - hitBorder,
-                                  w + hitBorder*2, h + hitBorder*2)
+    b = s.autoCloseBorder
+    insideBorder = mouseInside(x-b, y-b, w+b*2, h+b*2)
 
   if ps.state == psOpenLMBDown:
     ps.closed = false
     if not ui.mbLeftDown:
       ps.state = psOpen
 
-  if not ps.widgetInsidePopupCapturedFocus and
-     (not (inside or insideHitBorder) or
-      (ps.state == psOpen and ui.mbLeftDown and not inside)):
+  if not ps.widgetInsidePopupCapturedFocus and ps.state == psOpen and
+     ((s.autoClose and not (inside or insideBorder)) or
+     (ui.mbLeftDown and not inside)):
     closePopup()
     result = false
   else:
@@ -1462,17 +1547,21 @@ proc beginPopup(w, h: float,
 
     # Draw popup window
     addDrawLayer(layerPopup, vg):
-      let sw = 0.0
+      drawShadow(vg, x, y, w, h, s.shadowStyle)
+
+      # Draw background
+      let sw = s.backgroundStrokeWidth
       let (x, y, w, h) = snapToGrid(x, y, w, h, sw)
 
-      vg.fillColor(gray(0.1))
-      vg.strokeColor(gray(0.1))
+      vg.fillColor(s.backgroundFillColor)
+      vg.strokeColor(s.backgroundStrokeColor)
       vg.strokeWidth(sw)
 
       vg.beginPath()
-      vg.roundedRect(x, y, w, h, 5)
+      vg.roundedRect(x, y, w, h, s.backgroundCornerRadius)
       vg.fill()
       vg.stroke()
+
 
     pushDrawOffset(
       DrawOffset(ox: x, oy: y)
@@ -1947,7 +2036,7 @@ proc sectionHeader(id:           ItemId,
   let buttonWidth = h
 
   addDrawLayer(ui.currentLayer, vg):
-    let (x, y, w, h) = snapToGrid(x, y, w, h, 0)
+    let (x, y, w, h) = snapToGrid(x, y, w, h, strokeWidth=0)
 
     vg.fillColor(gray(0.2))
     vg.beginPath()
