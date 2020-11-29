@@ -2367,10 +2367,17 @@ proc radioButtons[T](
       setActive(id)
       rs.activeItem = hotButton
 
+  proc setHotButton(button: int) =
+    if hasNoActiveItem() or (hasActiveItem() and button == rs.activeItem):
+      hotButton = button
+
   case layout.kind
   of rblHoriz:
     let buttonW = w / numButtons.float
-    hotButton = min(((ui.mx - x) / buttonW).int, numButtons-1)
+    let button = min(((ui.mx - x) / buttonW).int, numButtons-1)
+
+    setHotButton(button)
+
     if isHit(x, y, w, h) and hotButton > -1: setHotAndActive()
 
   of rblGridHoriz:
@@ -2383,7 +2390,9 @@ proc radioButtons[T](
       button = row * layout.itemsPerRow + col
 
     if row >= 0 and col >= 0 and button < numButtons:
-      hotButton = button
+      setHotButton(button)
+
+    setHotButton(button)
 
     if isHit(x, y, bbWidth, bbHeight) and hotButton > -1: setHotAndActive()
 
@@ -2397,7 +2406,7 @@ proc radioButtons[T](
       button = col * layout.itemsPerColumn + row
 
     if row >= 0 and col >= 0 and button < numButtons:
-      hotButton = button
+      setHotButton(button)
 
     if isHit(x, y, bbWidth, bbHeight) and hotButton > -1: setHotAndActive()
 
