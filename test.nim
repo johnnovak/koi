@@ -106,7 +106,7 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
 
 #  vg.scissor(0, 0, 630, 100)
 
-  koi.label(x, y, w, h, "Koi widget tests", labelStyle)
+  koi.label(x, y, 200, h, "Koi widget tests", style = labelStyle)
 
   # Buttons
   y += pad
@@ -184,7 +184,7 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
     sliderVal3,
     tooltip = "Vertical Slider 1")
 
-  koi.label(300, 590, w, h, fmt"{sliderVal3:.3f}", labelStyle)
+  koi.label(300, 590, w, h, fmt"{sliderVal3:.3f}", style = labelStyle)
 
   koi.vertSlider(
     400, 460, h, 120,
@@ -192,7 +192,7 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
     sliderVal4,
     tooltip = "Vertical Slider 2")
 
-  koi.label(380, 590, w, h, fmt"{sliderVal4:.3f}", labelStyle)
+  koi.label(380, 590, w, h, fmt"{sliderVal4:.3f}", style = labelStyle)
 
   # dropDowns
   y += pad * 2
@@ -272,14 +272,14 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
   # Custom drawn radio buttons
   var radioButtonsDrawProc: RadioButtonsDrawProc =
     proc (vg: NVGContext, buttonIdx: Natural, label: string,
-          hover, active, pressed, first, last: bool,
+          state: WidgetState, first, last: bool,
           x, y, w, h: float, style: RadioButtonsStyle) =
 
       var col = hsl(0.08 * buttonIdx, 0.6, 0.5)
 
-      if hover:
+      if state == wsHover:
         col = col.lerp(white(), 0.3)
-      if pressed:
+      if state == wsDown:
         col = col.lerp(black(), 0.3)
 
       const Pad = 4
@@ -291,9 +291,9 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
 
       vg.fillColor(black(0.7))
       vg.setFont(14.0, horizAlign=haCenter)
-      discard vg.text(x + (w-Pad)*0.5, y + h*0.5,
-                      label)
-      if active:
+      discard vg.text(x + (w-Pad)*0.5, y + h*0.5, label)
+
+      if state in {wsActive, wsActiveHover}:
         vg.strokeColor(rgb(1.0, 0.4, 0.4))
         vg.strokeWidth(2)
         vg.stroke()

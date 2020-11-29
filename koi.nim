@@ -14,6 +14,7 @@ import glfw
 from glfw/wrapper import setCursor, createStandardCursor, CursorShape
 import glm
 import nanovg
+import with
 
 import koi/ringbuffer
 import koi/utils
@@ -262,7 +263,7 @@ type
 # {{{ WidgetState
 
 type WidgetState* = enum
-  wsNormal, wsHover, wsActive, wsDisabled
+  wsNormal, wsHover, wsDown, wsActive, wsActiveHover, wsDisabled
 
 # }}}
 # {{{ WidgetGrouping
@@ -1476,7 +1477,7 @@ type PopupStyle* = ref object
   backgroundStrokeWidth*:  float
   backgroundStrokeColor*:  Color
   backgroundFillColor*:    Color
-  shadowStyle*:            ShadowStyle
+  shadow*:                 ShadowStyle
 
 var DefaultPopupStyle = PopupStyle(
   autoClose              : true,
@@ -1485,7 +1486,7 @@ var DefaultPopupStyle = PopupStyle(
   backgroundStrokeWidth  : 0,
   backgroundStrokeColor  : black(),
   backgroundFillColor    : gray(0.1),
-  shadowStyle            : DefaultShadowStyle
+  shadow                 : getDefaultShadowStyle()
 )
 
 proc getDefaultPopupStyle*(): PopupStyle =
@@ -1545,7 +1546,7 @@ proc beginPopup*(w, h: float,
 
     # Draw popup window
     addDrawLayer(layerPopup, vg):
-      drawShadow(vg, x, y, w, h, s.shadowStyle)
+      drawShadow(vg, x, y, w, h, s.shadow)
 
       # Draw background
       let sw = s.backgroundStrokeWidth
@@ -1595,21 +1596,34 @@ proc endPopup*() =
 # {{{ Label
 
 type LabelStyle* = ref object
-  # TODO label prefix?
-  multiLine*:  bool
-  fontSize*:   float
-  fontFace*:   string
-  align*:      HorizontalAlign
-  lineHeight*: float
-  color*:      Color
+  fontSize*:         float
+  fontFace*:         string
+  vertAlignFactor*:  float
+  padHoriz*:         float
+  align*:            HorizontalAlign
+  multiLine*:        bool
+  lineHeight*:       float
+  color*:            Color
+  colorHover*:       Color
+  colorDown*:        Color
+  colorActive*:      Color
+  colorActiveHover*: Color
+  colorDisabled*:    Color
 
 var DefaultLabelStyle = LabelStyle(
-  multiLine  : false,
-  fontSize   : 14.0,
-  fontFace   : "sans-bold",
-  align      : haLeft,
-  lineHeight : 1.4,
-  color      : GRAY_HI
+  fontSize         : 14.0,
+  fontFace         : "sans-bold",
+  vertAlignFactor  : 0.55,
+  padHoriz         : 8.0,
+  align            : haLeft,
+  multiLine        : false,
+  lineHeight       : 1.4,
+  color            : gray(0.7),
+  colorHover       : gray(0.7),
+  colorDown        : gray(0.7),
+  colorActive      : gray(1.0),
+  colorActiveHover : gray(1.0),
+  colorDisabled    : gray(0.25)
 )
 
 proc getDefaultLabelStyle*(): LabelStyle =
@@ -1619,32 +1633,41 @@ proc setDefaultLabelStyle*(style: LabelStyle) =
   DefaultLabelStyle = style.deepCopy
 
 # {{{ drawLabel()
-proc drawLabel(vg: NVGContext, x, y, w, h, padHoriz: float,
-               label: string, color: Color,
-               fontSize: float, fontFace: string, align: HorizontalAlign,
-               multiLine: bool = false, lineHeight: float = 1.4) =
+proc drawLabel(vg: NVGContext; x, y, w, h: float; label: string;
+               state: WidgetState = wsNormal,
+               style: LabelStyle = DefaultLabelStyle) =
+  alias(s, style)
   let
-    textBoxX = x + padHoriz
-    textBoxW = w - padHoriz*2
+    textBoxX = x + s.padHoriz
+    textBoxW = w - s.padHoriz*2
     textBoxY = y
     textBoxH = h
 
-  let tx = case align:
+  let tx = case s.align:
   of haLeft:   textBoxX
   of haCenter: textBoxX + textBoxW*0.5
   of haRight:  textBoxX + textBoxW
 
-  let ty = y + h*TextVertAlignFactor
+  let ty = y + h*s.vertAlignFactor
 
   vg.save()
 
   vg.intersectScissor(textBoxX, textBoxY, textBoxW, textBoxH)
 
-  vg.setFont(fontSize, fontFace, align)
+  vg.setFont(s.fontSize, s.fontFace, s.align)
+
+  let color = case state
+              of wsNormal:      s.color
+              of wsHover:       s.colorHover
+              of wsDown:        s.colorDown
+              of wsActive:      s.colorActive
+              of wsActiveHover: s.colorActiveHover
+              of wsDisabled:    s.colorDisabled
+
   vg.fillColor(color)
 
-  if multiLine:
-    vg.textLineHeight(lineHeight)
+  if s.multiLine:
+    vg.textLineHeight(s.lineHeight)
     vg.textBox(tx, ty, textBoxW, label)
   else:
     discard vg.text(tx, ty, label)
@@ -1655,6 +1678,7 @@ proc drawLabel(vg: NVGContext, x, y, w, h, padHoriz: float,
 # {{{ label()
 proc label*(x, y, w, h: float,
            labelText:  string,
+           state:      WidgetState = wsNormal,
            style:      LabelStyle = DefaultLabelStyle) =
 
   alias(ui, g_uiState)
@@ -1663,16 +1687,16 @@ proc label*(x, y, w, h: float,
   let (x, y) = addDrawOffset(x, y)
 
   addDrawLayer(ui.currentLayer, vg):
-    vg.drawLabel(x, y, w, h, padHoriz = 0, labelText, s.color,
-                 s.fontSize, s.fontFace, s.align, s.multiLine, s.lineHeight)
+    vg.drawLabel(x, y, w, h, labelText, state, style)
 
 # }}}
 
-proc label*(labelText: string, style: LabelStyle = DefaultLabelStyle) =
+proc label*(labelText: string, state: WidgetState = wsNormal,
+            style: LabelStyle = DefaultLabelStyle) =
   alias(ui, g_uiState)
   alias(a, ui.autoLayoutState)
 
-  label(a.x, a.y, a.nextItemWidth, a.nextItemHeight, labelText, style)
+  label(a.x, a.y, a.nextItemWidth, a.nextItemHeight, labelText, state, style)
 
   handleAutoLayout()
 
@@ -1680,47 +1704,40 @@ proc label*(labelText: string, style: LabelStyle = DefaultLabelStyle) =
 # {{{ Button
 
 type ButtonStyle* = ref object
-  buttonCornerRadius*:        float
-  buttonStrokeWidth*:         float
-  buttonStrokeColor*:         Color
-  buttonStrokeColorHover*:    Color
-  buttonStrokeColorDown*:     Color
-  buttonStrokeColorDisabled*: Color
-  buttonFillColor*:           Color
-  buttonFillColorHover*:      Color
-  buttonFillColorDown*:       Color
-  buttonFillColorDisabled*:   Color
-  labelPadHoriz*:             float
-  labelFontSize*:             float
-  labelFontFace*:             string
-  labelOnly*:                 bool
-  labelAlign*:                HorizontalAlign
-  labelColor*:                Color
-  labelColorHover*:           Color
-  labelColorDown*:            Color
-  labelColorDisabled*:        Color
+  cornerRadius*:        float
+  strokeWidth*:         float
+  strokeColor*:         Color
+  strokeColorHover*:    Color
+  strokeColorDown*:     Color
+  strokeColorDisabled*: Color
+  fillColor*:           Color
+  fillColorHover*:      Color
+  fillColorDown*:       Color
+  fillColorDisabled*:   Color
+  labelOnly*:           bool
+  label*:               LabelStyle
 
 var DefaultButtonStyle = ButtonStyle(
-  buttonCornerRadius        : 5,
-  buttonStrokeWidth         : 0,
-  buttonStrokeColor         : black(),
-  buttonStrokeColorHover    : black(),
-  buttonStrokeColorDown     : black(),
-  buttonStrokeColorDisabled : black(),
-  buttonFillColor           : gray(0.6),
-  buttonFillColorHover      : GRAY_HI,
-  buttonFillColorDown       : HILITE,
-  buttonFillColorDisabled   : GRAY_LO,
-  labelPadHoriz             : 8,
-  labelFontSize             : 14.0,
-  labelFontFace             : "sans-bold",
-  labelOnly                 : false,
-  labelAlign                : haCenter,
-  labelColor                : GRAY_LO,
-  labelColorHover           : GRAY_LO,
-  labelColorDown            : GRAY_LO,
-  labelColorDisabled        : GRAY_MID
+  cornerRadius        : 5,
+  strokeWidth         : 0,
+  strokeColor         : black(),
+  strokeColorHover    : black(),
+  strokeColorDown     : black(),
+  strokeColorDisabled : black(),
+  fillColor           : gray(0.6),
+  fillColorHover      : GRAY_HI,
+  fillColorDown       : HILITE,
+  fillColorDisabled   : GRAY_LO,
+  labelOnly           : false,
+  label               : getDefaultLabelStyle()
 )
+
+with DefaultButtonStyle.label:
+  color         = GRAY_LO
+  colorHover    = GRAY_LO
+  colorDown     = GRAY_LO
+  colorDisabled = GRAY_HI
+
 
 proc getDefaultButtonStyle*(): ButtonStyle =
   DefaultButtonStyle.deepCopy
@@ -1752,25 +1769,25 @@ proc button(id:         ItemId,
     result = true
 
   addDrawLayer(ui.currentLayer, vg):
-    let sw = s.buttonStrokeWidth
+    let sw = s.strokeWidth
     let (x, y, w, h) = snapToGrid(x, y, w, h, sw)
 
     let state = if   disabled: wsDisabled
                 elif isHot(id) and hasNoActiveItem(): wsHover
-                elif isHot(id) and isActive(id): wsActive
+                elif isHot(id) and isActive(id): wsDown
                 else: wsNormal
 
     let (fillColor, strokeColor, labelColor) =
       case state
-      of wsNormal:
-        (s.buttonFillColor, s.buttonStrokeColor, s.labelColor)
+      of wsNormal, wsActive, wsActiveHover:
+        (s.fillColor, s.strokeColor, s.label.color)
       of wsHover:
-        (s.buttonFillColorHover, s.buttonStrokeColorHover, s.labelColorHover)
-      of wsActive:
-        (s.buttonFillColorDown, s.buttonStrokeColorDown, s.labelColorDown)
+        (s.fillColorHover, s.strokeColorHover, s.label.colorHover)
+      of wsDown:
+        (s.fillColorDown, s.strokeColorDown, s.label.colorDown)
       of wsDisabled:
-        (s.buttonFillColorDisabled, s.buttonStrokeColorDisabled,
-         s.labelColorDisabled)
+        (s.fillColorDisabled, s.strokeColorDisabled,
+         s.label.colorDisabled)
 
     if not s.labelOnly:
       vg.fillColor(fillColor)
@@ -1778,12 +1795,11 @@ proc button(id:         ItemId,
       vg.strokeWidth(sw)
 
       vg.beginPath()
-      vg.roundedRect(x, y, w, h, s.buttonCornerRadius)
+      vg.roundedRect(x, y, w, h, s.cornerRadius)
       vg.fill()
       vg.stroke()
 
-    vg.drawLabel(x, y, w, h, s.labelPadHoriz, label, labelColor,
-                 s.labelFontSize, s.labelFontFace, s.labelAlign)
+    vg.drawLabel(x, y, w, h, label, state, s.label)
 
   if isHot(id):
     handleTooltip(id, tooltip)
@@ -1815,12 +1831,8 @@ type CheckBoxStyle* = ref object
   fillColorHover*:      Color
   fillColorDown*:       Color
   fillColorActive*:     Color
-  iconColor*:           Color
-  iconColorHover*:      Color
-  iconColorDown*:       Color
+  icon*:                LabelStyle
   iconColorActive*:     Color
-  iconFontSize*:        float
-  iconFontFace*:        string
   iconActive*:          string
   iconInactive*:        string
 
@@ -1835,15 +1847,17 @@ var DefaultCheckBoxStyle = CheckBoxStyle(
   fillColorHover    : GRAY_HI,
   fillColorDown     : GRAY_LOHI,
   fillColorActive   : GRAY_LO,
-  iconColor         : GRAY_LO,
-  iconColorHover    : GRAY_LO,
-  iconColorDown     : GRAY_HI,
+  icon              : getDefaultLabelStyle(),
   iconColorActive   : GRAY_HI,
-  iconFontSize      : 14.0,
-  iconFontFace      : "sans-bold",
   iconActive        : "",
   iconInactive      : ""
 )
+
+with DefaultCheckBoxStyle.icon:
+  padHoriz    = 0.0
+  color       = GRAY_LO
+  colorHover  = GRAY_LO
+  colorDown   = GRAY_HI
 
 proc getDefaultCheckBoxStyle*(): CheckBoxStyle =
   DefaultCheckBoxStyle.deepCopy
@@ -1864,20 +1878,15 @@ let DefaultCheckBoxDrawProc: CheckBoxDrawProc =
     alias(ui, g_uiState)
     alias(s, style)
 
-    var (fillColor, strokeColor, iconColor) =
-      if active:
-        (s.fillColorActive, s.strokeColorActive, s.iconColorActive)
-      else:
-        case state
-        of wsNormal:
-          (s.fillColor, s.strokeColor, s.iconColor)
-        of wsHover:
-          (s.fillColorHover, s.strokeColorHover, s.iconColorHover)
-        of wsActive:
-          (s.fillColorDown, s.strokeColorDown, s.iconColorDown)
-        of wsDisabled:
-          # TODO disabled colours
-          (s.fillColorDown, s.strokeColorDown, s.iconColorDown)
+    var (fillColor, strokeColor) = case state
+      of wsNormal, wsDisabled:
+        (s.fillColor, s.strokeColor)
+      of wsHover:
+        (s.fillColorHover, s.strokeColorHover)
+      of wsDown:
+        (s.fillColorDown, s.strokeColorDown)
+      of wsActive, wsActiveHover:
+        (s.fillColorActive, s.strokeColorActive)
 
     let sw = s.strokeWidth
     let (x, y, w, _) = snapToGrid(x, y, w, w, sw)
@@ -1892,8 +1901,7 @@ let DefaultCheckBoxDrawProc: CheckBoxDrawProc =
 
     let icon = if active: s.iconActive else: s.iconInactive
     if icon != "":
-      vg.drawLabel(x, y, w, w, 0, icon, iconColor,
-                   s.iconFontSize, s.iconFontFace, haCenter)
+      vg.drawLabel(x, y, w, w, icon, state, s.icon)
 
 
 # {{{ checkBox()
@@ -1925,7 +1933,7 @@ proc checkBox(id:         ItemId,
 
   addDrawLayer(ui.currentLayer, vg):
     let state = if   isHot(id) and hasNoActiveItem(): wsHover
-                elif isHot(id) and isActive(id): wsActive
+                elif isHot(id) and isActive(id): wsDown
                 else: wsNormal
 
     drawProc(vg, x, y, w, active, state, style)
@@ -1968,44 +1976,11 @@ template checkBox*(active:   var bool,
 
 # TODO
 type SectionHeaderStyle* = ref object
-  buttonCornerRadius*:        float
-  buttonStrokeWidth*:         float
-  buttonStrokeColor*:         Color
-  buttonStrokeColorHover*:    Color
-  buttonStrokeColorDown*:     Color
-  buttonStrokeColorDisabled*: Color
-  buttonFillColor*:           Color
-  buttonFillColorHover*:      Color
-  buttonFillColorDown*:       Color
-  buttonFillColorDisabled*:   Color
-  labelPadHoriz*:             float
-  labelFontSize*:             float
-  labelFontFace*:             string
-  labelOnly*:                 bool
-  labelAlign*:                HorizontalAlign
-  labelColor*:                Color
-  labelColorHover*:           Color
-  labelColorDown*:            Color
-  labelColorDisabled*:        Color
+  label*:     LabelStyle
+#  checkBox*:  CheckBoxStyle
 
 var DefaultSectionHeaderStyle = SectionHeaderStyle(
-  buttonCornerRadius        : 5,
-  buttonStrokeWidth         : 0,
-  buttonStrokeColor         : black(),
-  buttonStrokeColorHover    : black(),
-  buttonStrokeColorDown     : black(),
-  buttonStrokeColorDisabled : black(),
-  buttonFillColor           : gray(0.6),
-  buttonFillColorHover      : GRAY_HI,
-  buttonFillColorDown       : HILITE,
-  buttonFillColorDisabled   : GRAY_LO,
-  labelPadHoriz             : 8,
-  labelFontSize             : 14.0,
-  labelFontFace             : "sans-bold",
-  labelAlign                : haLeft,
-  labelColor                : white(),
-  labelColorHover           : white(),
-  labelColorDown            : white()
+  label : getDefaultLabelStyle()
 )
 
 proc getDefaultSectionHeaderStyle*(): SectionHeaderStyle =
@@ -2041,17 +2016,14 @@ proc sectionHeader(id:           ItemId,
     vg.rect(x, y-2, w, h+4)
     vg.fill()
 
-    let labelColor = s.labelColor
+    let labelColor = s.label.color
 
     alias(vg, g_nvgContext)
-    vg.drawLabel(x+buttonWidth, y, w-buttonWidth, h, padHoriz=s.labelPadHoriz,
-                 label,
-                 color=labelColor, fontSize=s.labelFontSize,
-                 fontFace=s.labelFontFace, align=s.labelAlign)
+    vg.drawLabel(x+buttonWidth, y, w-buttonWidth, h, label, style=s.label)
 
   let cbId = hashId(lastIdString() & ":checkBox")
   checkBox(cbId, ox, oy, buttonWidth, expanded_out, tooltip,
-           style=SectionHeaderCheckboxStyle)
+           style=DefaultCheckBoxStyle)
 
   result = expanded_out
 
@@ -2096,51 +2068,47 @@ template sectionHeader*(
 # {{{ RadioButtons
 
 type RadioButtonsStyle* = ref object
-  buttonPadHoriz*:           float
-  buttonPadVert*:            float
-  buttonCornerRadius*:       float
-  buttonStrokeWidth*:        float
-  buttonStrokeColor*:        Color
-  buttonStrokeColorHover*:   Color
-  buttonStrokeColorDown*:    Color
-  buttonStrokeColorActive*:  Color
-  buttonFillColor*:          Color
-  buttonFillColorHover*:     Color
-  buttonFillColorDown*:      Color
-  buttonFillColorActive*:    Color
-  labelPadHoriz*:            float
-  labelFontSize*:            float
-  labelFontFace*:            string
-  labelOnly*:                bool
-  labelAlign*:               HorizontalAlign
-  labelColor*:               Color
-  labelColorHover*:          Color
-  labelColorActive*:         Color
-  labelColorDown*:           Color
+  buttonPadHoriz*:               float
+  buttonPadVert*:                float
+  buttonCornerRadius*:           float
+  buttonStrokeWidth*:            float
+  buttonStrokeColor*:            Color
+  buttonStrokeColorHover*:       Color
+  buttonStrokeColorDown*:        Color
+  buttonStrokeColorActive*:      Color
+  buttonStrokeColorActiveHover*: Color
+  buttonFillColor*:              Color
+  buttonFillColorHover*:         Color
+  buttonFillColorDown*:          Color
+  buttonFillColorActive*:        Color
+  buttonFillColorActiveHover*:   Color
+  label*:                        LabelStyle
 
 var DefaultRadioButtonsStyle = RadioButtonsStyle(
-  buttonPadHoriz           : 3,
-  buttonPadVert            : 3,
-  buttonCornerRadius       : 5,
-  buttonStrokeWidth        : 0,
-  buttonStrokeColor        : black(),
-  buttonStrokeColorHover   : black(),
-  buttonStrokeColorDown    : black(),
-  buttonStrokeColorActive  : black(),
-  buttonFillColor          : GRAY_MID,
-  buttonFillColorHover     : GRAY_HI,
-  buttonFillColorDown      : HILITE_LO,
-  buttonFillColorActive    : HILITE,
-  labelPadHoriz            : 8,
-  labelFontSize            : 14.0,
-  labelFontFace            : "sans-bold",
-  labelOnly                : false,
-  labelAlign               : haCenter,
-  labelColor               : GRAY_LO,
-  labelColorHover          : GRAY_LO,
-  labelColorActive         : GRAY_LO,
-  labelColorDown           : GRAY_LO
+  buttonPadHoriz               : 3,
+  buttonPadVert                : 3,
+  buttonCornerRadius           : 5,
+  buttonStrokeWidth            : 0,
+  buttonStrokeColor            : black(),
+  buttonStrokeColorHover       : black(),
+  buttonStrokeColorDown        : black(),
+  buttonStrokeColorActive      : black(),
+  buttonStrokeColorActiveHover : black(),
+  buttonFillColor              : GRAY_MID,
+  buttonFillColorHover         : GRAY_HI,
+  buttonFillColorDown          : HILITE_LO,
+  buttonFillColorActive        : HILITE,
+  buttonFillColorActiveHover   : HILITE,
+  label                        : getDefaultLabelStyle(),
 )
+
+with DefaultRadioButtonsStyle.label:
+  color            = GRAY_LO
+  colorHover       = GRAY_LO
+  colorDown        = GRAY_LO
+  colorActive      = GRAY_LO
+  colorActiveHover = GRAY_LO
+  colorDisabled    = GRAY_HI
 
 proc getDefaultRadioButtonsStyle*(): RadioButtonsStyle =
   DefaultRadioButtonsStyle.deepCopy
@@ -2160,28 +2128,30 @@ type
 
   RadioButtonsDrawProc* = proc (vg: NVGContext, buttonIdx: Natural,
                                 label: string,
-                                hover, active, down, first, last: bool,
+                                state: WidgetState, first, last: bool,
                                 x, y, w, h: float,
                                 style: RadioButtonsStyle)
 
 # {{{ DefaultRadioButtonDrawProc
 let DefaultRadioButtonDrawProc: RadioButtonsDrawProc =
   proc (vg: NVGContext, buttonIdx: Natural, label: string,
-        hover, active, down, first, last: bool,  # TODO use enum for state?
+        state: WidgetState, first, last: bool,
         x, y, w, h: float, style: RadioButtonsStyle) =
 
     alias(s, style)
 
-    let (fillColor, strokeColor, labelColor) =
-      if active: (s.buttonFillColorActive, s.buttonStrokeColorActive,
-                  s.labelColorActive)
-      else:
-        if hover:
-          (s.buttonFillColorHover, s.buttonStrokeColorHover, s.labelColorHover)
-        elif down:
-          (s.buttonFillColorDown, s.buttonStrokeColorDown, s.labelColorDown)
-        else:
-          (s.buttonFillColor, s.buttonStrokeColor, s.labelColor)
+    let (fillColor, strokeColor) =
+      case state
+      of wsNormal, wsDisabled:
+        (s.buttonFillColor, s.buttonStrokeColor)
+      of wsHover:
+        (s.buttonFillColorHover, s.buttonStrokeColorHover)
+      of wsDown:
+        (s.buttonFillColorDown, s.buttonStrokeColorDown)
+      of wsActive:
+        (s.buttonFillColorActive, s.buttonStrokeColorActive)
+      of wsActiveHover:
+        (s.buttonFillColorActiveHover, s.buttonStrokeColorActiveHover)
 
     let
       sw = s.buttonStrokeWidth
@@ -2190,7 +2160,7 @@ let DefaultRadioButtonDrawProc: RadioButtonsDrawProc =
       bw = round(x + buttonW) - bx
       bh = h - s.buttonPadVert
 
-    vg.setFont(s.labelFontSize)
+    vg.setFont(s.label.fontSize)
 
     vg.fillColor(fillColor)
     vg.strokeColor(strokeColor)
@@ -2205,8 +2175,7 @@ let DefaultRadioButtonDrawProc: RadioButtonsDrawProc =
     vg.fill()
     vg.stroke()
 
-    vg.drawLabel(bx, y, bw, bh, s.labelPadHoriz, label, labelColor,
-                 s.labelFontSize, s.labelFontFace, s.labelAlign)
+    vg.drawLabel(bx, y, bw, bh, label, state, s.label)
 
 # }}}
 # {{{ radioButtons()
@@ -2236,18 +2205,17 @@ proc radioButtons[T](
   # Hit testing
   var hotButton = -1
 
-  proc setHot() =
+  proc setHotAndActive() =
     setHot(id)
     if ui.mbLeftDown and hasNoActiveItem():
       setActive(id)
       rs.activeItem = hotButton
 
-  let buttonW = w / numButtons.float
-
   case layout.kind
   of rblHoriz:
+    let buttonW = w / numButtons.float
     hotButton = min(((ui.mx - x) / buttonW).int, numButtons-1)
-    if isHit(x, y, w, h): setHot()
+    if isHit(x, y, w, h) and hotButton > -1: setHotAndActive()
 
   of rblGridHoriz:
     let
@@ -2261,7 +2229,7 @@ proc radioButtons[T](
     if row >= 0 and col >= 0 and button < numButtons:
       hotButton = button
 
-    if isHit(x, y, bbWidth, bbHeight) and hotButton > -1: setHot()
+    if isHit(x, y, bbWidth, bbHeight) and hotButton > -1: setHotAndActive()
 
   of rblGridVert:
     let
@@ -2275,7 +2243,7 @@ proc radioButtons[T](
     if row >= 0 and col >= 0 and button < numButtons:
       hotButton = button
 
-    if isHit(x, y, bbWidth, bbHeight) and hotButton > -1: setHot()
+    if isHit(x, y, bbWidth, bbHeight) and hotButton > -1: setHotAndActive()
 
   # LMB released over active widget means it was clicked
   if not ui.mbLeftDown and isHot(id) and isActive(id) and
@@ -2285,17 +2253,22 @@ proc radioButtons[T](
   activeButton_out = activeButton
 
   # Draw radio buttons
-  proc buttonDrawState(i: Natural): (bool, bool, bool) =
+  proc buttonDrawState(i: Natural): WidgetState =
     let state = if   isHot(id) and hasNoActiveItem(): wsHover
-                elif isHot(id) and isActive(id): wsActive
+                elif isHot(id) and isActive(id): wsDown
                 else: wsNormal
 
-    let hover = state == wsHover and hotButton == i
-    let active = activeButton.ord == i
-    let down = state == wsActive and hotButton == i and
-               rs.activeItem == i
+    if activeButton.ord == i:
+      if hotButton == i and state == wsHover: wsActiveHover
+      else: wsActive
 
-    result = (hover, active, down)
+    else:
+      if hotButton == i:
+        if   state == wsHover: wsHover
+        elif state == wsDown:  wsDown
+        else: wsNormal
+      else:
+        wsNormal
 
 
   addDrawLayer(ui.currentLayer, vg):
@@ -2306,14 +2279,15 @@ proc radioButtons[T](
 
     case layout.kind
     of rblHoriz:
+      let buttonW = w / numButtons.float
       for i, label in labels:
         let
-          (hover, active, down) = buttonDrawState(i)
+          state = buttonDrawState(i)
           first = i == 0
           last = i == labels.len-1
           w = round(x + buttonW) - round(x)
 
-        drawProc(vg, i, label, hover, active, down, first, last,
+        drawProc(vg, i, label, state, first, last,
                  round(x), y, w, h, style)
         x += buttonW
 
@@ -2321,8 +2295,8 @@ proc radioButtons[T](
       let startX = x
       var itemsInRow = 0
       for i, label in labels:
-        let (hover, active, down) = buttonDrawState(i)
-        drawProc(vg, i, label, hover, active, down, first=false, last=false,
+        let state = buttonDrawState(i)
+        drawProc(vg, i, label, state, first=false, last=false,
                  x, y, w, h, style)
 
         inc(itemsInRow)
@@ -2337,8 +2311,8 @@ proc radioButtons[T](
       let startY = y
       var itemsInColumn = 0
       for i, label in labels:
-        let (hover, active, down) = buttonDrawState(i)
-        drawProc(vg, i, label, hover, active, down, first=false, last=false,
+        let state = buttonDrawState(i)
+        drawProc(vg, i, label, state, first=false, last=false,
                  x, y, w, h, style)
 
         inc(itemsInColumn)
@@ -2396,22 +2370,12 @@ type DropDownStyle* = ref object
   buttonStrokeColor*:         Color
   buttonStrokeColorHover*:    Color
   buttonStrokeColorDown*:     Color
-  buttonStrokeColorActive*:   Color
   buttonStrokeColorDisabled*: Color
   buttonFillColor*:           Color
   buttonFillColorHover*:      Color
   buttonFillColorDown*:       Color
-  buttonFillColorActive*:     Color
   buttonFillColorDisabled*:   Color
-  labelPadHoriz*:             float
-  labelFontSize*:             float
-  labelFontFace*:             string
-  labelAlign*:                HorizontalAlign
-  labelColor*:                Color
-  labelColorHover*:           Color
-  labelColorDown*:            Color
-  labelColorActive*:          Color
-  labelColorDisabled*:        Color
+  label*:                     LabelStyle
   itemListAlign*:             HorizontalAlign
   itemListPadHoriz*:          float
   itemListPadVert*:           float
@@ -2419,11 +2383,7 @@ type DropDownStyle* = ref object
   itemListStrokeWidth*:       float
   itemListStrokeColor*:       Color
   itemListFillColor*:         Color
-  itemFontSize*:              float
-  itemFontFace*:              string
-  itemAlign*:                 HorizontalAlign
-  itemColor*:                 Color
-  itemColorHover*:            Color
+  item*:                      LabelStyle
   itemBackgroundColorHover*:  Color
 
 var DefaultDropDownStyle = DropDownStyle(
@@ -2431,23 +2391,13 @@ var DefaultDropDownStyle = DropDownStyle(
   buttonStrokeWidth         : 0,
   buttonStrokeColor         : black(),
   buttonStrokeColorHover    : black(),
-  buttonStrokeColorDown     : black(), # TODO
-  buttonStrokeColorActive   : black(),
+  buttonStrokeColorDown     : black(),
   buttonStrokeColorDisabled : black(),
   buttonFillColor           : GRAY_MID,
   buttonFillColorHover      : GRAY_HI,
-  buttonFillColorDown       : GRAY_MID, # TODO
-  buttonFillColorActive     : GRAY_MID,
+  buttonFillColorDown       : GRAY_MID,
   buttonFillColorDisabled   : GRAY_LO,
-  labelPadHoriz             : 8,
-  labelFontSize             : 14.0,
-  labelFontFace             : "sans-bold",
-  labelAlign                : haLeft,
-  labelColor                : GRAY_LO,
-  labelColorHover           : GRAY_LO,
-  labelColorDown            : GRAY_LO, # TODO
-  labelColorActive          : GRAY_LO,
-  labelColorDisabled        : GRAY_MID,
+  label                     : getDefaultLabelStyle(),
   itemListAlign             : haCenter,
   itemListPadHoriz          : 7,
   itemListPadVert           : 7,
@@ -2455,13 +2405,18 @@ var DefaultDropDownStyle = DropDownStyle(
   itemListStrokeWidth       : 0,
   itemListStrokeColor       : black(),
   itemListFillColor         : GRAY_LO,
-  itemFontSize              : 14.0,
-  itemFontFace              : "sans-bold",
-  itemAlign                 : haLeft,
-  itemColor                 : GRAY_HI,
-  itemColorHover            : GRAY_LO,
+  item                      : getDefaultLabelStyle(),
   itemBackgroundColorHover  : HILITE
 )
+
+with DefaultDropDownStyle:
+  label.color       = GRAY_LO
+  label.colorHover  = GRAY_LO
+  label.colorDown   = GRAY_LO # TODO
+
+  item.padHoriz     = 0.0
+  item.color        = GRAY_HI
+  item.colorHover   = GRAY_LO
 
 proc getDefaultDropDownStyle*(): DropDownStyle =
   DefaultDropDownStyle.deepCopy
@@ -2520,7 +2475,7 @@ proc dropDown[T](id:               ItemId,
     # Calculate the position of the box around the drop-down items
     var maxItemWidth = 0.0
 
-    g_nvgContext.setFont(s.itemFontSize)
+    g_nvgContext.setFont(s.item.fontSize)
 
     for i in items:
       let tw = g_nvgContext.textWidth(i)
@@ -2586,7 +2541,7 @@ proc dropDown[T](id:               ItemId,
 
   let state = if disabled: wsDisabled
               elif isHot(id) and hasNoActiveItem(): wsHover
-              elif isHot(id) and isActive(id): wsActive
+              elif isHot(id) and isActive(id): wsDown
               else: wsNormal
 
   # Drop-down button
@@ -2595,15 +2550,15 @@ proc dropDown[T](id:               ItemId,
     let (x, y, w, h) = snapToGrid(x, y, w, h, sw)
 
     let (fillColor, strokeColor, textColor) = case state
-      of wsNormal:
-        (s.buttonFillColor, s.buttonStrokeColor, s.labelColor)
+      of wsNormal, wsActive, wsActiveHover:
+        (s.buttonFillColor, s.buttonStrokeColor, s.label.color)
       of wsHover:
-        (s.buttonFillColorHover, s.buttonStrokeColorHover, s.labelColorHover)
-      of wsActive:
-        (s.buttonFillColorActive, s.buttonStrokeColorActive, s.labelColorActive)
+        (s.buttonFillColorHover, s.buttonStrokeColorHover, s.label.colorHover)
+      of wsDown:
+        (s.buttonFillColorDown, s.buttonStrokeColorDown, s.label.colorDown)
       of wsDisabled:
         (s.buttonFillColorDisabled, s.buttonStrokeColorDisabled,
-         s.labelColorDisabled)
+         s.label.colorDisabled)
 
     vg.fillColor(fillColor)
     vg.strokeColor(strokeColor)
@@ -2616,8 +2571,7 @@ proc dropDown[T](id:               ItemId,
 
     let itemText = items[selectedItem]
 
-    vg.drawLabel(x, y, w, h, s.labelPadHoriz, itemText, textColor,
-                 s.labelFontSize, s.labelFontFace, s.labelAlign)
+    vg.drawLabel(x, y, w, h, itemText, state, s.label)
 
   # Drop-down items
   if isActive(id) and ds.state >= dsOpenLMBPressed:
@@ -2640,16 +2594,15 @@ proc dropDown[T](id:               ItemId,
         iy = itemListY + s.itemListPadVert
 
       for i, item in items.pairs:
-        var textColor = s.itemColor
+        var state = wsNormal
         if i == hoverItem:
           vg.beginPath()
           vg.rect(itemListX, iy, itemListW, h)
           vg.fillColor(s.itemBackgroundColorHover)
           vg.fill()
-          textColor = s.itemColorHover
+          state = wsHover
 
-        vg.drawLabel(ix, iy, itemListW, h, 0, item, textColor,
-                     s.itemFontSize, s.itemFontFace, s.itemAlign)
+        vg.drawLabel(ix, iy, itemListW, h, item, state, s.item)
 
         iy += itemHeight
 
@@ -2697,50 +2650,40 @@ type ScrollBarStyle* = ref object
   trackStrokeWidth*:       float
   trackStrokeColor*:       Color
   trackStrokeColorHover*:  Color
-  trackStrokeColorActive*: Color
+  trackStrokeColorDown*:   Color
   trackFillColor*:         Color
   trackFillColorHover*:    Color
-  trackFillColorActive*:   Color
+  trackFillColorDown*:     Color
   thumbCornerRadius*:      float
   thumbPad*:               float
   thumbMinSize*:           float
   thumbStrokeWidth*:       float
   thumbStrokeColor*:       Color
   thumbStrokeColorHover*:  Color
-  thumbStrokeColorActive*: Color
+  thumbStrokeColorDown*:   Color
   thumbFillColor*:         Color
   thumbFillColorHover*:    Color
-  thumbFillColorActive*:   Color
-  labelFontSize*:          float
-  labelFontFace*:          string
-  labelColor*:             Color
-  labelColorHover*:        Color
-  labelColorActive*:       Color
+  thumbFillColorDown*:     Color
 
 var DefaultScrollBarStyle = ScrollBarStyle(
   trackCornerRadius      : 5,
   trackStrokeWidth       : 0,
   trackStrokeColor       : black(),
   trackStrokeColorHover  : black(),
-  trackStrokeColorActive : black(),
+  trackStrokeColorDown   : black(),
   trackFillColor         : GRAY_MID,
   trackFillColorHover    : GRAY_HI,
-  trackFillColorActive   : GRAY_MID,
+  trackFillColorDown     : GRAY_MID,
   thumbCornerRadius      : 5,
   thumbPad               : 3,
   thumbMinSize           : 10,
   thumbStrokeWidth       : 0,
   thumbStrokeColor       : black(),
   thumbStrokeColorHover  : black(),
-  thumbStrokeColorActive : black(),
+  thumbStrokeColorDown   : black(),
   thumbFillColor         : GRAY_LO,
   thumbFillColorHover    : GRAY_LOHI,
-  thumbFillColorActive   : HILITE,
-  labelFontSize          : 14.0,
-  labelFontFace          : "sans-bold",
-  labelColor             : white(),
-  labelColorHover        : white(),
-  labelColorActive       : white()
+  thumbFillColorDown     : HILITE,
 )
 
 proc getDefaultScrollBarStyle*(): ScrollBarStyle =
@@ -2916,28 +2859,24 @@ proc horizScrollBar(id:         ItemId,
     let (bx, by, bw, bh) = (x, y, w, h)
 
     let state = if   isHot(id) and hasNoActiveItem(): wsHover
-                elif isActive(id): wsActive
+                elif isActive(id): wsDown
                 else: wsNormal
 
     var sw = s.trackStrokeWidth
     var (x, y, w, h) = snapToGrid(x, y, w, h, sw)
 
     let (trackFillColor, trackStrokeColor,
-         thumbFillColor, thumbStrokeColor,
-         labelColor) =
+         thumbFillColor, thumbStrokeColor) =
       case state
-      of wsNormal, wsDisabled:
-        (s.trackFillColor, s.trackStrokeColor,
-         s.thumbFillColor, s.thumbStrokeColor,
-         s.labelColor)
       of wsHover:
         (s.trackFillColorHover, s.trackStrokeColorHover,
-         s.thumbFillColorHover, s.thumbStrokeColorHover,
-         s.labelColorHover)
-      of wsActive:
-        (s.trackFillColorActive, s.trackStrokeColorActive,
-         s.thumbFillColorActive, s.thumbStrokeColorActive,
-         s.labelColorActive)
+         s.thumbFillColorHover, s.thumbStrokeColorHover)
+      of wsDown:
+        (s.trackFillColorDown, s.trackStrokeColorDown,
+         s.thumbFillColorDown, s.thumbStrokeColorDown)
+      else:
+        (s.trackFillColor, s.trackStrokeColor,
+         s.thumbFillColor, s.thumbStrokeColor)
 
     # Draw track
     vg.fillColor(trackFillColor)
@@ -2962,11 +2901,6 @@ proc horizScrollBar(id:         ItemId,
                    s.thumbCornerRadius)
     vg.fill()
     vg.stroke()
-
-    let valueString = fmt"{newValue:.3f}"
-
-    vg.drawLabel(bx, by, bw, bh, 0, valueString, labelColor,
-                 s.labelFontSize, s.labelFontFace, haCenter)
 
   if isHot(id):
     handleTooltip(id, tooltip)
@@ -3139,7 +3073,7 @@ proc vertScrollBar(id:         ItemId,
     let (bx, by, bw, bh) = (x, y, w, h)
 
     let state = if   isHot(id) and hasNoActiveItem(): wsHover
-                elif isActive(id): wsActive
+                elif isActive(id): wsDown
                 else: wsNormal
 
     # Draw track
@@ -3147,21 +3081,17 @@ proc vertScrollBar(id:         ItemId,
     var (x, y, w, h) = snapToGrid(x, y, w, h, sw)
 
     let (trackFillColor, trackStrokeColor,
-         thumbFillColor, thumbStrokeColor,
-         labelColor) =
+         thumbFillColor, thumbStrokeColor) =
       case state
-      of wsNormal, wsDisabled:
-        (s.trackFillColor, s.trackStrokeColor,
-         s.thumbFillColor, s.thumbStrokeColor,
-         s.labelColor)
       of wsHover:
         (s.trackFillColorHover, s.trackStrokeColorHover,
-         s.thumbFillColorHover, s.thumbStrokeColorHover,
-         s.labelColorHover)
-      of wsActive:
-        (s.trackFillColorActive, s.trackStrokeColorActive,
-         s.thumbFillColorActive, s.thumbStrokeColorActive,
-         s.labelColorActive)
+         s.thumbFillColorHover, s.thumbStrokeColorHover)
+      of wsDown:
+        (s.trackFillColorDown, s.trackStrokeColorDown,
+         s.thumbFillColorDown, s.thumbStrokeColorDown)
+      else:
+        (s.trackFillColor, s.trackStrokeColor,
+         s.thumbFillColor, s.thumbStrokeColor)
 
     vg.fillColor(trackFillColor)
     vg.strokeColor(trackStrokeColor)
@@ -3735,44 +3665,44 @@ proc textBreakLines*(text: string, maxWidth: float,
 # {{{ TextField
 
 type TextFieldStyle* = ref object
-  bgCornerRadius*:      float
-  bgStrokeWidth*:       float
-  bgStrokeColor*:       Color
-  bgStrokeColorHover*:  Color
-  bgStrokeColorActive*: Color
-  bgFillColor*:         Color
-  bgFillColorHover*:    Color
-  bgFillColorActive*:   Color
-  textPadHoriz*:        float
-  textPadVert*:         float
-  textFontSize*:        float
-  textFontFace*:        string
-  textColor*:           Color
-  textColorHover*:      Color
-  textColorActive*:     Color
-  cursorWidth*:         float
-  cursorColor*:         Color
-  selectionColor*:      Color
+  bgCornerRadius*:     float
+  bgStrokeWidth*:      float
+  bgStrokeColor*:      Color
+  bgStrokeColorHover*: Color
+  bgStrokeColorDown*:  Color
+  bgFillColor*:        Color
+  bgFillColorHover*:   Color
+  bgFillColorDown*:    Color
+  textPadHoriz*:       float
+  textPadVert*:        float
+  textFontSize*:       float
+  textFontFace*:       string
+  textColor*:          Color
+  textColorHover*:     Color
+  textColorDown*:      Color
+  cursorWidth*:        float
+  cursorColor*:        Color
+  selectionColor*:     Color
 
 var DefaultTextFieldStyle = TextFieldStyle(
-  bgCornerRadius      : 5,
-  bgStrokeWidth       : 0, # TODO
-  bgStrokeColor       : black(),
-  bgStrokeColorHover  : black(),
-  bgStrokeColorActive : black(),
-  bgFillColor         : GRAY_MID,
-  bgFillColorHover    : GRAY_HI,
-  bgFillColorActive   : GRAY_LO,
-  textPadHoriz        : 8.0,
-  textPadVert         : 2.0,
-  textFontSize        : 14.0,
-  textFontFace        : "sans-bold",
-  textColor           : GRAY_LO,
-  textColorHover      : GRAY_LO, # TODO
-  textColorActive     : GRAY_HI,
-  cursorColor         : HILITE,
-  cursorWidth         : 1.0,
-  selectionColor      : rgb(0.5, 0.15, 0.15)
+  bgCornerRadius     : 5,
+  bgStrokeWidth      : 0, # TODO
+  bgStrokeColor      : black(),
+  bgStrokeColorHover : black(),
+  bgStrokeColorDown  : black(),
+  bgFillColor        : GRAY_MID,
+  bgFillColorHover   : GRAY_HI,
+  bgFillColorDown    : GRAY_LO,
+  textPadHoriz       : 8.0,
+  textPadVert        : 2.0,
+  textFontSize       : 14.0,
+  textFontFace       : "sans-bold",
+  textColor          : GRAY_LO,
+  textColorHover     : GRAY_LO, # TODO
+  textColorDown      : GRAY_HI,
+  cursorColor        : HILITE,
+  cursorWidth        : 1.0,
+  selectionColor     : rgb(0.5, 0.15, 0.15)
 )
 
 proc getDefaultTextFieldStyle*(): TextFieldStyle =
@@ -4191,13 +4121,13 @@ proc textField(
     vg.save()
 
     let state = if isHot(id) and hasNoActiveItem(): wsHover
-      elif editing: wsActive
+      elif editing: wsDown
       else: wsNormal
 
     let (fillColor, strokeColor) = case state
-      of wsHover:  (s.bgFillColorHover,  s.bgStrokeColorHover)
-      of wsActive: (s.bgFillColorActive, s.bgStrokeColorActive)
-      else:        (s.bgFillColor,       s.bgStrokeColor)
+      of wsHover:  (s.bgFillColorHover, s.bgStrokeColorHover)
+      of wsDown:   (s.bgFillColorDown,  s.bgStrokeColorDown)
+      else:        (s.bgFillColor,      s.bgStrokeColor)
 
     var
       textX = textBoxX
@@ -4253,7 +4183,7 @@ proc textField(
 
     # Draw text
     # TODO text color hover
-    let textColor = if editing: s.textColorActive else: s.textColor
+    let textColor = if editing: s.textColorDown else: s.textColor
 
     setFont()
     vg.fillColor(textColor)
@@ -4327,46 +4257,46 @@ template textField*(
 # {{{ TextArea
 
 type TextAreaStyle* = object
-  bgCornerRadius*:      float
-  bgStrokeWidth*:       float
-  bgStrokeColor*:       Color
-  bgStrokeColorHover*:  Color
-  bgStrokeColorActive*: Color
-  bgFillColor*:         Color
-  bgFillColorHover*:    Color
-  bgFillColorActive*:   Color
-  textPadHoriz*:        float
-  textPadVert*:         float
-  textFontSize*:        float
-  textFontFace*:        string
-  textLineHeight*:      float
-  textColor*:           Color
-  textColorHover*:      Color
-  textColorActive*:     Color
-  cursorWidth*:         float
-  cursorColor*:         Color
-  selectionColor*:      Color
+  bgCornerRadius*:     float
+  bgStrokeWidth*:      float
+  bgStrokeColor*:      Color
+  bgStrokeColorHover*: Color
+  bgStrokeColorDown*:  Color
+  bgFillColor*:        Color
+  bgFillColorHover*:   Color
+  bgFillColorDown*:    Color
+  textPadHoriz*:       float
+  textPadVert*:        float
+  textFontSize*:       float
+  textFontFace*:       string
+  textLineHeight*:     float
+  textColor*:          Color
+  textColorHover*:     Color
+  textColorDown*:      Color
+  cursorWidth*:        float
+  cursorColor*:        Color
+  selectionColor*:     Color
 
 var DefaultTextAreaStyle = TextAreaStyle(
-  bgCornerRadius      : 5,
-  bgStrokeWidth       : 0, # TODO
-  bgStrokeColor       : black(),
-  bgStrokeColorHover  : black(),
-  bgStrokeColorActive : black(),
-  bgFillColor         : GRAY_MID,
-  bgFillColorHover    : GRAY_HI,
-  bgFillColorActive   : GRAY_LO,
-  textPadHoriz        : 8.0,
-  textPadVert         : 2.0,
-  textFontSize        : 14.0,
-  textFontFace        : "sans-bold", # TODO
-  textLineHeight      : 1.4,
-  textColor           : GRAY_LO,
-  textColorHover      : GRAY_LO, # TODO
-  textColorActive     : GRAY_HI,
-  cursorColor         : HILITE,
-  cursorWidth         : 1.0,
-  selectionColor      : rgb(0.5, 0.15, 0.15)
+  bgCornerRadius     : 5,
+  bgStrokeWidth      : 0, # TODO
+  bgStrokeColor      : black(),
+  bgStrokeColorHover : black(),
+  bgStrokeColorDown  : black(),
+  bgFillColor        : GRAY_MID,
+  bgFillColorHover   : GRAY_HI,
+  bgFillColorDown    : GRAY_LO,
+  textPadHoriz       : 8.0,
+  textPadVert        : 2.0,
+  textFontSize       : 14.0,
+  textFontFace       : "sans-bold", # TODO
+  textLineHeight     : 1.4,
+  textColor          : GRAY_LO,
+  textColorHover     : GRAY_LO, # TODO
+  textColorDown      : GRAY_HI,
+  cursorColor        : HILITE,
+  cursorWidth        : 1.0,
+  selectionColor     : rgb(0.5, 0.15, 0.15)
 )
 
 proc getDefaultTextAreaStyle*(): TextAreaStyle =
@@ -4381,14 +4311,16 @@ type
     maxLen*: int
 
 var DefaultTextAreaScrollBarStyle = getDefaultScrollBarStyle()
-DefaultTextAreaScrollBarStyle.trackCornerRadius = 3
-DefaultTextAreaScrollBarStyle.trackFillColor = gray(0, 0)
-DefaultTextAreaScrollBarStyle.trackFillColorHover = gray(0, 0)
-DefaultTextAreaScrollBarStyle.trackFillColorActive = gray(0, 0)
-DefaultTextAreaScrollBarStyle.thumbCornerRadius = 3
-DefaultTextAreaScrollBarStyle.thumbFillColor = gray(0, 0.4)
-DefaultTextAreaScrollBarStyle.thumbFillColorHover = gray(0, 0.43)
-DefaultTextAreaScrollBarStyle.thumbFillColorActive = gray(0, 0.35)
+
+with DefaultTextAreaScrollBarStyle:
+  trackCornerRadius   = 3
+  trackFillColor      = gray(0, 0)
+  trackFillColorHover = gray(0, 0)
+  trackFillColorDown  = gray(0, 0)
+  thumbCornerRadius   = 3
+  thumbFillColor      = gray(0, 0.4)
+  thumbFillColorHover = gray(0, 0.43)
+  thumbFillColorDown  = gray(0, 0.35)
 
 var DefaultTextAreaScrollBarStyle_EditMode = DefaultTextAreaScrollBarStyle.deepCopy()
 
@@ -4791,13 +4723,13 @@ proc textArea(
     vg.save()
 
     let state = if isHot(id) and hasNoActiveItem(): wsHover
-      elif editing: wsActive
+      elif editing: wsDown
       else: wsNormal
 
     let (fillColor, strokeColor) = case state
-      of wsHover:  (s.bgFillColorHover,  s.bgStrokeColorHover)
-      of wsActive: (s.bgFillColorActive, s.bgStrokeColorActive)
-      else:        (s.bgFillColor,       s.bgStrokeColor)
+      of wsHover: (s.bgFillColorHover, s.bgStrokeColorHover)
+      of wsDown:  (s.bgFillColorDown,  s.bgStrokeColorDown)
+      else:       (s.bgFillColor,      s.bgStrokeColor)
 
     # Draw text field background
     if drawWidget:
@@ -4864,7 +4796,7 @@ proc textArea(
             vg.fill()
 
       # Draw text
-      let textColor = if editing: s.textColorActive else: s.textColor
+      let textColor = if editing: s.textColorDown else: s.textColor
       vg.fillColor(textColor)
       discard vg.text(textX, textY, text, row.startBytePos, row.endBytePos)
 
@@ -4946,67 +4878,54 @@ template textArea*(
 # {{{ Slider
 
 type SliderStyle* = ref object
-  trackCornerRadius*:      float
-  trackPad:                float
-  trackStrokeWidth*:       float
-  trackStrokeColor*:       Color
-  trackStrokeColorHover*:  Color
-  trackStrokeColorActive*: Color
-  trackFillColor*:         Color
-  trackFillColorHover*:    Color
-  trackFillColorActive*:   Color
-  valuePrecision:          Natural
-  valueCornerRadius*:      float
-  valueColor*:             Color
-  valueColorHover*:        Color
-  valueColorActive*:       Color
-  labelPadHoriz*:          float
-  labelFontSize*:          float
-  labelFontFace*:          string
-  labelAlign*:             HorizontalAlign
-  labelColor*:             Color
-  labelColorHover*:        Color
-  labelColorActive*:       Color
-  valueLabelPadHoriz*:     float
-  valueLabelFontSize*:     float
-  valueLabelFontFace*:     string
-  valueLabelAlign*:        HorizontalAlign
-  valueLabelColor*:        Color
-  valueLabelColorHover*:   Color
-  valueLabelColorActive*:  Color
-  cursorFollowsValue*:     bool
+  trackCornerRadius*:     float
+  trackPad:               float
+  trackStrokeWidth*:      float
+  trackStrokeColor*:      Color
+  trackStrokeColorHover*: Color
+  trackStrokeColorDown*:  Color
+  trackFillColor*:        Color
+  trackFillColorHover*:   Color
+  trackFillColorDown*:    Color
+  valuePrecision:         Natural
+  valueCornerRadius*:     float
+  sliderColor*:           Color
+  sliderColorHover*:      Color
+  sliderColorDown*:       Color
+  label*:                 LabelStyle
+  value*:                 LabelStyle
+  cursorFollowsValue*:    bool
 
 var DefaultSliderStyle = SliderStyle(
-  trackCornerRadius      : 10,
-  trackPad:                3,
-  trackStrokeWidth       : 0,
-  trackStrokeColor       : black(),
-  trackStrokeColorHover  : black(),
-  trackStrokeColorActive : black(),
-  trackFillColor         : GRAY_MID,
-  trackFillColorHover    : GRAY_HI,
-  trackFillColorActive   : GRAY_MID,
-  valuePrecision         : 3,
-  valueCornerRadius      : 8.0,
-  valueColor             : GRAY_LO,
-  valueColorHover        : GRAY_LOHI,
-  valueColorActive       : HILITE,
-  labelPadHoriz          : 5.0,
-  labelFontSize          : 14.0,
-  labelFontFace          : "sans-bold",
-  labelAlign             : haCenter,
-  labelColor             : white(),
-  labelColorHover        : white(),
-  labelColorActive       : white(),
-  valueLabelPadHoriz     : 5.0,
-  valueLabelFontSize     : 14.0,
-  valueLabelFontFace     : "sans-bold",
-  valueLabelAlign        : haLeft,
-  valueLabelColor        : white(),
-  valueLabelColorHover   : white(),
-  valueLabelColorActive  : white(),
-  cursorFollowsValue     : true
+  trackCornerRadius     : 10.0,
+  trackPad              : 3.0,
+  trackStrokeWidth      : 0.0,
+  trackStrokeColor      : black(),
+  trackStrokeColorHover : black(),
+  trackStrokeColorDown  : black(),
+  trackFillColor        : GRAY_MID,
+  trackFillColorHover   : GRAY_HI,
+  trackFillColorDown    : GRAY_MID,
+  valuePrecision        : 3,
+  valueCornerRadius     : 8.0,
+  sliderColor           : GRAY_LO,
+  sliderColorHover      : GRAY_LO,
+  sliderColorDown       : GRAY_LO,
+  label                 : getDefaultLabelStyle(),
+  value                 : getDefaultLabelStyle(),
+  cursorFollowsValue    : true
 )
+
+with DefaultSliderStyle:
+  label.align       = haLeft
+  label.color       = white()
+  label.colorHover  = white()
+  label.colorDown   = white()
+
+  value.align       = haCenter
+  value.color       = white()
+  value.colorHover  = white()
+  value.colorDown   = white()
 
 proc getDefaultSliderStyle*(): SliderStyle =
   DefaultSliderStyle.deepCopy
@@ -5113,24 +5032,24 @@ proc horizSlider(id:         ItemId,
   # Draw slider
   addDrawLayer(ui.currentLayer, vg):
     let state = if isHot(id) and hasNoActiveItem(): wsHover
-                elif isActive(id): wsActive
+                elif isActive(id): wsDown
                 else: wsNormal
 
     var sw = s.trackStrokeWidth
     var (x, y, w, h) = snapToGrid(x, y, w, h, sw)
 
-    let (trackFillColor, trackStrokeColor, valueColor,
-         labelColor, valueLabelColor) =
+    let (trackFillColor, trackStrokeColor,
+         sliderColor, labelColor, valueColor) =
       case state
-      of wsNormal, wsDisabled:
-        (s.trackFillColor, s.trackStrokeColor, s.valueColor,
-         s.labelColor, s.valueLabelColor)
       of wsHover:
         (s.trackFillColorHover, s.trackStrokeColorHover,
-         s.valueColorHover, s.labelColorHover, s.valueLabelColorHover)
-      of wsActive:
-        (s.trackFillColorActive, s.trackStrokeColorActive,
-         s.valueColorActive, s.labelColorActive, s.valueLabelColorActive)
+         s.sliderColorHover, s.label.colorHover, s.value.colorHover)
+      of wsDown:
+        (s.trackFillColorDown, s.trackStrokeColorDown,
+         s.sliderColorDown, s.label.colorDown, s.value.colorDown)
+      else:
+        (s.trackFillColor, s.trackStrokeColor,
+         s.sliderColor, s.label.color, s.value.color)
 
     # Draw track background
     proc drawTrackShape() =
@@ -5147,7 +5066,7 @@ proc horizSlider(id:         ItemId,
     drawTrackShape()
     vg.fill()
 
-    # Draw value
+    # Draw slider bar
     if not (ss.editModeItem == id and ss.state == ssEditValue):
       let
         vx = x + s.trackPad
@@ -5159,7 +5078,7 @@ proc horizSlider(id:         ItemId,
         clipW = (newPosX - x - s.trackPad).int +
                 (if sw mod 2 == 1: 0.5 else: 0)
 
-      vg.fillColor(valueColor)
+      vg.fillColor(sliderColor)
       vg.beginPath()
 
       case grouping
@@ -5176,16 +5095,13 @@ proc horizSlider(id:         ItemId,
 
       # Draw label text
       if label != "":
-        vg.drawLabel(x, y, w, h, s.labelPadHoriz, label, labelColor,
-                     s.labelFontSize, s.labelFontFace, s.labelAlign)
+        vg.drawLabel(x, y, w, h, label, state, s.label)
 
       # Draw value text
       let valueString = if s.valuePrecision == 0: $value.int
                         else: value.formatFloat(ffDecimal, s.valuePrecision)
 
-      vg.drawLabel(x, y, w, h, s.labelPadHoriz, valueString, valueLabelColor,
-                   s.valueLabelFontSize, s.valueLabelFontFace,
-                   s.valueLabelAlign)
+      vg.drawLabel(x, y, w, h, valueString, state, s.value)
 
     # Draw track outline
     vg.strokeColor(trackStrokeColor)
@@ -5321,21 +5237,20 @@ proc vertSlider(id:         ItemId,
   # Draw slider
   addDrawLayer(ui.currentLayer, vg):
     let state = if isHot(id) and hasNoActiveItem(): wsHover
-                elif isActive(id): wsActive
+                elif isActive(id): wsDown
                 else: wsNormal
 
     var sw = s.trackStrokeWidth
     var (x, y, w, h) = snapToGrid(x, y, w, h, sw)
 
-    let (trackFillColor, trackStrokeColor, valueColor) =
+    let (trackFillColor, trackStrokeColor, sliderColor) =
       case state
-      of wsNormal, wsDisabled:
-        (s.trackFillColor, s.trackStrokeColor, s.valueColor)
       of wsHover:
-        (s.trackFillColorHover, s.trackStrokeColorHover, s.valueColorHover)
-      of wsActive:
-        (s.trackFillColorActive, s.trackStrokeColorActive, s.valueColorActive)
-
+        (s.trackFillColorHover, s.trackStrokeColorHover, s.sliderColorHover)
+      of wsDown:
+        (s.trackFillColorDown, s.trackStrokeColorDown, s.sliderColorDown)
+      else:
+        (s.trackFillColor, s.trackStrokeColor, s.sliderColor)
 
     # Draw track background
     vg.fillColor(trackFillColor)
@@ -5352,7 +5267,7 @@ proc vertSlider(id:         ItemId,
       vh = y + h - newPosY - s.trackPad
       cr = s.valueCornerRadius
 
-    vg.fillColor(valueColor)
+    vg.fillColor(sliderColor)
 
     vg.beginPath()
     vg.roundedRect(vx, vy, vw, vh, cr)
@@ -5407,27 +5322,33 @@ proc sliderPost() =
 # {{{ Color
 
 var ColorPickerRadioButtonStyle = RadioButtonsStyle(
-  buttonPadHoriz          : 2,
-  buttonPadVert           : 3,
-  buttonCornerRadius      : 4,
-  buttonStrokeWidth       : 0,
-  buttonStrokeColor       : black(),
-  buttonStrokeColorHover  : black(),
-  buttonStrokeColorDown   : black(),
-  buttonStrokeColorActive : black(),
-  buttonFillColor         : gray(0.25),
-  buttonFillColorHover    : gray(0.25),
-  buttonFillColorDown     : gray(0.45),
-  buttonFillColorActive   : gray(0.45),
-  labelPadHoriz           : 0,
-  labelFontSize           : 13.0,
-  labelFontFace           : "sans-bold",
-  labelAlign              : haCenter,
-  labelColor              : gray(0.6),
-  labelColorHover         : gray(0.6),
-  labelColorActive        : gray(1.0),
-  labelColorDown          : gray(0.8)
+  buttonPadHoriz             : 2.0,
+  buttonPadVert              : 3.0,
+  buttonCornerRadius         : 4.0,
+  buttonStrokeWidth          : 0.0,
+  buttonStrokeColor          : black(),
+  buttonStrokeColorHover     : black(),
+  buttonStrokeColorDown      : black(),
+  buttonStrokeColorActive    : black(),
+  buttonFillColor            : gray(0.25),
+  buttonFillColorHover       : gray(0.25),
+  buttonFillColorDown        : gray(0.45),
+  buttonFillColorActive      : gray(0.45),
+  buttonFillColorActiveHover : gray(0.45),
+  label                      : getDefaultLabelStyle()
 )
+
+with ColorPickerRadioButtonStyle.label:
+  fontSize         = 13.0
+  fontFace         = "sans-bold"
+  padHoriz         = 0
+  align            = haCenter
+  color            = gray(0.6)
+  colorHover       = gray(0.6)
+  colorDown        = gray(0.8)
+  colorActive      = gray(1.0)
+  colorActiveHover = gray(1.0)
+
 
 var ColorPickerSliderStyle = SliderStyle(
   trackCornerRadius      : 4,
@@ -5435,51 +5356,57 @@ var ColorPickerSliderStyle = SliderStyle(
   trackStrokeWidth       : 1,
   trackStrokeColor       : gray(0.1),
   trackStrokeColorHover  : gray(0.1),
-  trackStrokeColorActive : gray(0.1),
+  trackStrokeColorDown   : gray(0.1),
   trackFillColor         : gray(0.25),
   trackFillColorHover    : gray(0.30),
-  trackFillColorActive   : gray(0.25),
+  trackFillColorDown     : gray(0.25),
+  sliderColor            : gray(0.45),
+  sliderColorHover       : gray(0.55),
+  sliderColorDown        : gray(0.45),
+  label                  : getDefaultLabelStyle(),
+  value                  : getDefaultLabelStyle(),
   valuePrecision         : 0,
   valueCornerRadius      : 4,
-  valueColor             : gray(0.45),
-  valueColorHover        : gray(0.55),
-  valueColorActive       : gray(0.45),
-  labelPadHoriz          : 5.0,
-  labelFontSize          : 13.0,
-  labelFontFace          : "sans-bold",
-  labelAlign             : haLeft,
-  labelColor             : white(),
-  labelColorHover        : white(),
-  labelColorActive       : white(),
-  valueLabelPadHoriz     : 5.0,
-  valueLabelFontSize     : 13.0,
-  valueLabelFontFace     : "sans",
-  valueLabelAlign        : haRight,
-  valueLabelColor        : white(),
-  valueLabelColorHover   : white(),
-  valueLabelColorActive  : white(),
   cursorFollowsValue     : true
 )
 
+with ColorPickerSliderStyle:
+  label.padHoriz    = 5.0
+  label.fontSize    = 13.0
+  label.fontFace    = "sans-bold"
+  label.align       = haLeft
+  label.color       = gray(0.8)
+  label.colorHover  = gray(0.9)
+  label.colorDown   = gray(0.8)
+
+  value.padHoriz    = 5.0
+  value.fontSize    = 13.0
+  value.fontFace    = "sans"
+  value.align       = haRight
+  value.color       = white()
+  value.colorHover  = white()
+  value.colorDown   = white()
+
+
 var ColorPickerTextFieldStyle = TextFieldStyle(
-  bgCornerRadius      : 4,
-  bgStrokeWidth       : 1,
-  bgStrokeColor       : gray(0.1),
-  bgStrokeColorHover  : gray(0.1),
-  bgStrokeColorActive : gray(0.1),
-  bgFillColor         : gray(0.25),
-  bgFillColorHover    : gray(0.30),
-  bgFillColorActive   : gray(0.25),
-  textPadHoriz        : 8.0,
-  textPadVert         : 2.0,
-  textFontSize        : 13.0,
-  textFontFace        : "sans-bold",
-  textColor           : gray(0.8),
-  textColorHover      : gray(0.8),
-  textColorActive     : gray(0.8),
-  cursorColor         : rgb(1.0, 0.8, 0.0),
-  cursorWidth         : 1.0,
-  selectionColor      : rgb(0.5, 0.15, 0.15)
+  bgCornerRadius     : 4.0,
+  bgStrokeWidth      : 1.0,
+  bgStrokeColor      : gray(0.1),
+  bgStrokeColorHover : gray(0.1),
+  bgStrokeColorDown  : gray(0.1),
+  bgFillColor        : gray(0.25),
+  bgFillColorHover   : gray(0.30),
+  bgFillColorDown    : gray(0.25),
+  textPadHoriz       : 8.0,
+  textPadVert        : 2.0,
+  textFontSize       : 13.0,
+  textFontFace       : "sans-bold",
+  textColor          : gray(0.8),
+  textColorHover     : gray(0.8),
+  textColorDown      : gray(0.8),
+  cursorColor        : rgb(1.0, 0.8, 0.0),
+  cursorWidth        : 1.0,
+  selectionColor     : rgb(0.5, 0.15, 0.15)
 )
 
 # {{{ colorWheel()
@@ -6006,14 +5933,16 @@ proc closeDialog*() =
 # {{{ ScrollView
 
 var DefaultScrollViewScrollBarStyle = getDefaultScrollBarStyle()
-DefaultScrollViewScrollBarStyle.trackCornerRadius = 6
-DefaultScrollViewScrollBarStyle.trackFillColor = gray(0, 0)
-DefaultScrollViewScrollBarStyle.trackFillColorHover = gray(0, 0.14)
-DefaultScrollViewScrollBarStyle.trackFillColorActive = gray(0, 0.14)
-DefaultScrollViewScrollBarStyle.thumbCornerRadius = 4
-DefaultScrollViewScrollBarStyle.thumbFillColor = gray(0.422)
-DefaultScrollViewScrollBarStyle.thumbFillColorHover = gray(0.54)
-DefaultScrollViewScrollBarStyle.thumbFillColorActive = gray(0.48)
+
+with DefaultScrollViewScrollBarStyle:
+  trackCornerRadius   = 6.0
+  trackFillColor      = gray(0, 0)
+  trackFillColorHover = gray(0, 0.14)
+  trackFillColorDown  = gray(0, 0.14)
+  thumbCornerRadius   = 4.0
+  thumbFillColor      = gray(0.422)
+  thumbFillColorHover = gray(0.54)
+  thumbFillColorDown  = gray(0.48)
 
 type ScrollViewState = ref object of RootObj
   x, y, w, h: float
