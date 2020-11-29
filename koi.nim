@@ -2389,6 +2389,7 @@ type DropDownStyle* = ref object
   itemListFillColor*:         Color
   item*:                      LabelStyle
   itemBackgroundColorHover*:  Color
+  shadow*:                    ShadowStyle
 
 var DefaultDropDownStyle = DropDownStyle(
   buttonCornerRadius        : 5.0,
@@ -2410,7 +2411,8 @@ var DefaultDropDownStyle = DropDownStyle(
   itemListStrokeColor       : black(),
   itemListFillColor         : GRAY_LO,
   item                      : getDefaultLabelStyle(),
-  itemBackgroundColorHover  : HILITE
+  itemBackgroundColorHover  : HILITE,
+  shadow                    : getDefaultShadowStyle()
 )
 
 with DefaultDropDownStyle:
@@ -2582,6 +2584,8 @@ proc dropDown[T](id:               ItemId,
   if isActive(id) and ds.state >= dsOpenLMBPressed:
 
     addDrawLayer(layerWidgetOverlay, vg):
+      drawShadow(vg, itemListX, itemListY, itemListW, itemListH, s.shadow)
+
       # Draw item list box
       vg.fillColor(s.itemListFillColor)
       vg.strokeColor(s.itemListStrokeColor)
@@ -5871,7 +5875,6 @@ DefaultDialogStyle.shadow = ShadowStyle(
   feather      : 25.0,
   color        : black(0.4)
 )
-
 
 proc getDefaultDialogStyle*(): DialogStyle =
   DefaultDialogStyle.deepCopy
