@@ -277,7 +277,7 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
 
       var col = hsl(0.08 * buttonIdx, 0.6, 0.5)
 
-      if state == wsHover:
+      if state in {wsHover, wsActiveHover}:
         col = col.lerp(white(), 0.3)
       if state == wsDown:
         col = col.lerp(black(), 0.3)
