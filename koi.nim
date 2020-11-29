@@ -5848,17 +5848,30 @@ type DialogStyle* = ref object
   innerBorderColor*:   Color
   outerBorderWidth*:   float
   innerBorderWidth*:   float
+  shadow*:             ShadowStyle
 
 var DefaultDialogStyle = DialogStyle(
-  cornerRadius:      7.0,
-  backgroundColor:   gray(0.2),
-  titleBarBgColor:   gray(0.05),
-  titleBarTextColor: gray(0.85),
-  outerBorderColor:  black(),
-  innerBorderColor:  white(),
-  outerBorderWidth:  0.0,
-  innerBorderWidth:  0.0
+  cornerRadius      : 7.0,
+  backgroundColor   : gray(0.2),
+  titleBarBgColor   : gray(0.05),
+  titleBarTextColor : gray(0.85),
+  outerBorderColor  : black(),
+  innerBorderColor  : white(),
+  outerBorderWidth  : 0.0,
+  innerBorderWidth  : 0.0
 )
+
+DefaultDialogStyle.shadow = ShadowStyle(
+  enabled      : true,
+  cornerRadius : 12.0,
+  xOffset      : 2.0,
+  yOffset      : 3.0,
+  widthOffset  : 0.0,
+  heightOffset : 0.0,
+  feather      : 25.0,
+  color        : black(0.4)
+)
+
 
 proc getDefaultDialogStyle*(): DialogStyle =
   DefaultDialogStyle.deepCopy
@@ -5884,6 +5897,8 @@ proc beginDialog*(w, h: float, title: string,
 
   addDrawLayer(ui.currentLayer, vg):
     const TitleBarHeight = 30.0
+
+    drawShadow(vg, x, y, w, h, s.shadow)
 
     # Outer border
     if s.outerBorderWidth > 0:
