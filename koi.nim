@@ -5983,9 +5983,16 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
         color = colorFromHexStr(cs.hexString).withAlpha(a/255)
 
         var (hue, sat, val) = color.toHSV
+        let (oldHue, oldSat, oldVal) = (hue, sat, val)
+
         colorWheel(x, startY, w+0.5, w+0.5, hue, sat, val)
 
-        color_out = hsva(hue, sat, val, a/255)
+        color = hsva(hue, sat, val, a/255)
+        if hue != oldHue or sat != oldSat or val != oldVal:
+          cs.hexString = color.toHex
+
+        color_out =  color
+
 
       # Make sure 'opened' is only true in the first frame after opening the
       # color picker
