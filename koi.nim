@@ -1491,7 +1491,8 @@ proc initAutoLayout() =
 
 # }}}
 # {{{ handleAutoLayout()
-proc handleAutoLayout(height: float = -1, forceNextRow: bool = false) =
+proc handleAutoLayout(height: float = -1,
+                      forceNextRow: bool = false, forceNoPad: bool = false) =
   alias(a, g_uiState.autoLayoutState)
   alias(ap, g_uiState.autoLayoutParams)
 
@@ -1506,7 +1507,9 @@ proc handleAutoLayout(height: float = -1, forceNextRow: bool = false) =
 
     a.y += h
     a.yNoPad = a.y
-    a.y += (if a.insideGroup: ap.rowPad else: ap.rowGroupPad)
+
+    if not forceNoPad:
+      a.y += (if a.insideGroup: ap.rowPad else: ap.rowGroupPad)
 
   # TODO this only works for the default 2-column layout
   else:
@@ -2315,7 +2318,6 @@ let DefaultCheckBoxDrawProc: CheckBoxDrawProc =
     if icon != "":
       vg.drawLabel(x, y, w, w, icon, state, s.icon)
 
-
 # {{{ checkBox()
 proc checkBox(id:         ItemId,
               x, y, w:    float,
@@ -2420,22 +2422,25 @@ proc sectionHeader(id:           ItemId,
 
   let buttonWidth = h
 
+  # Hit testing
+  if isHit(x, y, w, h):
+    setHot(id)
+    if ui.mbLeftDown and hasNoActiveItem():
+      setActive(id)
+      expanded_out = not expanded_out
+
   addDrawLayer(ui.currentLayer, vg):
     let (x, y, w, h) = snapToGrid(x, y, w, h, strokeWidth=0)
 
     vg.fillColor(gray(0.2))
     vg.beginPath()
-    vg.rect(x, y-2, w, h+4)
+    vg.rect(x, y-2, w, h)
     vg.fill()
 
     let labelColor = s.label.color
 
     alias(vg, g_nvgContext)
     vg.drawLabel(x+buttonWidth, y, w-buttonWidth, h, label, style=s.label)
-
-  let cbId = hashId(lastIdString() & ":checkBox")
-  checkBox(cbId, ox, oy, buttonWidth, expanded_out, tooltip,
-           style=DefaultCheckBoxStyle)
 
   result = expanded_out
 
@@ -2473,7 +2478,7 @@ template sectionHeader*(
   let result = sectionHeader(id, a.x, a.y, ap.rowWidth, a.nextItemHeight,
                              label, expanded, tooltip, style)
 
-  handleAutoLayout(forceNextRow=true)
+  handleAutoLayout(forceNextRow=true, forceNoPad=(not expanded))
   result
 
 # }}}
