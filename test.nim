@@ -219,19 +219,19 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
     winWidth.float - (w+10), 20, w, h,
     items = @["Red", "Green", "Blue", "Yellow", "Purple (with little yellow dots)"],
     dropDownTopRight,
-    tooltip = "Select a colour")
+    tooltip = textAreaVal1)
 
   koi.dropDown(
     winWidth.float - (w+10), winHeight.float - 40, w, h,
     items = @["Red", "Green", "Blue", "Yellow", "Purple (with little yellow dots)"],
     dropDownBottomRight,
-    tooltip = "Select a colour")
+    tooltip = textAreaVal1)
 
   koi.dropDown(
     10, winHeight.float - 40, w, h,
     items = @["Red", "Green", "Blue", "Yellow", "Purple (with little yellow dots)"],
     dropDownBottomLeft,
-    tooltip = "Select a colour")
+    tooltip = textAreaVal1)
 
   # Text fields
   y += pad * 2

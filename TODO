@@ -1,40 +1,72 @@
 BUGS
 ====
 
-- tooltips are broken
+* scrollbar:
 
-- maybe keep dropdown open in LMBPressed mode even if the cursor goes
-  outside of the selection box
-
-- scrollbar:
-  - click-repeat bug -
-    click & hold, wait until track is under the cursor, then click & hold
-    at the opposite side of the track without leaving the widget
+  - click-repeat bug:
+      click & hold, wait until track is under the cursor, then click & hold
+      at the opposite side of the track without leaving the widget
   - click-hold doesn't work if the tooltip appeared
 
-- textfield:
+* textfield:
+
   - move cursor past the right edge when text doesn't fit into the the
     textfield - the cursor should be after the last character, not after the 
     one before the last
-
-- textarea: get rid of two frame delay when exiting widget with ESC while the
-  the cursor is over if (edit -> default -> hover state)
-
-- dropdown: quickly click and move pointer down -> value select (put small
-  delay in there, wait a few frames at least)
-
-- slider: when exiting from edit value mode, active (dragging) state hover
-  flashes for 1 frame
 
 
 TODO
 ====
 
 - OS X specific shortcuts (e.g. Ctrl-A = Select All on Win)
-- value entry widget (modified slider)
+- value stepper widget
 - display tooltip based on screen position
 - proper tooltip sizing/formatting (requires multi-line wrapping...)
-- scroll wheel support
+- scroll wheel support (where it makes sense)
+- scrollbar for dropdowns
+
+- re-use code between widgets
+- "normalise" widgets:
+    Button
+    ToggleButton
+    CheckBox (special case of ToggleButton)
+    DropDown (should use Popup?)
+    RadioButton (should use ToggleButton?)
+    TextField
+    TextArea
+    ScrollBar (orientation decided by w/h params)
+    ValueSlider (orientation decided by w/h params)
+    Popup
+    Dialog
+    ScrollView
+
+- "orientation" parameters for all widgets (15 values)
+         TopLeft  Top        TopRight
+            Left  Center        Right
+      BottomLeft  Bottom  BottomRight
+
+      TopRow       = TopLeft Top TopRight
+      BottomRow    = BottomLeft Bottom BottomRight
+      LeftColumn   = TopLeft Left BottomLeft
+      RightColumn  = TopRight Right BottomRight
+      CenterRow    = Left Center Right
+      CenterColumn = Top Center Bottom
+
+- custom draw proc for all widgets
+- disabled state for all widgets
+
+- keyboard support for dropdowns
+- complete theming support
+- menus
+- "soft asserts" (check) that print errors to stderr instead of aborting
+- set theme parameters globally? (e.g. font, corner roundness, colours)
+- SweepCheckBox?
+
+- all widget styles: gradient support, shadow support, text shadow support
+
+
+TESTS
+=====
 
 - test shortcuts & widgets with capslock & numlock again
 
@@ -57,14 +89,4 @@ TODO
     - in last row
     - at first char
     - at last char
-
-- keyboard support for dropdowns
-- theming
-- menus
-- windows (e.g. modal popups)
-- SweepCheckBox?
-
-- "soft asserts" (check) that print errors to stderr instead of aborting
-
-- set theme paramters globally (e.g. font, corner roundness, colours)
 

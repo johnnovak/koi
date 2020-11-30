@@ -585,10 +585,9 @@ func snapToGrid*(x, y, w, h, strokeWidth: float): (float, float, float, float) =
   result = (x, y, w, h)
 
 # }}}
-# {{{ positionRectWithinWindow*()
-proc positionRectWithinWindow*(w, h: float,
-                               ax, ay, aw, ah: float,
-                               align: HorizontalAlign): (float, float) =
+# {{{ fitRectWithinWindow*()
+proc fitRectWithinWindow*(w, h: float, ax, ay, aw, ah: float,
+                          align: HorizontalAlign): (float, float) =
   alias(ui, g_uiState)
 
   var x = case align
@@ -597,12 +596,16 @@ proc positionRectWithinWindow*(w, h: float,
           of haRight:  ax+aw
 
   var y = ay+ah
+  let pad = WindowEdgePad
 
-  if x+w > ui.winWidth - WindowEdgePad: x = ax+aw - w
-  if x < WindowEdgePad: x = ax
+  if x+w > ui.winWidth  - pad: x = ax+aw - w
+  if y+h > ui.winHeight - pad: y = ay-h
 
-  if y+h > ui.winHeight - WindowEdgePad: y = ay-h
-  if y < WindowEdgePad: y = ay+h
+  if   x < pad: x = pad
+  elif x+w > ui.winWidth - pad: x = ui.winWidth - pad - w
+
+  if   y < pad: y = pad
+  elif y+h > ui.winHeight - pad: y = ui.winHeight - pad - h
 
   result = (x, y)
 
@@ -615,6 +618,239 @@ proc setFont*(vg: NVGContext, size: float, name: string = "sans-bold",
   vg.fontFace(name)
   vg.fontSize(size)
   vg.textAlign(horizAlign, vertAlign)
+
+# }}}
+# {{{ textBreakLines*()
+type
+  TextRow* = object
+    startPos*: Natural
+    startBytePos*: Natural
+
+    endPos*: Natural
+    endBytePos*: Natural
+
+    nextRowPos*: int
+    nextRowBytePos*: int
+
+    width*: float
+    # TODO
+#    minX*:  cfloat
+#    maxX*:  cfloat
+
+
+const TextBreakRunes = @[
+  # Breaking spaces
+  "\u0020", # space
+  "\u2000", # en quad
+  "\u2001", # em quad
+  "\u2002", # en space
+  "\u2003", # em space
+  "\u2004", # three-per-em space
+  "\u2005", # four-per-em space
+  "\u2006", # six-per-em space
+  "\u2008", # punctuation space
+  "\u2009", # thin space
+  "\u200a", # hair space
+  "\u205f", # medium mathematical space
+  "\u3000", # ideographic space
+
+  # Breaking hyphens
+  "\u002d", # hyphen-minus
+  "\u00ad", # soft hyphen (shy)
+  "\u2010", # hyphen
+  "\u2012", # figure dash
+  "\u2013", # en dash
+  "\u007c", # vertical line
+].mapIt(it.runeAt(0))
+
+
+# TODO support for start & end pos
+proc textBreakLines*(text: string, maxWidth: float,
+                     maxRows: int = -1): seq[TextRow] =
+  var glyphs: array[1024, GlyphPosition]
+  result = newSeq[TextRow]()
+
+  if text == "":
+    return @[TextRow(
+      startPos:       0,
+      startBytePos:   0,
+      endPos:         0,
+      endBytePos:     0,
+      nextRowPos:     -1,
+      nextRowBytePos: -1,
+      width:          0
+    )]
+
+  let textLen = text.runeLen
+
+  proc fillGlyphsBuffer(textPos, textBytePos: Natural) =
+    glyphs[0] = glyphs[^2]
+    glyphs[1] = glyphs[^1]
+    # TODO using maxX as the next start pos might not be entirely accurate
+    # we should use the x pos of the next glyph
+    discard g_nvgContext.textGlyphPositions(glyphs[1].maxX, 0, text,
+                                            startPos = textBytePos,
+                                            toOpenArray(glyphs, 2, glyphs.high))
+  const
+    NewLine = "\n".runeAt(0)
+
+  var
+    prevRune: Rune
+
+    textPos = 0       # current rune position
+    textBytePos = 0   # byte offset of the current rune
+    prevTextPos = 0
+    prevTextBytePos = 0
+
+    # glyphPos is ahead by 1 rune, so glyphs[glyphPos].x will give us the end
+    # of the current rune
+    glyphPos = 3
+
+    rowStartPos, rowStartBytePos: Natural
+    rowStartX = glyphs[0].x
+
+    lastBreakPos = -1
+    lastBreakBytePos = -1
+    lastBreakPosStartX: float
+    lastBreakPosPrev, lastBreakBytePosPrev: Natural
+
+
+  fillGlyphsBuffer(textPos, textBytePos)
+
+  for rune in text.runes:
+    if glyphPos >= glyphs.len:
+      fillGlyphsBuffer(textPos, textBytePos)
+      glyphPos = 2
+
+
+    if rune == NewLine and prevRune != NewLine:
+      discard
+
+    else:
+      if prevRune == NewLine:
+        # we're at the rune after the endline
+        let newLineEndX           = glyphs[glyphPos-1].x
+        let runeBeforeNewLineEndX = glyphs[glyphPos-2].x
+        let newLinePos = textPos - 1
+
+        let row = TextRow(
+          startPos:       rowStartPos,
+          startBytePos:   rowStartBytePos,
+          endPos:         prevTextPos,
+          endBytePos:     prevTextBytePos,
+          nextRowPos:     textPos,
+          nextRowBytePos: textBytePos,
+          width:          runeBeforeNewLineEndX - rowStartX
+        )
+        result.add(row)
+
+        rowStartPos = row.nextRowPos
+        rowStartBytePos = row.nextRowBytePos
+        rowStartX = newLineEndX
+        lastBreakPos = -1
+        lastBreakBytePos = -1
+
+      else: # not a new line
+
+        # are we at the start of a new word?
+        if prevRune in TextBreakRunes and rune notin TextBreakRunes:
+          lastBreakPos = textPos
+          lastBreakBytePos = textBytePos
+
+          lastBreakPosPrev = prevTextPos
+          lastBreakBytePosPrev = prevTextBytePos
+
+          let prevRuneEndX = glyphs[glyphPos-1].x
+          lastBreakPosStartX = prevRuneEndX
+
+        let currRuneEndX = glyphs[glyphPos].x
+
+        if currRuneEndX - rowStartX > maxWidth:
+          # break line at the last found break position
+          if lastBreakPos > 0:
+            let row = TextRow(
+              startPos:       rowStartPos,
+              startBytePos:   rowStartBytePos,
+              endPos:         lastBreakPosPrev,
+              endBytePos:     lastBreakBytePosPrev,
+              nextRowPos:     lastBreakPos,
+              nextRowBytePos: lastBreakBytePos,
+              width:          lastBreakPosStartX - rowStartX
+            )
+            result.add(row)
+
+            rowStartPos = row.nextRowPos
+            rowStartBytePos = row.nextRowBytePos
+            rowStartX = lastBreakPosStartX
+            lastBreakPos = -1
+            lastBreakBytePos = -1
+
+          # no break position has been found (the line is basically a single
+          # long word)
+          else:
+            let prevRuneEndX = glyphs[glyphPos-1].x
+            let row = TextRow(
+              startPos:       rowStartPos,
+              startBytePos:   rowStartBytePos,
+              endPos:         prevTextPos,
+              endBytePos:     prevTextBytePos,
+              nextRowPos:     textPos,
+              nextRowBytePos: textBytePos,
+              width:          prevRuneEndX - rowStartX
+            )
+            result.add(row)
+
+            rowStartPos = row.nextRowPos
+            rowStartBytePos = row.nextRowBytePos
+            rowStartX = prevRuneEndX
+            lastBreakPos = -1
+            lastBreakBytePos = -1
+
+    # flush last row if we're processing the last rune
+    if textPos == textLen-1:
+      if rune == NewLine:
+        let runeBeforeNewLineEndX = glyphs[glyphPos-1].x
+
+        let lastEmptyRowStartPos = textLen
+        let lastEmptyRowStartBytePos = textBytePos+1
+
+        result.add(TextRow(
+          startPos:       rowStartPos,
+          startBytePos:   rowStartBytePos,
+          endPos:         textPos,
+          endBytePos:     textBytePos,
+          nextRowPos:     lastEmptyRowStartPos,
+          nextRowBytePos: lastEmptyRowStartBytePos,
+          width:          runeBeforeNewLineEndX - rowStartX
+        ))
+        result.add(TextRow(
+          startPos:       lastEmptyRowStartPos,
+          startBytePos:   lastEmptyRowStartBytePos,
+          endPos:         lastEmptyRowStartPos,
+          endBytePos:     lastEmptyRowStartBytePos,
+          nextRowPos:     -1,
+          nextRowBytePos: -1,
+          width:          0
+        ))
+      else:
+        let currRuneEndX = glyphs[glyphPos].x
+        result.add(TextRow(
+          startPos:       rowStartPos,
+          startBytePos:   rowStartBytePos,
+          endPos:         textPos,
+          endBytePos:     textBytePos,
+          nextRowPos:     -1,
+          nextRowBytePos: -1,
+          width:          currRuneEndX - rowStartX
+        ))
+
+    prevRune = rune
+    prevTextPos = textPos
+    prevTextBytePos = textBytePos
+
+    inc(textPos)
+    inc(textBytePos, rune.size)
+    inc(glyphPos)
 
 # }}}
 
@@ -1242,126 +1478,6 @@ proc isDoubleClick*(): bool =
   abs(ui.lastMbLeftDownY - ui.my) <= DoubleClickMaxYOffs
 
 # }}}
-# {{{ Tooltip handling
-
-# {{{ handleTooltip()
-
-proc handleTooltip(id: ItemId, tooltip: string) =
-  alias(ui, g_uiState)
-  alias(tt, ui.tooltipState)
-
-  if tooltip != "":
-    tt.state = tt.lastState
-
-    # Reset the tooltip show delay if the cursor has been moved inside a
-    # widget
-    if tt.state == tsShowDelay:
-      let cursorMoved = ui.mx != ui.lastmx or ui.my != ui.lastmy
-      if cursorMoved:
-        tt.t0 = getTime()
-      setFramesLeft()
-
-    # Hide the tooltip immediately if the LMB is pressed inside the widget
-    if ui.mbLeftDown and hasActiveItem():
-      tt.state = tsOff
-
-    # Start the show delay if we just entered the widget with LMB up and no
-    # other tooltip is being shown
-    elif tt.state == tsOff and not ui.mbLeftDown and
-         tt.lastHotItem != id:
-      tt.state = tsShowDelay
-      tt.t0 = getTime()
-      setFramesLeft()
-
-    elif tt.state >= tsShow:
-      tt.state = tsShow
-      tt.t0 = getTime()
-      tt.text = tooltip
-      setFramesLeft()
-
-# }}}
-# {{{ drawTooltip()
-
-proc drawTooltip(x, y: float, text: string, alpha: float = 1.0) =
-  alias(vg, g_nvgContext)
-
-  # TODO make visual parameters configurable
-  # TODO multi-line support
-  # TODO auto-positioning close to edges
-  addDrawLayer(layerTooltip, vg):
-    let
-      w = 150.0
-      h = 40.0
-
-    vg.beginPath()
-    vg.roundedRect(x, y, w, h, 5)
-    vg.fillColor(gray(0.1, 0.88 * alpha))
-    vg.fill()
-
-    vg.setFont(13.0)
-    vg.fillColor(white(0.9 * alpha))
-    discard vg.text(x + 10, y + 10, text)
-
-# }}}
-# {{{ tooltipPost()
-
-proc tooltipPost() =
-  alias(ui, g_uiState)
-  alias(tt, ui.tooltipState)
-
-  # TODO constants
-  let
-    ttx = ui.mx + 13
-    tty = ui.my + 20
-
-  case tt.state:
-  of tsOff: discard
-  of tsShowDelay:
-    if getTime() - tt.t0 > TooltipShowDelay:
-      tt.state = tsShow
-
-  of tsShow:
-    drawToolTip(ttx, tty, tt.text)
-
-  of tsFadeOutDelay:
-    drawToolTip(ttx, tty, tt.text)
-    if getTime() - tt.t0 > TooltipFadeOutDelay:
-      tt.state = tsFadeOut
-      tt.t0 = getTime()
-
-  of tsFadeOut:
-    let t = getTime() - tt.t0
-    if t > TooltipFadeOutDuration:
-      tt.state = tsOff
-    else:
-      let alpha = 1.0 - t / TooltipFadeOutDuration
-      drawToolTip(ttx, tty, tt.text, alpha)
-
-  # We reset the show delay state or move into the fade out state if the
-  # tooltip is being shown; this is to handle the case when the user just
-  # moved the cursor outside of a widget. The actual widgets are responsible
-  # for "keeping the state alive" every frame if the widget is hot/active by
-  # restoring the tooltip state from lastTooltipState.
-  tt.lastState = tt.state
-
-  if tt.state == tsShowDelay:
-    tt.state = tsOff
-  elif tt.state == tsShow:
-    tt.state = tsFadeOutDelay
-    tt.t0 = getTime()
-
-  # Make sure to keep drawing until the tooltip animation cycle is over
-  if tt.state > tsOff:
-    setFramesLeft()
-
-  if tt.state == tsShow:
-    ui.framesLeft = 0
-
-  tt.lastHotItem = ui.hotItem
-
-# }}}
-
-# }}}
 # {{{ Layout handling
 
 # {{{ initAutoLayout()
@@ -1502,6 +1618,147 @@ proc drawShadow*(vg: NVGContext, x, y, w, h: float,
 # }}}
 
 # }}}
+# {{{ Tooltip
+
+# {{{ handleTooltip*()
+
+proc handleTooltip*(id: ItemId, tooltip: string) =
+  alias(ui, g_uiState)
+  alias(tt, ui.tooltipState)
+
+  if tooltip != "":
+    tt.state = tt.lastState
+
+    # Reset the tooltip show delay if the cursor has been moved inside a
+    # widget
+    if tt.state == tsShowDelay:
+      let cursorMoved = ui.mx != ui.lastmx or ui.my != ui.lastmy
+      if cursorMoved:
+        tt.t0 = getTime()
+      setFramesLeft()
+
+    # Hide the tooltip immediately if the LMB is pressed inside the widget
+    if ui.mbLeftDown and hasActiveItem():
+      tt.state = tsOff
+
+    # Start the show delay if we just entered the widget with LMB up and no
+    # other tooltip is being shown
+    elif tt.state == tsOff and not ui.mbLeftDown and
+         tt.lastHotItem != id:
+      tt.state = tsShowDelay
+      tt.t0 = getTime()
+      setFramesLeft()
+
+    elif tt.state >= tsShow:
+      tt.state = tsShow
+      tt.t0 = getTime()
+      tt.text = tooltip
+      setFramesLeft()
+
+# }}}
+# {{{ drawTooltip()
+
+proc drawTooltip(x, y: float, text: string, alpha: float = 1.0) =
+  alias(vg, g_nvgContext)
+
+  # TODO make visual parameters configurable
+  addDrawLayer(layerTooltip, vg):
+    var w = 300.0
+    let fontSize = 14.0
+    let lineHeight = 1.4
+    let padX = 10.0
+    let padY = 10.0
+
+    vg.setFont(fontSize, "sans-bold")
+
+    var rows = textBreakLines(text, w-padX*2)
+    let h = fontSize * lineHeight * rows.len + padY*2
+
+    if rows.len == 1:
+      w = vg.textWidth(text) + padX*2
+
+    var (x, y) = fitRectWithinWindow(w, h, x-8, y-8, 30, 30, haLeft)
+
+    # Draw shadow
+    var shadow = DefaultShadowStyle.deepCopy
+    shadow.color.a = shadow.color.a * alpha
+    drawShadow(vg, x, y, w, h, shadow)
+
+    # Draw tooltip background
+    vg.beginPath()
+    vg.roundedRect(x, y, w, h, 5)
+    vg.fillColor(gray(0.1, 0.88 * alpha))
+    vg.fill()
+
+    # Draw text
+    vg.fillColor(white(0.9 * alpha))
+
+    x += padX
+    y += padY + fontSize * lineHeight * 0.55 # TODO hacky
+
+    for row in rows:
+      discard vg.text(x, y, text, row.startBytePos, row.endBytePos)
+      y += fontSize * lineHeight
+
+# }}}
+# {{{ tooltipPost()
+
+proc tooltipPost() =
+  alias(ui, g_uiState)
+  alias(tt, ui.tooltipState)
+
+  let
+    ttx = ui.mx
+    tty = ui.my
+
+  case tt.state:
+  of tsOff: discard
+  of tsShowDelay:
+    if getTime() - tt.t0 > TooltipShowDelay:
+      tt.state = tsShow
+
+  of tsShow:
+    drawToolTip(ttx, tty, tt.text)
+
+  of tsFadeOutDelay:
+    drawToolTip(ttx, tty, tt.text)
+    if getTime() - tt.t0 > TooltipFadeOutDelay:
+      tt.state = tsFadeOut
+      tt.t0 = getTime()
+
+  of tsFadeOut:
+    let t = getTime() - tt.t0
+    if t > TooltipFadeOutDuration:
+      tt.state = tsOff
+    else:
+      let alpha = 1.0 - t / TooltipFadeOutDuration
+      drawToolTip(ttx, tty, tt.text, alpha)
+
+  # We reset the show delay state or move into the fade out state if the
+  # tooltip is being shown; this is to handle the case when the user just
+  # moved the cursor outside of a widget. The actual widgets are responsible
+  # for "keeping the state alive" every frame if the widget is hot/active by
+  # restoring the tooltip state from lastTooltipState.
+  tt.lastState = tt.state
+
+  if tt.state == tsShowDelay:
+    tt.state = tsOff
+  elif tt.state == tsShow:
+    tt.state = tsFadeOutDelay
+    tt.t0 = getTime()
+
+  # Make sure to keep drawing until the tooltip animation cycle is over
+  if tt.state > tsOff:
+    setFramesLeft()
+
+  if tt.state == tsShow:
+    ui.framesLeft = 0
+
+  tt.lastHotItem = ui.hotItem
+
+# }}}
+
+# }}}
 # {{{ Popup
 
 type PopupStyle* = ref object
@@ -1548,7 +1805,7 @@ proc beginPopup*(w, h: float,
   alias(s, style)
 
   var (x, y) = addDrawOffset(ax, ay)
-  (x, y) = positionRectWithinWindow(w, h, x, y, aw, ah, haLeft)
+  (x, y) = fitRectWithinWindow(w, h, x, y, aw, ah, haLeft)
 
   # Hit testing
   let
@@ -2652,9 +2909,9 @@ proc dropDown[T](id:               ItemId,
     itemListW = max(maxItemWidth + s.itemListPadHoriz*2, w)
     itemListH = float(items.len) * itemHeight + s.itemListPadVert*2
 
-    (itemListX, itemListY) = positionRectWithinWindow(itemListW, itemListH,
-                                                      x, y, w, h,
-                                                      s.itemListAlign)
+    (itemListX, itemListY) = fitRectWithinWindow(itemListW, itemListH,
+                                                 x, y, w, h,
+                                                 s.itemListAlign)
 
     let (itemListX, itemListY, itemListW, itemListH) = snapToGrid(
       itemListX, itemListY, itemListW, itemListH, s.itemListStrokeWidth
@@ -3584,240 +3841,6 @@ proc handleCommonTextEditingShortcuts(
     eventHandled = false
 
   result = if eventHandled: res.some else: TextEditResult.none
-
-# }}}
-
-# {{{ breakLines*()
-type
-  TextRow* = object
-    startPos*: Natural
-    startBytePos*: Natural
-
-    endPos*: Natural
-    endBytePos*: Natural
-
-    nextRowPos*: int
-    nextRowBytePos*: int
-
-    width*: float
-    # TODO
-#    minX*:  cfloat
-#    maxX*:  cfloat
-
-
-const BreakingRunes = @[
-  # Breaking spaces
-  "\u0020", # space
-  "\u2000", # en quad
-  "\u2001", # em quad
-  "\u2002", # en space
-  "\u2003", # em space
-  "\u2004", # three-per-em space
-  "\u2005", # four-per-em space
-  "\u2006", # six-per-em space
-  "\u2008", # punctuation space
-  "\u2009", # thin space
-  "\u200a", # hair space
-  "\u205f", # medium mathematical space
-  "\u3000", # ideographic space
-
-  # Breaking hyphens
-  "\u002d", # hyphen-minus
-  "\u00ad", # soft hyphen (shy)
-  "\u2010", # hyphen
-  "\u2012", # figure dash
-  "\u2013", # en dash
-  "\u007c", # vertical line
-].mapIt(it.runeAt(0))
-
-
-# TODO support for start & end pos
-proc textBreakLines*(text: string, maxWidth: float,
-                     maxRows: int = -1): seq[TextRow] =
-  var glyphs: array[1024, GlyphPosition]
-  result = newSeq[TextRow]()
-
-  if text == "":
-    return @[TextRow(
-      startPos:       0,
-      startBytePos:   0,
-      endPos:         0,
-      endBytePos:     0,
-      nextRowPos:     -1,
-      nextRowBytePos: -1,
-      width:          0
-    )]
-
-  let textLen = text.runeLen
-
-  proc fillGlyphsBuffer(textPos, textBytePos: Natural) =
-    glyphs[0] = glyphs[^2]
-    glyphs[1] = glyphs[^1]
-    # TODO using maxX as the next start pos might not be entirely accurate
-    # we should use the x pos of the next glyph
-    discard g_nvgContext.textGlyphPositions(glyphs[1].maxX, 0, text,
-                                            startPos = textBytePos,
-                                            toOpenArray(glyphs, 2, glyphs.high))
-  const
-    NewLine = "\n".runeAt(0)
-
-  var
-    prevRune: Rune
-
-    textPos = 0       # current rune position
-    textBytePos = 0   # byte offset of the current rune
-    prevTextPos = 0
-    prevTextBytePos = 0
-
-    # glyphPos is ahead by 1 rune, so glyphs[glyphPos].x will give us the end
-    # of the current rune
-    glyphPos = 3
-
-    rowStartPos, rowStartBytePos: Natural
-    rowStartX = glyphs[0].x
-
-    lastBreakPos = -1
-    lastBreakBytePos = -1
-    lastBreakPosStartX: float
-    lastBreakPosPrev, lastBreakBytePosPrev: Natural
-
-
-  fillGlyphsBuffer(textPos, textBytePos)
-
-  for rune in text.runes:
-    if glyphPos >= glyphs.len:
-      fillGlyphsBuffer(textPos, textBytePos)
-      glyphPos = 2
-
-
-    if rune == NewLine and prevRune != NewLine:
-      discard
-
-    else:
-      if prevRune == NewLine:
-        # we're at the rune after the endline
-        let newLineEndX           = glyphs[glyphPos-1].x
-        let runeBeforeNewLineEndX = glyphs[glyphPos-2].x
-        let newLinePos = textPos - 1
-
-        let row = TextRow(
-          startPos:       rowStartPos,
-          startBytePos:   rowStartBytePos,
-          endPos:         prevTextPos,
-          endBytePos:     prevTextBytePos,
-          nextRowPos:     textPos,
-          nextRowBytePos: textBytePos,
-          width:          runeBeforeNewLineEndX - rowStartX
-        )
-        result.add(row)
-
-        rowStartPos = row.nextRowPos
-        rowStartBytePos = row.nextRowBytePos
-        rowStartX = newLineEndX
-        lastBreakPos = -1
-        lastBreakBytePos = -1
-
-      else: # not a new line
-
-        # are we at the start of a new word?
-        if prevRune in BreakingRunes and rune notin BreakingRunes:
-          lastBreakPos = textPos
-          lastBreakBytePos = textBytePos
-
-          lastBreakPosPrev = prevTextPos
-          lastBreakBytePosPrev = prevTextBytePos
-
-          let prevRuneEndX = glyphs[glyphPos-1].x
-          lastBreakPosStartX = prevRuneEndX
-
-        let currRuneEndX = glyphs[glyphPos].x
-
-        if currRuneEndX - rowStartX > maxWidth:
-          # break line at the last found break position
-          if lastBreakPos > 0:
-            let row = TextRow(
-              startPos:       rowStartPos,
-              startBytePos:   rowStartBytePos,
-              endPos:         lastBreakPosPrev,
-              endBytePos:     lastBreakBytePosPrev,
-              nextRowPos:     lastBreakPos,
-              nextRowBytePos: lastBreakBytePos,
-              width:          lastBreakPosStartX - rowStartX
-            )
-            result.add(row)
-
-            rowStartPos = row.nextRowPos
-            rowStartBytePos = row.nextRowBytePos
-            rowStartX = lastBreakPosStartX
-            lastBreakPos = -1
-            lastBreakBytePos = -1
-
-          # no break position has been found (the line is basically a single
-          # long word)
-          else:
-            let prevRuneEndX = glyphs[glyphPos-1].x
-            let row = TextRow(
-              startPos:       rowStartPos,
-              startBytePos:   rowStartBytePos,
-              endPos:         prevTextPos,
-              endBytePos:     prevTextBytePos,
-              nextRowPos:     textPos,
-              nextRowBytePos: textBytePos,
-              width:          prevRuneEndX - rowStartX
-            )
-            result.add(row)
-
-            rowStartPos = row.nextRowPos
-            rowStartBytePos = row.nextRowBytePos
-            rowStartX = prevRuneEndX
-            lastBreakPos = -1
-            lastBreakBytePos = -1
-
-    # flush last row if we're processing the last rune
-    if textPos == textLen-1:
-      if rune == NewLine:
-        let runeBeforeNewLineEndX = glyphs[glyphPos-1].x
-
-        let lastEmptyRowStartPos = textLen
-        let lastEmptyRowStartBytePos = textBytePos+1
-
-        result.add(TextRow(
-          startPos:       rowStartPos,
-          startBytePos:   rowStartBytePos,
-          endPos:         textPos,
-          endBytePos:     textBytePos,
-          nextRowPos:     lastEmptyRowStartPos,
-          nextRowBytePos: lastEmptyRowStartBytePos,
-          width:          runeBeforeNewLineEndX - rowStartX
-        ))
-        result.add(TextRow(
-          startPos:       lastEmptyRowStartPos,
-          startBytePos:   lastEmptyRowStartBytePos,
-          endPos:         lastEmptyRowStartPos,
-          endBytePos:     lastEmptyRowStartBytePos,
-          nextRowPos:     -1,
-          nextRowBytePos: -1,
-          width:          0
-        ))
-      else:
-        let currRuneEndX = glyphs[glyphPos].x
-        result.add(TextRow(
-          startPos:       rowStartPos,
-          startBytePos:   rowStartBytePos,
-          endPos:         textPos,
-          endBytePos:     textBytePos,
-          nextRowPos:     -1,
-          nextRowBytePos: -1,
-          width:          currRuneEndX - rowStartX
-        ))
-
-    prevRune = rune
-    prevTextPos = textPos
-    prevTextBytePos = textBytePos
-
-    inc(textPos)
-    inc(textBytePos, rune.size)
-    inc(glyphPos)
 
 # }}}
 
