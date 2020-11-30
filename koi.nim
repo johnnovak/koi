@@ -12,7 +12,6 @@ import unicode
 
 import glfw
 from glfw/wrapper import setCursor, createStandardCursor, CursorShape
-import glm
 import nanovg
 import with
 
@@ -1679,19 +1678,19 @@ proc drawTooltip(x, y: float, text: string, alpha: float = 1.0) =
 
     var (x, y) = fitRectWithinWindow(w, h, x-8, y-8, 30, 30, haLeft)
 
+    vg.globalAlpha(alpha)
+
     # Draw shadow
-    var shadow = DefaultShadowStyle.deepCopy
-    shadow.color.a = shadow.color.a * alpha
-    drawShadow(vg, x, y, w, h, shadow)
+    drawShadow(vg, x, y, w, h, DefaultShadowStyle)
 
     # Draw tooltip background
     vg.beginPath()
     vg.roundedRect(x, y, w, h, 5)
-    vg.fillColor(gray(0.1, 0.88 * alpha))
+    vg.fillColor(gray(0.1, 0.88))
     vg.fill()
 
     # Draw text
-    vg.fillColor(white(0.9 * alpha))
+    vg.fillColor(white(0.9))
 
     x += padX
     y += padY + fontSize * lineHeight * 0.55 # TODO hacky
@@ -1699,6 +1698,8 @@ proc drawTooltip(x, y: float, text: string, alpha: float = 1.0) =
     for row in rows:
       discard vg.text(x, y, text, row.startBytePos, row.endBytePos)
       y += fontSize * lineHeight
+
+    vg.globalAlpha(1.0)
 
 # }}}
 # {{{ tooltipPost()
@@ -5718,16 +5719,16 @@ proc colorWheel(x, y, w, h: float; hue, sat, val: var float) =
       mx -= cx
       my -= cy
 
-      # The angle is negative because the Y-axis in NanoVG is flipped, and
-      # we're dealing with an "unflipped" transform matrix here
-      const M = mat3f().rotate(-2*PI/3)
-      let vm = M * vec3f(mx, my, 1)
+      var M: TransformMatrix
+      M.rotate(2*PI/3)
+
+      let (rx, ry) = transformPoint(M, mx, my)
 
       # Because of the rotation trick, we can easily calculate the saturation
       # and value from the "local" mouse coordinates (value runs along the
       # Y axis, saturation along the X axis)
       let dy = y1-y3
-      val = ((vm.y)-(y3-cy)) / dy
+      val = ((ry)-(y3-cy)) / dy
       val = clamp(val, 0, 1)  # there's a chance to over/undershoot
 
       const Eps = 0.0001
@@ -5735,7 +5736,7 @@ proc colorWheel(x, y, w, h: float; hue, sat, val: var float) =
             else:
               let xs = lerp(x3-cx, x1-cx, val)
               let xe = lerp(x3-cx, x2-cx, val)
-              invLerp(xs, xe, vm.x)
+              invLerp(xs, xe, rx)
 
       sat = clamp(sat, 0, 1)  # there's a chance to over/undershoot
 
