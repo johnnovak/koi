@@ -3312,7 +3312,7 @@ proc horizScrollBar(id:         ItemId,
   addDrawLayer(ui.currentLayer, vg):
     let dy = abs(y - ui.my)
 
-    if dy < s.autoFadeDistance:
+    if not s.autoFade or (s.autoFade and dy < s.autoFadeDistance):
       let (bx, by, bw, bh) = (x, y, w, h)
 
       let state = if   isHot(id) and hasNoActiveItem(): wsHover
@@ -3536,7 +3536,8 @@ proc vertScrollBar(id:         ItemId,
   addDrawLayer(ui.currentLayer, vg):
     let dx = abs(x - ui.mx)
 
-    if dx < s.autoFadeDistance:
+    if not s.autoFade or (s.autoFade and dx < s.autoFadeDistance and
+                          not ui.focusCaptured):
       let value = newValue
       let (bx, by, bw, bh) = (x, y, w, h)
 
