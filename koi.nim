@@ -400,14 +400,20 @@ type
     ox, oy: float
 
   AutoLayoutParams* = object
-    rowWidth*:         float
     labelWidth*:       float
     itemsPerRow*:      Natural
+    leftPad*:          float
+    rightPad*:         float
     rowPad*:           float
     rowGroupPad*:      float
     defaultRowHeight*: float
 
   AutoLayoutStateVars = object
+    rowWidth:          float
+
+    # TODO this is just for the padding of the right side scrollbar. maybe
+    # use some more generic name?
+    scrollBarWidth:    float
     x, y:              float
     yNoPad:            float
     currColIndex:      Natural
@@ -1023,6 +1029,19 @@ proc rightClippedRoundedRect*(vg: NVGContext, x, y, w, h, r, clipW: float,
       vg.closePath()
 
 # }}}
+# {{{ horizLine*()
+proc horizLine*(vg: NVGContext, x, y, w: float) =
+  vg.strokeWidth(1.0)
+  vg.lineCap(lcjSquare)
+
+  var (x, y, w, _) = snapToGrid(x, y, w, 0, strokeWidth=1.0)
+
+  vg.beginPath()
+  vg.moveTo(x-1,   y)
+  vg.lineTo(x-1+w, y)
+  vg.stroke()
+
+# }}}
 
 # }}}
 # {{{ Draw layers
@@ -1480,41 +1499,47 @@ proc isDoubleClick*(): bool =
 # {{{ Layout handling
 
 # {{{ initAutoLayout()
-proc initAutoLayout() =
+proc initAutoLayout(rowWidth: float, scrollBarWidth: float) =
   alias(ui, g_uiState)
   alias(a,  ui.autoLayoutState)
   alias(ap, ui.autoLayoutParams)
 
   a = AutoLayoutStateVars.default
+  a.rowWidth = rowWidth
+  a.scrollBarWidth = scrollBarWidth
   a.nextItemWidth  = ap.labelWidth
   a.nextItemHeight = ap.defaultRowHeight
 
 # }}}
 # {{{ handleAutoLayout()
-proc handleAutoLayout(height: float = -1,
-                      forceNextRow: bool = false, forceNoPad: bool = false) =
-  alias(a, g_uiState.autoLayoutState)
-  alias(ap, g_uiState.autoLayoutParams)
+proc handleAutoLayout(height: Option[float] = float.none,
+                      yPad: Option[float] = float.none,
+                      forceNextRow: bool = false) =
+
+  alias(ui, g_uiState)
+  alias(a, ui.autoLayoutState)
+  alias(ap, ui.autoLayoutParams)
 
   inc(a.currColIndex)
 
-  let h = if height >= 0: height else: ap.defaultRowHeight
+  let h = if height.isSome: height.get else: ap.defaultRowHeight
 
   if a.currColIndex == ap.itemsPerRow or forceNextRow:
     a.currColIndex = 0
     a.nextItemWidth = ap.labelWidth
-    a.x = 0
+    a.x = ap.leftPad
 
     a.y += h
     a.yNoPad = a.y
 
-    if not forceNoPad:
-      a.y += (if a.insideGroup: ap.rowPad else: ap.rowGroupPad)
+    a.y += (if yPad.isSome: yPad.get
+            else:
+              if a.insideGroup: ap.rowPad else: ap.rowGroupPad)
 
   # TODO this only works for the default 2-column layout
   else:
-    a.x = ap.labelWidth
-    a.nextItemWidth = ap.rowWidth - ap.labelWidth
+    a.x += ap.labelWidth
+    a.nextItemWidth = a.rowWidth - a.x - ap.rightPad - (a.scrollBarWidth+1)
     a.nextItemHeight = h
 
 # }}}
@@ -1522,18 +1547,18 @@ proc handleAutoLayout(height: float = -1,
 # {{{ setAutoLayoutParams*()
 #
 const DefaultAutoLayoutParams = AutoLayoutParams(
-  rowWidth:         300.0,
-  labelWidth:       180.0,
+  labelWidth:       160.0,
   itemsPerRow:      2,
-  rowPad:           6.0,
-  rowGroupPad:      18.0,
-  defaultRowHeight: 22.0
+  leftPad:          13.0,
+  rightPad:         4.0,
+  rowPad:           5.0,
+  rowGroupPad:      13.0,
+  defaultRowHeight: 21.0
 )
 
 proc setAutoLayoutParams*(params: AutoLayoutParams) =
   alias(ui, g_uiState)
   ui.autoLayoutParams = params
-  initAutoLayout()
 
 # }}}
 # {{{ beginGroup*()
@@ -2388,14 +2413,23 @@ template checkBox*(active:   var bool,
 # }}}
 # {{{ SectionHeader
 
-# TODO
 type SectionHeaderStyle* = ref object
-  label*:     LabelStyle
-#  checkBox*:  CheckBoxStyle
+  label*:           LabelStyle
+  height*:          float
+  hitRightPad*:     float
+  backgroundColor*: Color
+  separatorColor*:  Color
 
 var DefaultSectionHeaderStyle = SectionHeaderStyle(
-  label : getDefaultLabelStyle()
+  label           : getDefaultLabelStyle(),
+  height          : 28.0,
+  hitRightPad     : 13.0,
+  backgroundColor : gray(0.2),
+  separatorColor  : gray(0.3)
 )
+
+with DefaultSectionHeaderStyle.label:
+  color = gray(0.9)
 
 proc getDefaultSectionHeaderStyle*(): SectionHeaderStyle =
   DefaultSectionHeaderStyle.deepCopy
@@ -2408,7 +2442,7 @@ let SectionHeaderCheckboxStyle = getDefaultCheckBoxStyle()
 
 # {{{ sectionHeader()
 proc sectionHeader(id:           ItemId,
-                   x, y, w, h:   float,
+                   x, y, w:      float,
                    label:        string,
                    expanded_out: var bool,
                    tooltip:      string,
@@ -2420,46 +2454,32 @@ proc sectionHeader(id:           ItemId,
   let (ox, oy) = (x, y)
   let (x, y) = addDrawOffset(x, y)
 
-  let buttonWidth = h
+  let labelPadX = 20
+  let h = s.height
 
   # Hit testing
-  if isHit(x, y, w, h):
+  if isHit(x, y, w - s.hitRightPad, h):
     setHot(id)
     if ui.mbLeftDown and hasNoActiveItem():
       setActive(id)
       expanded_out = not expanded_out
 
   addDrawLayer(ui.currentLayer, vg):
-    let (x, y, w, h) = snapToGrid(x, y, w, h, strokeWidth=0)
+    var (x, y, w, h) = snapToGrid(x, y, w, h, strokeWidth=0)
 
-    vg.fillColor(gray(0.2))
+    vg.fillColor(s.backgroundColor)
     vg.beginPath()
-    vg.rect(x, y-2, w, h)
+    vg.rect(x, y, w, h)
     vg.fill()
 
-    let labelColor = s.label.color
+    vg.strokeColor(s.separatorColor)
+    vg.horizLine(x, y+h, w)
 
-    alias(vg, g_nvgContext)
-    vg.drawLabel(x+buttonWidth, y, w-buttonWidth, h, label, style=s.label)
+    vg.drawLabel(x+labelPadX, y, w-labelPadX, h, label, style=s.label)
 
   result = expanded_out
 
 # }}}
-
-template sectionHeader*(
-  x, y, w, h: float,
-  label:      string,
-  expanded:   var bool,
-  tooltip:    string = "",
-  style:      SectionHeaderStyle = DefaultSectionHeaderStyle
-): bool =
-
-  let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
-
-  sectionHeader(id, x, y, w, h, label, expanded, tooltip, style)
-  expanded
-
 
 template sectionHeader*(
   label:    string,
@@ -2475,10 +2495,13 @@ template sectionHeader*(
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, label)
 
-  let result = sectionHeader(id, a.x, a.y, ap.rowWidth, a.nextItemHeight,
-                             label, expanded, tooltip, style)
+  let result = sectionHeader(id, 0, a.y, a.rowWidth, label, expanded,
+                             tooltip, style)
 
-  handleAutoLayout(forceNextRow=true, forceNoPad=(not expanded))
+  let yPad = if expanded: float.none else: 0.0.some
+
+  handleAutoLayout(yPad=yPad, height=style.height.some,
+                   forceNextRow=true)
   result
 
 # }}}
@@ -3087,6 +3110,10 @@ type ScrollBarStyle* = ref object
   thumbFillColor*:         Color
   thumbFillColorHover*:    Color
   thumbFillColorDown*:     Color
+  autoFade*:               bool
+  autoFadeStartAlpha*:     float
+  autoFadeEndAlpha*:       float
+  autoFadeDistance*:       float
 
 var DefaultScrollBarStyle = ScrollBarStyle(
   trackCornerRadius      : 5.0,
@@ -3107,6 +3134,10 @@ var DefaultScrollBarStyle = ScrollBarStyle(
   thumbFillColor         : GRAY_LO,
   thumbFillColorHover    : GRAY_LOHI,
   thumbFillColorDown     : HILITE,
+  autoFade               : false,
+  autoFadeStartAlpha     : 0.5,
+  autoFadeEndAlpha       : 1.0,
+  autoFadeDistance       : 60.0
 )
 
 proc getDefaultScrollBarStyle*(): ScrollBarStyle =
@@ -3279,51 +3310,63 @@ proc horizScrollBar(id:         ItemId,
 
   # Draw scrollbar
   addDrawLayer(ui.currentLayer, vg):
-    let (bx, by, bw, bh) = (x, y, w, h)
+    let dy = abs(y - ui.my)
 
-    let state = if   isHot(id) and hasNoActiveItem(): wsHover
-                elif isActive(id): wsDown
-                else: wsNormal
+    if dy < s.autoFadeDistance:
+      let (bx, by, bw, bh) = (x, y, w, h)
 
-    var sw = s.trackStrokeWidth
-    var (x, y, w, h) = snapToGrid(x, y, w, h, sw)
+      let state = if   isHot(id) and hasNoActiveItem(): wsHover
+                  elif isActive(id): wsDown
+                  else: wsNormal
 
-    let (trackFillColor, trackStrokeColor,
-         thumbFillColor, thumbStrokeColor) =
-      case state
-      of wsHover:
-        (s.trackFillColorHover, s.trackStrokeColorHover,
-         s.thumbFillColorHover, s.thumbStrokeColorHover)
-      of wsDown:
-        (s.trackFillColorDown, s.trackStrokeColorDown,
-         s.thumbFillColorDown, s.thumbStrokeColorDown)
-      else:
-        (s.trackFillColor, s.trackStrokeColor,
-         s.thumbFillColor, s.thumbStrokeColor)
+      var sw = s.trackStrokeWidth
+      var (x, y, w, h) = snapToGrid(x, y, w, h, sw)
 
-    # Draw track
-    vg.fillColor(trackFillColor)
-    vg.strokeColor(trackStrokeColor)
-    vg.strokeWidth(sw)
+      let (trackFillColor, trackStrokeColor,
+           thumbFillColor, thumbStrokeColor) =
+        case state
+        of wsHover:
+          (s.trackFillColorHover, s.trackStrokeColorHover,
+           s.thumbFillColorHover, s.thumbStrokeColorHover)
+        of wsDown:
+          (s.trackFillColorDown, s.trackStrokeColorDown,
+           s.thumbFillColorDown, s.thumbStrokeColorDown)
+        else:
+          (s.trackFillColor, s.trackStrokeColor,
+           s.thumbFillColor, s.thumbStrokeColor)
 
-    vg.beginPath()
-    vg.roundedRect(x, y, w, h, s.trackCornerRadius)
-    vg.fill()
-    vg.stroke()
+      let ga = if s.autoFade:
+                 lerp(s.autoFadeEndAlpha, s.autoFadeStartAlpha,
+                      min(dy, s.autoFadeDistance) / s.autoFadeDistance)
+               else: 1.0
 
-    # Draw thumb
-    sw = s.thumbStrokeWidth
-    (x, y, w, h) = snapToGrid(x, y, w, h, sw)
+      vg.globalAlpha(ga)
 
-    vg.fillColor(thumbFillColor)
-    vg.strokeColor(thumbStrokeColor)
-    vg.strokeWidth(sw)
+      # Draw track
+      vg.fillColor(trackFillColor)
+      vg.strokeColor(trackStrokeColor)
+      vg.strokeWidth(sw)
 
-    vg.beginPath()
-    vg.roundedRect(newThumbX, y + s.thumbPad, thumbW, thumbH,
-                   s.thumbCornerRadius)
-    vg.fill()
-    vg.stroke()
+      vg.beginPath()
+      vg.roundedRect(x, y, w, h, s.trackCornerRadius)
+      vg.fill()
+      vg.stroke()
+
+      # Draw thumb
+      sw = s.thumbStrokeWidth
+      (x, y, w, h) = snapToGrid(x, y, w, h, sw)
+
+      vg.fillColor(thumbFillColor)
+      vg.strokeColor(thumbStrokeColor)
+      vg.strokeWidth(sw)
+
+      vg.beginPath()
+      vg.roundedRect(newThumbX, y + s.thumbPad, thumbW, thumbH,
+                     s.thumbCornerRadius)
+      vg.fill()
+      vg.stroke()
+
+      vg.globalAlpha(1.0)
 
   if isHot(id):
     handleTooltip(id, tooltip)
@@ -3491,53 +3534,64 @@ proc vertScrollBar(id:         ItemId,
 
   # Draw scrollbar
   addDrawLayer(ui.currentLayer, vg):
-    let value = newValue
+    let dx = abs(x - ui.mx)
 
-    let (bx, by, bw, bh) = (x, y, w, h)
+    if dx < s.autoFadeDistance:
+      let value = newValue
+      let (bx, by, bw, bh) = (x, y, w, h)
 
-    let state = if   isHot(id) and hasNoActiveItem(): wsHover
-                elif isActive(id): wsDown
-                else: wsNormal
+      let state = if   isHot(id) and hasNoActiveItem(): wsHover
+                  elif isActive(id): wsDown
+                  else: wsNormal
 
-    # Draw track
-    var sw = s.trackStrokeWidth
-    var (x, y, w, h) = snapToGrid(x, y, w, h, sw)
+      let ga = if s.autoFade:
+                 lerp(s.autoFadeEndAlpha, s.autoFadeStartAlpha,
+                      min(dx, s.autoFadeDistance) / s.autoFadeDistance)
+               else: 1.0
 
-    let (trackFillColor, trackStrokeColor,
-         thumbFillColor, thumbStrokeColor) =
-      case state
-      of wsHover:
-        (s.trackFillColorHover, s.trackStrokeColorHover,
-         s.thumbFillColorHover, s.thumbStrokeColorHover)
-      of wsDown:
-        (s.trackFillColorDown, s.trackStrokeColorDown,
-         s.thumbFillColorDown, s.thumbStrokeColorDown)
-      else:
-        (s.trackFillColor, s.trackStrokeColor,
-         s.thumbFillColor, s.thumbStrokeColor)
+      vg.globalAlpha(ga)
 
-    vg.fillColor(trackFillColor)
-    vg.strokeColor(trackStrokeColor)
-    vg.strokeWidth(sw)
+      # Draw track
+      var sw = s.trackStrokeWidth
+      var (x, y, w, h) = snapToGrid(x, y, w, h, sw)
 
-    vg.beginPath()
-    vg.roundedRect(x, y, w, h, s.trackCornerRadius)
-    vg.fill()
-    vg.stroke()
+      let (trackFillColor, trackStrokeColor,
+           thumbFillColor, thumbStrokeColor) =
+        case state
+        of wsHover:
+          (s.trackFillColorHover, s.trackStrokeColorHover,
+           s.thumbFillColorHover, s.thumbStrokeColorHover)
+        of wsDown:
+          (s.trackFillColorDown, s.trackStrokeColorDown,
+           s.thumbFillColorDown, s.thumbStrokeColorDown)
+        else:
+          (s.trackFillColor, s.trackStrokeColor,
+           s.thumbFillColor, s.thumbStrokeColor)
 
-    # Draw thumb
-    sw = s.thumbStrokeWidth
-    (x, y, w, h) = snapToGrid(x, y, w, h, sw)
+      vg.fillColor(trackFillColor)
+      vg.strokeColor(trackStrokeColor)
+      vg.strokeWidth(sw)
 
-    vg.fillColor(thumbFillColor)
-    vg.strokeColor(thumbStrokeColor)
-    vg.strokeWidth(sw)
+      vg.beginPath()
+      vg.roundedRect(x, y, w, h, s.trackCornerRadius)
+      vg.fill()
+      vg.stroke()
 
-    vg.beginPath()
-    vg.roundedRect(x + s.thumbPad, newThumbY, thumbW, thumbH,
-                   s.thumbCornerRadius)
-    vg.fill()
-    vg.stroke()
+      # Draw thumb
+      sw = s.thumbStrokeWidth
+      (x, y, w, h) = snapToGrid(x, y, w, h, sw)
+
+      vg.fillColor(thumbFillColor)
+      vg.strokeColor(thumbStrokeColor)
+      vg.strokeWidth(sw)
+
+      vg.beginPath()
+      vg.roundedRect(x + s.thumbPad, newThumbY, thumbW, thumbH,
+                     s.thumbCornerRadius)
+      vg.fill()
+      vg.stroke()
+
+      vg.globalAlpha(1.0)
 
   if isHot(id):
     handleTooltip(id, tooltip)
@@ -6035,19 +6089,23 @@ var DefaultScrollViewScrollBarStyle = getDefaultScrollBarStyle()
 with DefaultScrollViewScrollBarStyle:
   trackCornerRadius   = 6.0
   trackFillColor      = gray(0, 0)
-  trackFillColorHover = gray(0, 0.14)
-  trackFillColorDown  = gray(0, 0.14)
-  thumbCornerRadius   = 4.0
-  thumbFillColor      = gray(0.422)
-  thumbFillColorHover = gray(0.54)
-  thumbFillColorDown  = gray(0.48)
+  trackFillColorHover = gray(0, 0.15)
+  trackFillColorDown  = gray(0, 0.15)
+  thumbCornerRadius   = 3.0
+  thumbFillColor      = gray(0.52)
+  thumbFillColorHover = gray(0.55)
+  thumbFillColorDown  = gray(0.50)
+  autoFade            = true
+  autoFadeStartAlpha  = 0.4
+  autoFadeEndAlpha    = 1.0
+  autoFadeDistance    = 60.0
 
 type ScrollViewState = ref object of RootObj
   x, y, w, h: float
   viewStartY: float
 
 # TODO style param
-let ScrollViewScrollBarWidth = 14.0
+let ScrollViewScrollBarWidth = 12.0
 
 # {{{ beginScrollView*()
 proc beginScrollView*(id: ItemId, x, y, w, h: float) =
@@ -6058,13 +6116,7 @@ proc beginScrollView*(id: ItemId, x, y, w, h: float) =
 
   addDrawLayer(ui.currentLayer, vg):
     vg.save()
-    vg.intersectScissor(x, y, w-ScrollViewScrollBarWidth, h)
-
-    vg.strokeColor(black())
-    vg.strokeWidth(1)
-    vg.beginPath()
-    vg.rect(x, y, w, h)
-    vg.stroke()
+    vg.intersectScissor(x, y, w, h)
 
   ui.scrollViewState.activeItem = id
 
@@ -6078,6 +6130,8 @@ proc beginScrollView*(id: ItemId, x, y, w, h: float) =
   )
 
   ui.itemState[id] = ss
+
+  initAutoLayout(rowWidth=w, scrollBarWidth=ScrollViewScrollBarWidth)
 
 
 template beginScrollView*(x, y, w, h: float) =
@@ -6353,9 +6407,8 @@ proc beginFrame*(winWidth, winHeight: float) =
   # Reset hot item
   ui.hotItem = 0
 
-  # Layout
+  # Reset layout params
   ui.autoLayoutParams = DefaultAutoLayoutParams
-  initAutoLayout()
 
   g_drawLayers.init()
 

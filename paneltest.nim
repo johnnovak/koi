@@ -48,15 +48,6 @@ var
   checkBoxVal5 = false
   checkBoxVal6 = false
 
-let layoutParams = AutoLayoutParams(
-  rowWidth:         300.0,
-  labelWidth:       170.0,
-  itemsPerRow:      2,
-  rowPad:           4.0,
-  rowGroupPad:      12.0,
-  defaultRowHeight: 20.0
-)
-
 ##############################################################################
 
 proc createWindow(): Window =
@@ -94,10 +85,6 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
   ############################################################################
 
   koi.beginScrollView(x=100, y=100, w=250, h=600)
-
-  var lp = layoutParams
-  lp.rowWidth = 230
-  koi.setAutoLayoutParams(lp)
 
   if koi.sectionHeader("General", sectionGeneral):
     koi.group:
@@ -316,10 +303,6 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
 
 
   koi.beginScrollView(x=400, y=150, w=300, h=300)
-
-  lp = layoutParams
-  lp.rowWidth = 270
-  koi.setAutoLayoutParams(lp)
 
   if koi.sectionHeader("First section", section1):
     koi.beginGroup()
