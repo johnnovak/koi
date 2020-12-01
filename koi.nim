@@ -1375,14 +1375,14 @@ var g_eventBuf = initRingBuffer[Event](EventBufSize)
 # No key events will be generated for these keys
 # TODO this could be made configurable
 const ExcludedKeyEvents = @[
-  keyLeftShift,
-  keyLeftControl,
-  keyLeftAlt,
-  keyLeftSuper,
-  keyRightShift,
-  keyRightControl,
-  keyRightAlt,
-  keyRightSuper,
+#  keyLeftShift,
+#  keyLeftControl,
+#  keyLeftAlt,
+#  keyLeftSuper,
+#  keyRightShift,
+#  keyRightControl,
+#  keyRightAlt,
+#  keyRightSuper,
   keyCapsLock,
   keyScrollLock,
   keyNumLock
