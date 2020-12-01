@@ -2417,6 +2417,7 @@ type SectionHeaderStyle* = ref object
   label*:           LabelStyle
   height*:          float
   hitRightPad*:     float
+  triangleColor*:   Color
   backgroundColor*: Color
   separatorColor*:  Color
 
@@ -2425,11 +2426,12 @@ var DefaultSectionHeaderStyle = SectionHeaderStyle(
   height          : 28.0,
   hitRightPad     : 13.0,
   backgroundColor : gray(0.2),
-  separatorColor  : gray(0.3)
+  separatorColor  : gray(0.3),
+  triangleColor   : gray(0.65)
 )
 
 with DefaultSectionHeaderStyle.label:
-  color = gray(0.9)
+  color = gray(0.85)
 
 proc getDefaultSectionHeaderStyle*(): SectionHeaderStyle =
   DefaultSectionHeaderStyle.deepCopy
@@ -2454,7 +2456,8 @@ proc sectionHeader(id:           ItemId,
   let (ox, oy) = (x, y)
   let (x, y) = addDrawOffset(x, y)
 
-  let labelPadX = 20
+  # TODO style param
+  let labelPadX = 28
   let h = s.height
 
   # Hit testing
@@ -2464,9 +2467,12 @@ proc sectionHeader(id:           ItemId,
       setActive(id)
       expanded_out = not expanded_out
 
+  let expanded = expanded_out
+
   addDrawLayer(ui.currentLayer, vg):
     var (x, y, w, h) = snapToGrid(x, y, w, h, strokeWidth=0)
 
+    # Draw background
     vg.fillColor(s.backgroundColor)
     vg.beginPath()
     vg.rect(x, y, w, h)
@@ -2475,6 +2481,25 @@ proc sectionHeader(id:           ItemId,
     vg.strokeColor(s.separatorColor)
     vg.horizLine(x, y+h, w)
 
+    # Draw triangle
+    vg.save()
+
+    vg.translate(x+15, y+h*0.5)
+    vg.scale(4, 4)
+    if expanded: vg.rotate(PI*0.5)
+
+    vg.beginPath()
+    vg.moveTo(-1, 1)
+    vg.lineTo(-1, -1)
+    vg.lineTo(1.2, 0)
+    vg.closePath()
+
+    vg.fillColor(s.triangleColor)
+    vg.fill()
+
+    vg.restore()
+
+    # Draw label
     vg.drawLabel(x+labelPadX, y, w-labelPadX, h, label, style=s.label)
 
   result = expanded_out
@@ -6097,7 +6122,7 @@ with DefaultScrollViewScrollBarStyle:
   thumbFillColorHover = gray(0.55)
   thumbFillColorDown  = gray(0.50)
   autoFade            = true
-  autoFadeStartAlpha  = 0.4
+  autoFadeStartAlpha  = 0.3
   autoFadeEndAlpha    = 1.0
   autoFadeDistance    = 60.0
 
