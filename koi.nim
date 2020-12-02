@@ -5866,18 +5866,24 @@ template color*(col: var Color) =
 
 type SectionHeaderStyle* = ref object
   label*:           LabelStyle
+  labelLeftPad*:    float
   height*:          float
   hitRightPad*:     float
-  triangleColor*:   Color
   backgroundColor*: Color
   separatorColor*:  Color
+  triangleSize*:    float
+  triangleLeftPad*: float
+  triangleColor*:   Color
 
 var DefaultSectionHeaderStyle = SectionHeaderStyle(
   label           : getDefaultLabelStyle(),
+  labelLeftPad    : 28.0,
   height          : 28.0,
   hitRightPad     : 13.0,
   backgroundColor : gray(0.2),
   separatorColor  : gray(0.3),
+  triangleSize    : 4.0,
+  triangleLeftPad : 11.0,
   triangleColor   : gray(0.65)
 )
 
@@ -5907,8 +5913,6 @@ proc sectionHeader(id:           ItemId,
   let (ox, oy) = (x, y)
   let (x, y) = addDrawOffset(x, y)
 
-  # TODO style param
-  let labelPadX = 28
   let h = s.height
 
   # Hit testing
@@ -5935,8 +5939,11 @@ proc sectionHeader(id:           ItemId,
     # Draw triangle
     vg.save()
 
-    vg.translate(x+15, y+h*0.5)
-    vg.scale(4, 4)
+    let ts = s.triangleSize
+
+    vg.translate(x + s.triangleLeftPad, y+h*0.5)
+    vg.scale(ts, ts)
+    vg.translate(1, 0)
     if expanded: vg.rotate(PI*0.5)
 
     vg.beginPath()
@@ -5951,7 +5958,8 @@ proc sectionHeader(id:           ItemId,
     vg.restore()
 
     # Draw label
-    vg.drawLabel(x+labelPadX, y, w-labelPadX, h, label, style=s.label)
+    vg.drawLabel(x + s.labelLeftPad, y, w - s.labelLeftPad, h, label,
+                 style=s.label)
 
   result = expanded_out
 
