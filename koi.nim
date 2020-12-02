@@ -1602,12 +1602,12 @@ type ShadowStyle* = ref object
 
 var DefaultShadowStyle = ShadowStyle(
   enabled      : true,
-  cornerRadius : 10.0,
+  cornerRadius : 8.0,
   xOffset      : 1.0,
-  yOffset      : 2.0,
+  yOffset      : 1.0,
   widthOffset  : 0.0,
   heightOffset : 0.0,
-  feather      : 10.0,
+  feather      : 8.0,
   color        : black(0.4)
 )
 
