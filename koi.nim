@@ -2855,7 +2855,7 @@ proc dropDown[T](id:               ItemId,
     handleTooltip(id, tooltip)
 
 # }}}
-
+# {{{ dropDown templates - seq[string]
 template dropDown*(
   x, y, w, h:   float,
   items:        seq[string],
@@ -2891,6 +2891,53 @@ template dropDown*(
            selectedItem, tooltip, disabled, style)
 
   autoLayoutPost()
+
+# }}}
+# {{{ dropDown templates - enum
+template dropDown*[E: enum](
+  x, y, w, h:   float,
+  items:        typedesc[E],
+  selectedItem: E,
+  tooltip:      string = "",
+  disabled:     bool = false,
+  style:        DropDownStyle = DefaultDropDownStyle
+) =
+
+  let i = instantiationInfo(fullPaths=true)
+  let id = generateId(i.filename, i.line, "")
+
+  var itemsSeq: seq[string] = @[]
+  for e in items.low..items.high:
+    itemsSeq.add($e)
+
+  var selItem = ord(selectedItem)
+
+  dropDown(id, x, y, w, h, itemsSeq, selItem, tooltip, disabled, style)
+  selectedItem = items(selItem)
+
+
+template dropDown*[E: enum](
+  items:        typedesc[E],
+  selectedItem: E,
+  tooltip:      string = "",
+  disabled:     bool = false,
+  style:        DropDownStyle = DefaultDropDownStyle
+) =
+
+  alias(ui, g_uiState)
+  alias(a, ui.autoLayoutState)
+
+  let i = instantiationInfo(fullPaths=true)
+  let id = generateId(i.filename, i.line, "")
+
+  autoLayoutPre()
+
+  dropDown(id, a.x, a.y, a.nextItemWidth, a.nextItemHeight, items,
+           selectedItem, tooltip, disabled, style)
+
+  autoLayoutPost()
+
+# }}}
 
 # }}}
 # {{{ ScrollBar

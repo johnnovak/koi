@@ -15,6 +15,14 @@ var vg: NVGContext
 
 
 ### UI DATA ################################################
+
+type Fruits = enum
+  Orange    = (0, "Orange"),
+  Banana    = (1, "Banana"),
+  Blueberry = (2, "Blueberry"),
+  Apricot   = (3, "Apricot"),
+  Apple     = (4, "Apple")
+
 var
   scrollBarVal1 = 30.0
   scrollBarVal2 = 0.0
@@ -38,7 +46,7 @@ var
   radioButtonsVal6 = 1
   radioButtonsVal7 = 1
 
-  dropDownVal1 = 0
+  dropDownVal1 = Fruits(0)
   dropDownVal2 = 0
   dropDownVal3 = 3
   dropDownTopRight = 0
@@ -54,9 +62,6 @@ var
   textFieldVal3 = "42"
 
   textAreaVal1 = "A merry little surge of electricity piped by automatic alarm from the mood organ beside his bed awakened Rick Deckard. Surprised—it always surprised him to find himself awake without prior notice—he rose from the bed, stood up in his multicolored pajamas, and stretched.\n\nNow, in her bed, his wife Iran opened her gray, unmerry eyes, blinked, then groaned and shut her eyes again.     A merry little surge of electricity piped by automatic alarm from the mood organ beside his bed awakened Rick Deckard. Surprised—it always surprised him to find himself awake without prior notice—he rose from the bed, stood up in his multicolored pajamas, and stretched.\n\nNow, in her bed, his wife Iran opened her gray, unmerry eyes, blinked, then groaned and shut her eyes again."
-#  textAreaVal1 = "123\n4\n\n5\n"
-  printBreakRows = true
-
 
 ############################################################
 
@@ -198,7 +203,7 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
   y += pad * 2
   koi.dropDown(
     x, y, w, h,
-    items = @["Orange", "Banana", "Blueberry", "Apricot", "Apple"],
+    Fruits,
     dropDownVal1,
     tooltip = "Select a fruit")
 
