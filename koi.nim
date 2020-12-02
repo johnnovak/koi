@@ -5,6 +5,8 @@ import math
 import options
 import sequtils
 import sets
+import std/decls
+import macros
 import strformat
 import strutils
 import tables
@@ -1500,13 +1502,13 @@ proc isDoubleClick*(): bool =
 # {{{ Layout handling
 
 const DefaultAutoLayoutParams = AutoLayoutParams(
-  labelWidth:       160.0,
+  labelWidth:       175.0,
   itemsPerRow:      2,
   sectionPad:       12.0,
   leftPad:          13.0,
   rightPad:         4.0,
   rowPad:           5.0,
-  rowGroupPad:      15.0,
+  rowGroupPad:      16.0,
   defaultRowHeight: 21.0
 )
 
@@ -1579,8 +1581,7 @@ proc autoLayoutPost(height: Option[float] = float.none,
 
 # {{{ beginGroup*()
 proc beginGroup*() =
-  alias(a, g_uiState.autoLayoutState)
-  a.groupBegin = true
+  g_uiState.autoLayoutState.groupBegin = true
 
 # }}}
 # {{{ endGroup*()
@@ -2291,8 +2292,7 @@ template checkBox*(active:   var bool,
                    drawProc: CheckBoxDrawProc = DefaultCheckBoxDrawProc,
                    style:    CheckBoxStyle = DefaultCheckBoxStyle) =
 
-  alias(ui, g_uiState)
-  alias(a, ui.autoLayoutState)
+  alias(a, g_uiState.autoLayoutState)
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
@@ -2906,6 +2906,7 @@ template dropDown*[E: enum](
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
+  # TODO common. extract
   var itemsSeq: seq[string] = @[]
   for e in items.low..items.high:
     itemsSeq.add($e)
@@ -2924,16 +2925,23 @@ template dropDown*[E: enum](
   style:        DropDownStyle = DefaultDropDownStyle
 ) =
 
-  alias(ui, g_uiState)
-  alias(a, ui.autoLayoutState)
+  alias(a, g_uiState.autoLayoutState)
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
+  # TODO common. extract
+  var itemsSeq: seq[string] = @[]
+  for e in items.low..items.high:
+    itemsSeq.add($e)
+
+  var selItem = ord(selectedItem)
+
   autoLayoutPre()
 
-  dropDown(id, a.x, a.y, a.nextItemWidth, a.nextItemHeight, items,
-           selectedItem, tooltip, disabled, style)
+  dropDown(id, a.x, a.y, a.nextItemWidth, a.nextItemHeight, itemsSeq, selItem,
+           tooltip, disabled, style)
+  selectedItem = items(selItem)
 
   autoLayoutPost()
 
@@ -5266,6 +5274,28 @@ template horizSlider*(x, y, w, h: float,
   horizSlider(id, x, y, w, h, startVal, endVal, value, tooltip, label,
               style, grouping)
 
+
+template horizSlider*(startVal:   float = 0.0,
+                      endVal:     float = 1.0,
+                      value:      float,
+                      tooltip:    string = "",
+                      label:      string = "",
+                      style:      SliderStyle = DefaultSliderStyle,
+                      grouping:   WidgetGrouping = wgNone) =
+
+  alias(a, g_uiState.autoLayoutState)
+
+  let i = instantiationInfo(fullPaths=true)
+  let id = generateId(i.filename, i.line, "")
+
+  autoLayoutPre()
+
+  horizSlider(id, a.x, a.y, a.nextItemWidth, a.nextItemHeight,
+              startVal, endVal, value, tooltip, label,
+              style, grouping)
+
+  autoLayoutPost()
+
 # }}}
 # {{{ vertSlider
 
@@ -5924,8 +5954,7 @@ template color*(x, y, w, h: float, color: var Color) =
 
 
 template color*(col: var Color) =
-  alias(ui, g_uiState)
-  alias(a, ui.autoLayoutState)
+  alias(a, g_uiState.autoLayoutState)
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
@@ -5955,9 +5984,9 @@ type SectionHeaderStyle* = ref object
 var DefaultSectionHeaderStyle = SectionHeaderStyle(
   label           : getDefaultLabelStyle(),
   labelLeftPad    : 28.0,
-  height          : 28.0,
+  height          : 32.0,
   hitRightPad     : 13.0,
-  backgroundColor : gray(0.2),
+  backgroundColor : gray(0.15),
   separatorColor  : gray(0.3),
   triangleSize    : 4.0,
   triangleLeftPad : 11.0,

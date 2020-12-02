@@ -10,6 +10,7 @@ import nanovg
 import koi
 
 import ../gridmonger/src/theme
+import ../gridmonger/src/common
 
 
 # Global NanoVG context
@@ -19,10 +20,7 @@ var vg: NVGContext
 ### UI DATA ##################################################################
 var
   sectionUserInterface = true
-
-  sectionGeneral = true
-  sectionTemp = true
-
+  sectionUserInterfaceGeneral = true
   sectionWidget = true
   sectionTextField = true
   sectionDialog = true
@@ -30,6 +28,18 @@ var
   sectionStatusBar = true
   sectionLeveldropDown = true
   sectionAboutButton = true
+
+  sectionLevel = true
+  sectionLevelGeneral = true
+  sectionOutline = true
+  sectionShadow = true
+  sectionBackgroundHatch = true
+  sectionFloorColors = true
+  sectionNotes = true
+  
+  sectionPanes = true
+  sectionNotesPane = true
+  sectionToolbarPane = true
 
 var currTheme = loadTheme("../gridmonger/themes/Default.cfg")
 
@@ -82,17 +92,21 @@ proc loadData(vg: NVGContext) =
     quit "Could not add font italic.\n"
 
 
+var propsSliderStyle = getDefaultSliderStyle()
+propsSliderStyle.trackCornerRadius = 8.0
+propsSliderStyle.valueCornerRadius = 6.0
+
 proc renderUI(winWidth, winHeight, pxRatio: float) =
   vg.beginFrame(winWidth.float, winHeight.float, pxRatio)
   koi.beginFrame(winWidth.float, winHeight.float)
 
   ############################################################################
 
-  koi.beginScrollView(x=100, y=100, w=250, h=600)
+  koi.beginScrollView(x=100, y=100, w=310, h=600)
 
-  if koi.sectionHeader("User interface", sectionUserInterface):
+  if koi.sectionHeader("User Interface", sectionUserInterface):
 
-    if koi.subSectionHeader("General", sectionGeneral):
+    if koi.subSectionHeader("General", sectionUserInterfaceGeneral):
       koi.label("Background")
       koi.color(currTheme.general.backgroundColor)
 
@@ -104,25 +118,25 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
         koi.label("Background")
         koi.color(currTheme.widget.bgColor)
 
-        koi.label("Background hover")
+        koi.label("Background Hover")
         koi.color(currTheme.widget.bgColorHover)
 
-        koi.label("Background disabled")
+        koi.label("Background Disabled")
         koi.color(currTheme.widget.bgColorDisabled)
 
       koi.group:
         koi.label("Text")
         koi.color(currTheme.widget.textColor)
 
-        koi.label("Text disabled")
+        koi.label("Text Disabled")
         koi.color(currTheme.widget.textColorDisabled)
 
-    if koi.subSectionHeader("Text field", sectionTextField):
+    if koi.subSectionHeader("Text Field", sectionTextField):
       koi.group:
-        koi.label("Background active")
+        koi.label("Background Active")
         koi.color(currTheme.textField.bgColorActive)
 
-        koi.label("Text active")
+        koi.label("Text Active")
         koi.color(currTheme.textField.textColorActive)
 
         koi.label("Cursor")
@@ -133,10 +147,10 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
 
     if koi.subSectionHeader("Dialog", sectionDialog):
       koi.group:
-        koi.label("Title bar background")
+        koi.label("Title Bar Background")
         koi.color(currTheme.dialog.titleBarBgColor)
 
-        koi.label("Title bar text")
+        koi.label("Title Bar Text")
         koi.color(currTheme.dialog.titleBarTextColor)
 
         koi.label("Background")
@@ -145,42 +159,39 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
         koi.label("Text")
         koi.color(currTheme.dialog.textColor)
 
-        koi.label("Warning text")
+        koi.label("Warning Text")
         koi.color(currTheme.dialog.warningTextColor)
 
-    if koi.subSectionHeader("Title bar", sectionTitleBar):
+    if koi.subSectionHeader("Title Bar", sectionTitleBar):
       koi.group:
         koi.label("Background")
         koi.color(currTheme.titleBar.backgroundColor)
 
-        koi.label("Background unfocused")
+        koi.label("Background Unfocused")
         koi.color(currTheme.titleBar.bgColorUnfocused)
 
       koi.group:
         koi.label("Text")
         koi.color(currTheme.titleBar.textColor)
 
-        koi.label("Text unfocused")
+        koi.label("Text Unfocused")
         koi.color(currTheme.titleBar.textColorUnfocused)
 
       koi.group:
-        koi.label("Modified flag")
+        koi.label("Modified Flag")
         koi.color(currTheme.titleBar.modifiedFlagColor)
 
       koi.group:
         koi.label("Button")
         koi.color(currTheme.titleBar.buttonColor)
 
-        koi.label("Button hover")
+        koi.label("Button Hover")
         koi.color(currTheme.titleBar.buttonColorHover)
 
-        koi.label("Button down")
+        koi.label("Button Down")
         koi.color(currTheme.titleBar.buttonColorDown)
 
-
-  if koi.sectionHeader("Temp section", sectionTemp):
-
-    if koi.subSectionHeader("Status bar", sectionStatusBar):
+    if koi.subSectionHeader("Status Bar", sectionStatusBar):
       koi.group:
         koi.label("Background")
         koi.color(currTheme.statusBar.backgroundColor)
@@ -189,7 +200,7 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
         koi.color(currTheme.statusBar.textColor)
 
       koi.group:
-        koi.label("Command background")
+        koi.label("Command Background")
         koi.color(currTheme.statusBar.commandBgColor)
 
         koi.label("Command")
@@ -199,12 +210,12 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
         koi.label("Coordinates")
         koi.color(currTheme.statusBar.coordsColor)
 
-    if koi.subSectionHeader("Level drop down", sectionLeveldropDown):
+    if koi.subSectionHeader("Level Drop Down", sectionLeveldropDown):
       koi.group:
         koi.label("Button")
         koi.color(currTheme.leveldropDown.buttonColor)
 
-        koi.label("Button hover")
+        koi.label("Button Hover")
         koi.color(currTheme.leveldropDown.buttonColorHover)
 
       koi.group:
@@ -212,16 +223,16 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
         koi.color(currTheme.leveldropDown.textColor)
 
       koi.group:
-        koi.label("Item list")
+        koi.label("Item List")
         koi.color(currTheme.leveldropDown.itemListColor)
 
         koi.label("Item")
         koi.color(currTheme.leveldropDown.itemColor)
 
-        koi.label("Item hover")
+        koi.label("Item Hover")
         koi.color(currTheme.leveldropDown.itemColorHover)
 
-    if koi.subSectionHeader("About button", sectionAboutButton):
+    if koi.subSectionHeader("About Button", sectionAboutButton):
       koi.group:
         koi.label("Color")
         koi.color(currTheme.aboutButton.color)
@@ -232,92 +243,215 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
         koi.label("Active")
         koi.color(currTheme.aboutButton.colorActive)
 
+
+  if koi.sectionHeader("Level", sectionLevel):
+    if koi.subSectionHeader("General", sectionLevelGeneral):
+      group:
+        koi.label("Background")
+        koi.color(currTheme.level.backgroundColor)
+
+        koi.label("Draw")
+        koi.color(currTheme.level.drawColor)
+
+        koi.label("Draw Light")
+        koi.color(currTheme.level.lightDrawColor)
+
+        koi.label("Line Width")
+        koi.dropDown(LineWidth, currTheme.level.lineWidth)
+
+      group:
+        koi.label("Coordinates")
+        koi.color(currTheme.level.coordsColor)
+
+        koi.label("Coordinates Highlight")
+        koi.color(currTheme.level.coordsHighlightColor)
+
+        koi.label("Cursor")
+        koi.color(currTheme.level.cursorColor)
+
+        koi.label("Cursor Guides")
+        koi.color(currTheme.level.cursorGuideColor)
+
+      group:
+        koi.label("Grid Style Background")
+        koi.dropDown(GridStyle, currTheme.level.gridStyleBackground)
+
+        koi.label("Grid Background")
+        koi.color(currTheme.level.gridColorBackground)
+
+        koi.label("Grid Style Floor")
+        koi.dropDown(GridStyle, currTheme.level.gridStyleFloor)
+
+        koi.label("Grid Floor")
+        koi.color(currTheme.level.gridColorFloor)
+
+      group:
+        koi.label("Selection")
+        koi.color(currTheme.level.selectionColor)
+
+        koi.label("Paste Preview")
+        koi.color(currTheme.level.pastePreviewColor)
+
+      group:
+        koi.label("Link Marker")
+        koi.color(currTheme.level.linkMarkerColor)
+
+    if koi.subSectionHeader("Background Hatch", sectionBackgroundHatch):
+        koi.label("Background Hatch?")
+        koi.checkBox(currTheme.level.bgHatchEnabled)
+
+        koi.label("Hatch")
+        koi.color(currTheme.level.bgHatchColor)
+
+        koi.label("Hatch Stroke Width")
+        koi.horizSlider(startVal=0, endVal=10, currTheme.level.bgHatchStrokeWidth,
+                        style=propsSliderStyle)
+
+        koi.label("Hatch Spacing")
+        koi.horizSlider(startVal=0, endVal=10, currTheme.level.bgHatchSpacingFactor,
+                        style=propsSliderStyle)
+
+    if koi.subSectionHeader("Floor Colors", sectionFloorColors):
+      koi.label("Floor 1")
+      koi.color(currTheme.level.floorColor[0])
+
+      koi.label("Floor 2")
+      koi.color(currTheme.level.floorColor[1])
+
+      koi.label("Floor 3")
+      koi.color(currTheme.level.floorColor[2])
+
+      koi.label("Floor 4")
+      koi.color(currTheme.level.floorColor[3])
+
+      koi.label("Floor 5")
+      koi.color(currTheme.level.floorColor[4])
+
+      koi.label("Floor 6")
+      koi.color(currTheme.level.floorColor[5])
+
+      koi.label("Floor 7")
+      koi.color(currTheme.level.floorColor[6])
+
+      koi.label("Floor 8")
+      koi.color(currTheme.level.floorColor[7])
+
+      koi.label("Floor 9")
+      koi.color(currTheme.level.floorColor[8])
+
+    if koi.subSectionHeader("Outline", sectionOutline):
+      koi.label("Outline Style")
+      koi.dropDown(OutlineStyle, currTheme.level.outlineStyle)
+
+      koi.label("Outline Fill Style")
+      koi.dropDown(OutlineFillStyle, currTheme.level.outlineFillStyle)
+
+      koi.label("Outline Overscan")
+      koi.checkBox(currTheme.level.outlineOverscan)
+
+      koi.label("Outline")
+      koi.color(currTheme.level.outlineColor)
+
+      koi.label("Outline Width")
+      koi.horizSlider(startVal=0, endVal=10, currTheme.level.outlineWidthFactor,
+                      style=propsSliderStyle)
+
+    if koi.subSectionHeader("Shadow", sectionShadow):
+      group:
+        koi.label("Inner Shadow?")
+        koi.checkBox(currTheme.level.innerShadowEnabled)
+
+        koi.label("Inner Shadow")
+        koi.color(currTheme.level.innerShadowColor)
+
+        koi.label("Inner Shadow Width")
+        koi.horizSlider(startVal=0, endVal=10, currTheme.level.innerShadowWidthFactor,
+                        style=propsSliderStyle)
+
+      group:
+        koi.label("Outer Shadow?")
+        koi.checkBox(currTheme.level.outerShadowEnabled)
+
+        koi.label("Outer Shadow")
+        koi.color(currTheme.level.outerShadowColor)
+
+        koi.label("Outer Shadow Width")
+        koi.horizSlider(startVal=0, endVal=10, currTheme.level.outerShadowWidthFactor,
+                        style=propsSliderStyle)
+
+    if koi.subSectionHeader("Notes", sectionNotes):
+      group:
+        koi.label("Marker")
+        koi.color(currTheme.level.noteMarkerColor)
+
+        koi.label("Comment")
+        koi.color(currTheme.level.noteCommentColor)
+
+      group:
+        koi.label("Index")
+        koi.color(currTheme.level.noteIndexColor)
+
+        koi.label("Index Background 1")
+        koi.color(currTheme.level.noteIndexBgColor[0])
+
+        koi.label("Index Background 2")
+        koi.color(currTheme.level.noteIndexBgColor[1])
+
+        koi.label("Index Background 3")
+        koi.color(currTheme.level.noteIndexBgColor[2])
+
+        koi.label("Index Background 4")
+        koi.color(currTheme.level.noteIndexBgColor[3])
+
+      group:
+        koi.label("Tooltip Background")
+        koi.color(currTheme.level.noteTooltipBgColor)
+
+        koi.label("Tooltip Text")
+        koi.color(currTheme.level.noteTooltipTextColor)
+
+  if koi.sectionHeader("Panes", sectionPanes):
+    if koi.subSectionHeader("Notes Pane", sectionNotesPane):
+      koi.label("Text")
+      koi.color(currTheme.notesPane.textColor)
+
+      koi.label("Index")
+      koi.color(currTheme.notesPane.indexColor)
+
+      koi.label("Index Background 1")
+      koi.color(currTheme.notesPane.indexBgColor[0])
+
+      koi.label("Index Background 2")
+      koi.color(currTheme.notesPane.indexBgColor[1])
+
+      koi.label("Index Background 3")
+      koi.color(currTheme.notesPane.indexBgColor[2])
+
+      koi.label("Index Background 4")
+      koi.color(currTheme.notesPane.indexBgColor[3])
+
+    if koi.subSectionHeader("Toolbar Pane", sectionToolbarPane):
+      koi.label("Button Background")
+      koi.color(currTheme.toolbarPane.buttonBgColor)
+
+      koi.label("Button Background Hover")
+      koi.color(currTheme.toolbarPane.buttonBgColorHover)
+
   koi.endScrollView()
 
 
 #[
-  if koi.sectionHeader("About button", sectionAboutButton):
 
-[level]
-backgroundColor         = "gray(0.4)"
-drawColor               = "gray(0.1)"
-lightDrawColor          = "gray(0.6)"
-lineWidth               = lwNormal
-
-floorColor1             = "gray(0.9)"
-floorColor2             = "rgba(51, 92, 162, 66)"
-floorColor3             = "rgba(61, 139, 231, 80)"
-floorColor4             = "rgba(108, 57, 172, 66)"
-floorColor5             = "rgba(137, 95, 233, 76)"
-floorColor6             = "rgba(151, 0, 97, 66)"
-floorColor7             = "rgba(217, 40, 158, 72)"
-floorColor8             = "rgba(48, 141, 154, 55)"
-floorColor9             = "rgba(54, 184, 166, 73)"
-
-bgHatch                 = on
-bgHatchColor            = "gray(0.0, 0.4)"
-bgHatchStrokeWidth      = 1.0
-bgHatchSpacingFactor    = 2.0
-
-coordsColor             = "gray(0.9)"
-coordsHighlightColor    = "rgb(1.0, 0.75, 0.0)"
-
-cursorColor             = "rgb(1.0, 0.65, 0.0)"
-cursorGuideColor        = "rgba(1.0, 0.65, 0.0, 0.2)"
-
-gridStyleBackground     = gsSolid
-gridColorBackground     = "gray(0.0, 0.1)"
-gridStyleFloor          = gsSolid
-gridColorFloor          = "gray(0.2, 0.4)"
-
-outlineStyle            = osCell
-outlineFillStyle        = ofsSolid
-outlineOverscan         = off
-outlineColor            = "gray(0.22)"
-outlineWidthFactor      = 0.5
-
-innerShadow             = off
-innerShadowColor        = "gray(0.0, 0.1)"
-innerShadowWidthFactor  = 0.125
-outerShadow             = off
-outerShadowColor        = "gray(0.0, 0.1)"
-outerShadowWidthFactor  = 0.125
-
-selectionColor          = "rgba(1.0, 0.5, 0.5, 0.4)"
-pastePreviewColor       = "rgba(0.2, 0.6, 1.0, 0.4)"
-
-noteMarkerColor         = "gray(0.1, 0.7)"
-noteCommentColor        = "rgba(1.0, 0.2, 0.0, 0.8)"
-noteIndexColor          = "gray(1.0)"
-noteIndexBgColor1       = "rgb(247, 92, 74)"
-noteIndexBgColor2       = "rgb(255, 156, 106)"
-noteIndexBgColor3       = "rgb(0, 179, 200)"
-noteIndexBgColor4       = "rgb(19, 131, 127)"
-
-noteTooltipBgColor      = "gray(0.03)"
-noteTooltipTextColor    = "gray(0.9)"
-
-linkMarkerColor         = "rgb(0, 179, 200)"
 
 #-----------------------------------------------------------------------------
 
-[notesPane]
-textColor               = "gray(0.9)"
-indexColor              = "gray(1.0)"
-indexBgColor1           = "rgb(247, 92, 74)"
-indexBgColor2           = "rgb(250, 141, 100)"
-indexBgColor3           = "rgb(0, 179, 200)"
-indexBgColor4           = "rgb(29, 141, 137)"
-
 [toolbarPane]
-buttonBgColor           = "gray(0.9)"
-buttonBgColorHover      = "gray(1.0)"
 ]#
 
 
 
 
-  koi.beginScrollView(x=400, y=150, w=300, h=300)
+  koi.beginScrollView(x=600, y=150, w=300, h=300)
 
   if koi.sectionHeader("First section", section1):
     koi.beginGroup()
