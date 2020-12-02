@@ -1903,133 +1903,6 @@ proc endPopup*() =
 # }}}
 
 # }}}
-# {{{ Dialog
-
-type DialogStyle* = ref object
-  cornerRadius*:       float
-  backgroundColor*:    Color
-  titleBarBgColor*:    Color
-  titleBarTextColor*:  Color
-  outerBorderColor*:   Color
-  innerBorderColor*:   Color
-  outerBorderWidth*:   float
-  innerBorderWidth*:   float
-  shadow*:             ShadowStyle
-
-var DefaultDialogStyle = DialogStyle(
-  cornerRadius      : 7.0,
-  backgroundColor   : gray(0.2),
-  titleBarBgColor   : gray(0.05),
-  titleBarTextColor : gray(0.85),
-  outerBorderColor  : black(),
-  innerBorderColor  : white(),
-  outerBorderWidth  : 0.0,
-  innerBorderWidth  : 0.0
-)
-
-DefaultDialogStyle.shadow = ShadowStyle(
-  enabled      : true,
-  cornerRadius : 12.0,
-  xOffset      : 2.0,
-  yOffset      : 3.0,
-  widthOffset  : 0.0,
-  heightOffset : 0.0,
-  feather      : 25.0,
-  color        : black(0.4)
-)
-
-proc getDefaultDialogStyle*(): DialogStyle =
-  DefaultDialogStyle.deepCopy
-
-proc setDefaultDialogStyle*(style: DialogStyle) =
-  DefaultDialogStyle = style.deepCopy
-
-# {{{ beginDialog()
-proc beginDialog*(w, h: float, title: string,
-                  style: DialogStyle = DefaultDialogStyle) =
-
-  alias(ui, g_uiState)
-  alias(s, style)
-
-  ui.dialogOpen = true
-  ui.focusCaptured = false
-
-  let
-    x = floor((ui.winWidth - w) / 2)
-    y = floor((ui.winHeight - h) / 2)
-
-  ui.currentLayer = layerDialog
-
-  addDrawLayer(ui.currentLayer, vg):
-    const TitleBarHeight = 30.0
-
-    drawShadow(vg, x, y, w, h, s.shadow)
-
-    # Outer border
-    if s.outerBorderWidth > 0:
-      let bw = s.outerBorderWidth + s.innerBorderWidth
-      let cr = if s.cornerRadius > 0: s.cornerRadius+bw else: 0
-
-      vg.beginPath()
-      vg.fillColor(s.outerBorderColor)
-      vg.roundedRect(x-bw, y-bw, w+bw*2, h+bw*2, cr)
-      vg.fill()
-
-    # Inner border
-    if s.innerBorderWidth > 0:
-      let bw = s.innerBorderWidth
-      let cr = if s.cornerRadius > 0: s.cornerRadius+bw else: 0
-
-      vg.beginPath()
-      vg.fillColor(s.innerBorderColor)
-      vg.roundedRect(x-bw, y-bw, w+bw*2, h+bw*2, cr)
-      vg.fill()
-
-    # Dialog background
-    vg.beginPath()
-    vg.fillColor(s.backgroundColor)
-    vg.roundedRect(x, y, w, h, s.cornerRadius)
-    vg.fill()
-
-    # Title bar
-    vg.beginPath()
-    vg.fillColor(s.titleBarBgColor)
-    vg.roundedRect(x, y, w, TitleBarHeight,
-                   s.cornerRadius, s.cornerRadius, 0, 0)
-    vg.fill()
-
-    # TODO use label
-    vg.fontFace("sans-bold")
-    vg.fontSize(15.0)
-    vg.textAlign(haLeft, vaMiddle)
-    vg.fillColor(s.titleBarTextColor)
-    discard vg.text(x+10.0, y + TitleBarHeight * TextVertAlignFactor, title)
-
-  pushDrawOffset(
-    DrawOffset(ox: x, oy: y)
-  )
-
-# }}}
-# {{{ endDialog()
-proc endDialog*() =
-  alias(ui, g_uiState)
-
-  popDrawOffset()
-  ui.currentLayer = layerDefault
-  if ui.dialogOpen:
-    ui.focusCaptured = true
-
-# }}}
-# {{{ closeDialog()
-proc closeDialog*() =
-  alias(ui, g_uiState)
-
-  ui.focusCaptured = false
-  ui.dialogOpen = false
-
-# }}}
-
-# }}}
 
 # {{{ Label
 
@@ -2409,125 +2282,6 @@ template checkBox*(active:   var bool,
   checkbox(id, a.x, a.y, a.nextItemHeight, active, tooltip, drawProc, style)
 
   handleAutoLayout()
-
-# }}}
-# {{{ SectionHeader
-
-type SectionHeaderStyle* = ref object
-  label*:           LabelStyle
-  height*:          float
-  hitRightPad*:     float
-  triangleColor*:   Color
-  backgroundColor*: Color
-  separatorColor*:  Color
-
-var DefaultSectionHeaderStyle = SectionHeaderStyle(
-  label           : getDefaultLabelStyle(),
-  height          : 28.0,
-  hitRightPad     : 13.0,
-  backgroundColor : gray(0.2),
-  separatorColor  : gray(0.3),
-  triangleColor   : gray(0.65)
-)
-
-with DefaultSectionHeaderStyle.label:
-  color = gray(0.85)
-
-proc getDefaultSectionHeaderStyle*(): SectionHeaderStyle =
-  DefaultSectionHeaderStyle.deepCopy
-
-proc setDefaultSectionHeaderStyle*(style: SectionHeaderStyle) =
-  DefaultSectionHeaderStyle = style.deepCopy
-
-
-let SectionHeaderCheckboxStyle = getDefaultCheckBoxStyle()
-
-# {{{ sectionHeader()
-proc sectionHeader(id:           ItemId,
-                   x, y, w:      float,
-                   label:        string,
-                   expanded_out: var bool,
-                   tooltip:      string,
-                   style:        SectionHeaderStyle): bool =
-
-  alias(ui, g_uiState)
-  alias(s, style)
-
-  let (ox, oy) = (x, y)
-  let (x, y) = addDrawOffset(x, y)
-
-  # TODO style param
-  let labelPadX = 28
-  let h = s.height
-
-  # Hit testing
-  if isHit(x, y, w - s.hitRightPad, h):
-    setHot(id)
-    if ui.mbLeftDown and hasNoActiveItem():
-      setActive(id)
-      expanded_out = not expanded_out
-
-  let expanded = expanded_out
-
-  addDrawLayer(ui.currentLayer, vg):
-    var (x, y, w, h) = snapToGrid(x, y, w, h, strokeWidth=0)
-
-    # Draw background
-    vg.fillColor(s.backgroundColor)
-    vg.beginPath()
-    vg.rect(x, y, w, h)
-    vg.fill()
-
-    vg.strokeColor(s.separatorColor)
-    vg.horizLine(x, y+h, w)
-
-    # Draw triangle
-    vg.save()
-
-    vg.translate(x+15, y+h*0.5)
-    vg.scale(4, 4)
-    if expanded: vg.rotate(PI*0.5)
-
-    vg.beginPath()
-    vg.moveTo(-1, 1)
-    vg.lineTo(-1, -1)
-    vg.lineTo(1.2, 0)
-    vg.closePath()
-
-    vg.fillColor(s.triangleColor)
-    vg.fill()
-
-    vg.restore()
-
-    # Draw label
-    vg.drawLabel(x+labelPadX, y, w-labelPadX, h, label, style=s.label)
-
-  result = expanded_out
-
-# }}}
-
-template sectionHeader*(
-  label:    string,
-  expanded: var bool,
-  tooltip:  string = "",
-  style:    SectionHeaderStyle = DefaultSectionHeaderStyle
-): bool =
-
-  alias(ui, g_uiState)
-  alias(a, ui.autoLayoutState)
-  alias(ap, ui.autoLayoutParams)
-
-  let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, label)
-
-  let result = sectionHeader(id, 0, a.y, a.rowWidth, label, expanded,
-                             tooltip, style)
-
-  let yPad = if expanded: float.none else: 0.0.some
-
-  handleAutoLayout(yPad=yPad, height=style.height.some,
-                   forceNextRow=true)
-  result
 
 # }}}
 # {{{ RadioButtons
@@ -6108,6 +5862,125 @@ template color*(col: var Color) =
 
 # }}}
 
+# {{{ SectionHeader
+
+type SectionHeaderStyle* = ref object
+  label*:           LabelStyle
+  height*:          float
+  hitRightPad*:     float
+  triangleColor*:   Color
+  backgroundColor*: Color
+  separatorColor*:  Color
+
+var DefaultSectionHeaderStyle = SectionHeaderStyle(
+  label           : getDefaultLabelStyle(),
+  height          : 28.0,
+  hitRightPad     : 13.0,
+  backgroundColor : gray(0.2),
+  separatorColor  : gray(0.3),
+  triangleColor   : gray(0.65)
+)
+
+with DefaultSectionHeaderStyle.label:
+  color = gray(0.85)
+
+proc getDefaultSectionHeaderStyle*(): SectionHeaderStyle =
+  DefaultSectionHeaderStyle.deepCopy
+
+proc setDefaultSectionHeaderStyle*(style: SectionHeaderStyle) =
+  DefaultSectionHeaderStyle = style.deepCopy
+
+
+let SectionHeaderCheckboxStyle = getDefaultCheckBoxStyle()
+
+# {{{ sectionHeader()
+proc sectionHeader(id:           ItemId,
+                   x, y, w:      float,
+                   label:        string,
+                   expanded_out: var bool,
+                   tooltip:      string,
+                   style:        SectionHeaderStyle): bool =
+
+  alias(ui, g_uiState)
+  alias(s, style)
+
+  let (ox, oy) = (x, y)
+  let (x, y) = addDrawOffset(x, y)
+
+  # TODO style param
+  let labelPadX = 28
+  let h = s.height
+
+  # Hit testing
+  if isHit(x, y, w - s.hitRightPad, h):
+    setHot(id)
+    if ui.mbLeftDown and hasNoActiveItem():
+      setActive(id)
+      expanded_out = not expanded_out
+
+  let expanded = expanded_out
+
+  addDrawLayer(ui.currentLayer, vg):
+    var (x, y, w, h) = snapToGrid(x, y, w, h, strokeWidth=0)
+
+    # Draw background
+    vg.fillColor(s.backgroundColor)
+    vg.beginPath()
+    vg.rect(x, y, w, h)
+    vg.fill()
+
+    vg.strokeColor(s.separatorColor)
+    vg.horizLine(x, y+h, w)
+
+    # Draw triangle
+    vg.save()
+
+    vg.translate(x+15, y+h*0.5)
+    vg.scale(4, 4)
+    if expanded: vg.rotate(PI*0.5)
+
+    vg.beginPath()
+    vg.moveTo(-1, 1)
+    vg.lineTo(-1, -1)
+    vg.lineTo(1.2, 0)
+    vg.closePath()
+
+    vg.fillColor(s.triangleColor)
+    vg.fill()
+
+    vg.restore()
+
+    # Draw label
+    vg.drawLabel(x+labelPadX, y, w-labelPadX, h, label, style=s.label)
+
+  result = expanded_out
+
+# }}}
+
+template sectionHeader*(
+  label:    string,
+  expanded: var bool,
+  tooltip:  string = "",
+  style:    SectionHeaderStyle = DefaultSectionHeaderStyle
+): bool =
+
+  alias(ui, g_uiState)
+  alias(a, ui.autoLayoutState)
+  alias(ap, ui.autoLayoutParams)
+
+  let i = instantiationInfo(fullPaths=true)
+  let id = generateId(i.filename, i.line, label)
+
+  let result = sectionHeader(id, 0, a.y, a.rowWidth, label, expanded,
+                             tooltip, style)
+
+  let yPad = if expanded: float.none else: 0.0.some
+
+  handleAutoLayout(yPad=yPad, height=style.height.some,
+                   forceNextRow=true)
+  result
+
+# }}}
 # {{{ ScrollView
 
 var DefaultScrollViewScrollBarStyle = getDefaultScrollBarStyle()
@@ -6220,6 +6093,134 @@ proc endScrollView*() =
   ui.itemState[id] = ss
 
   ui.scrollViewState.activeItem = 0
+
+# }}}
+
+# }}}
+
+# {{{ Dialog
+
+type DialogStyle* = ref object
+  cornerRadius*:       float
+  backgroundColor*:    Color
+  titleBarBgColor*:    Color
+  titleBarTextColor*:  Color
+  outerBorderColor*:   Color
+  innerBorderColor*:   Color
+  outerBorderWidth*:   float
+  innerBorderWidth*:   float
+  shadow*:             ShadowStyle
+
+var DefaultDialogStyle = DialogStyle(
+  cornerRadius      : 7.0,
+  backgroundColor   : gray(0.2),
+  titleBarBgColor   : gray(0.05),
+  titleBarTextColor : gray(0.85),
+  outerBorderColor  : black(),
+  innerBorderColor  : white(),
+  outerBorderWidth  : 0.0,
+  innerBorderWidth  : 0.0
+)
+
+DefaultDialogStyle.shadow = ShadowStyle(
+  enabled      : true,
+  cornerRadius : 12.0,
+  xOffset      : 2.0,
+  yOffset      : 3.0,
+  widthOffset  : 0.0,
+  heightOffset : 0.0,
+  feather      : 25.0,
+  color        : black(0.4)
+)
+
+proc getDefaultDialogStyle*(): DialogStyle =
+  DefaultDialogStyle.deepCopy
+
+proc setDefaultDialogStyle*(style: DialogStyle) =
+  DefaultDialogStyle = style.deepCopy
+
+# {{{ beginDialog()
+proc beginDialog*(w, h: float, title: string,
+                  style: DialogStyle = DefaultDialogStyle) =
+
+  alias(ui, g_uiState)
+  alias(s, style)
+
+  ui.dialogOpen = true
+  ui.focusCaptured = false
+
+  let
+    x = floor((ui.winWidth - w) / 2)
+    y = floor((ui.winHeight - h) / 2)
+
+  ui.currentLayer = layerDialog
+
+  addDrawLayer(ui.currentLayer, vg):
+    const TitleBarHeight = 30.0
+
+    drawShadow(vg, x, y, w, h, s.shadow)
+
+    # Outer border
+    if s.outerBorderWidth > 0:
+      let bw = s.outerBorderWidth + s.innerBorderWidth
+      let cr = if s.cornerRadius > 0: s.cornerRadius+bw else: 0
+
+      vg.beginPath()
+      vg.fillColor(s.outerBorderColor)
+      vg.roundedRect(x-bw, y-bw, w+bw*2, h+bw*2, cr)
+      vg.fill()
+
+    # Inner border
+    if s.innerBorderWidth > 0:
+      let bw = s.innerBorderWidth
+      let cr = if s.cornerRadius > 0: s.cornerRadius+bw else: 0
+
+      vg.beginPath()
+      vg.fillColor(s.innerBorderColor)
+      vg.roundedRect(x-bw, y-bw, w+bw*2, h+bw*2, cr)
+      vg.fill()
+
+    # Dialog background
+    vg.beginPath()
+    vg.fillColor(s.backgroundColor)
+    vg.roundedRect(x, y, w, h, s.cornerRadius)
+    vg.fill()
+
+    # Title bar
+    vg.beginPath()
+    vg.fillColor(s.titleBarBgColor)
+    vg.roundedRect(x, y, w, TitleBarHeight,
+                   s.cornerRadius, s.cornerRadius, 0, 0)
+    vg.fill()
+
+    # TODO use label
+    vg.fontFace("sans-bold")
+    vg.fontSize(15.0)
+    vg.textAlign(haLeft, vaMiddle)
+    vg.fillColor(s.titleBarTextColor)
+    discard vg.text(x+10.0, y + TitleBarHeight * TextVertAlignFactor, title)
+
+  pushDrawOffset(
+    DrawOffset(ox: x, oy: y)
+  )
+
+# }}}
+# {{{ endDialog()
+proc endDialog*() =
+  alias(ui, g_uiState)
+
+  popDrawOffset()
+  ui.currentLayer = layerDefault
+  if ui.dialogOpen:
+    ui.focusCaptured = true
+
+# }}}
+# {{{ closeDialog()
+proc closeDialog*() =
+  alias(ui, g_uiState)
+
+  ui.focusCaptured = false
+  ui.dialogOpen = false
 
 # }}}
 
