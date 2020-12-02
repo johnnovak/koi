@@ -402,6 +402,7 @@ type
   AutoLayoutParams* = object
     labelWidth*:       float
     itemsPerRow*:      Natural
+    sectionPad*:       float
     leftPad*:          float
     rightPad*:         float
     rowPad*:           float
@@ -415,11 +416,12 @@ type
     # use some more generic name?
     scrollBarWidth:    float
     x, y:              float
-    yNoPad:            float
     currColIndex:      Natural
     nextItemWidth:     float
     nextItemHeight:    float
-    insideGroup:       bool
+    firstRow:          bool
+    prevSection:       bool
+    groupBegin:        bool
 
 # }}}
 
@@ -861,8 +863,7 @@ proc textBreakLines*(text: string, maxWidth: float,
 
 # {{{ pushDrawOffset*()
 proc pushDrawOffset*(ds: DrawOffset) =
-  alias(ui, g_uiState)
-  ui.drawOffsetStack.add(ds)
+  g_uiState.drawOffsetStack.add(ds)
 
 # }}}
 # {{{ popDrawOffset*()
@@ -1498,6 +1499,20 @@ proc isDoubleClick*(): bool =
 # }}}
 # {{{ Layout handling
 
+const DefaultAutoLayoutParams = AutoLayoutParams(
+  labelWidth:       160.0,
+  itemsPerRow:      2,
+  sectionPad:       12.0,
+  leftPad:          13.0,
+  rightPad:         4.0,
+  rowPad:           5.0,
+  rowGroupPad:      15.0,
+  defaultRowHeight: 21.0
+)
+
+proc setAutoLayoutParams*(params: AutoLayoutParams) =
+  g_uiState.autoLayoutParams = params
+
 # {{{ initAutoLayout()
 proc initAutoLayout(rowWidth: float, scrollBarWidth: float) =
   alias(ui, g_uiState)
@@ -1509,12 +1524,28 @@ proc initAutoLayout(rowWidth: float, scrollBarWidth: float) =
   a.scrollBarWidth = scrollBarWidth
   a.nextItemWidth  = ap.labelWidth
   a.nextItemHeight = ap.defaultRowHeight
+  a.firstRow = true
 
 # }}}
-# {{{ handleAutoLayout()
-proc handleAutoLayout(height: Option[float] = float.none,
-                      yPad: Option[float] = float.none,
-                      forceNextRow: bool = false) =
+# {{{ autoLayoutPre()
+proc autoLayoutPre(section: bool = false) =
+  alias(ui, g_uiState)
+  alias(a, ui.autoLayoutState)
+  alias(ap, ui.autoLayoutParams)
+
+  if not a.firstRow:
+    if section:
+      if a.prevSection:
+        a.y -= ap.sectionPad
+    else:
+      if a.currColIndex == 0 and not a.prevSection:
+        a.y -= ap.sectionPad
+        a.y += (if a.groupBegin: ap.rowGroupPad else: ap.rowPad)
+
+# }}}
+# {{{ autoLayoutPost()
+proc autoLayoutPost(height: Option[float] = float.none,
+                    section: bool = false) =
 
   alias(ui, g_uiState)
   alias(a, ui.autoLayoutState)
@@ -1522,19 +1553,19 @@ proc handleAutoLayout(height: Option[float] = float.none,
 
   inc(a.currColIndex)
 
-  let h = if height.isSome: height.get else: ap.defaultRowHeight
+  let h = if height.isSome: height.get
+          else: ap.defaultRowHeight
 
-  if a.currColIndex == ap.itemsPerRow or forceNextRow:
+  if a.currColIndex == ap.itemsPerRow or section:
     a.currColIndex = 0
     a.nextItemWidth = ap.labelWidth
     a.x = ap.leftPad
 
     a.y += h
-    a.yNoPad = a.y
+    a.y += ap.sectionPad
 
-    a.y += (if yPad.isSome: yPad.get
-            else:
-              if a.insideGroup: ap.rowPad else: ap.rowGroupPad)
+    a.prevSection = section
+    a.firstRow = false
 
   # TODO this only works for the default 2-column layout
   else:
@@ -1542,38 +1573,19 @@ proc handleAutoLayout(height: Option[float] = float.none,
     a.nextItemWidth = a.rowWidth - a.x - ap.rightPad - (a.scrollBarWidth+1)
     a.nextItemHeight = h
 
-# }}}
-
-# {{{ setAutoLayoutParams*()
-#
-const DefaultAutoLayoutParams = AutoLayoutParams(
-  labelWidth:       160.0,
-  itemsPerRow:      2,
-  leftPad:          13.0,
-  rightPad:         4.0,
-  rowPad:           5.0,
-  rowGroupPad:      13.0,
-  defaultRowHeight: 21.0
-)
-
-proc setAutoLayoutParams*(params: AutoLayoutParams) =
-  alias(ui, g_uiState)
-  ui.autoLayoutParams = params
+  a.groupBegin = false
 
 # }}}
+
 # {{{ beginGroup*()
 proc beginGroup*() =
   alias(a, g_uiState.autoLayoutState)
-  a.insideGroup = true
+  a.groupBegin = true
 
 # }}}
 # {{{ endGroup*()
 proc endGroup*() =
-  alias(a, g_uiState.autoLayoutState)
-  alias(ap, g_uiState.autoLayoutParams)
-
-  a.y += ap.rowGroupPad
-  a.insideGroup = false
+  discard
 
 # }}}
 # {{{ group*()
@@ -2007,9 +2019,11 @@ proc label*(labelText: string, state: WidgetState = wsNormal,
   alias(ui, g_uiState)
   alias(a, ui.autoLayoutState)
 
+  autoLayoutPre()
+
   label(a.x, a.y, a.nextItemWidth, a.nextItemHeight, labelText, state, style)
 
-  handleAutoLayout()
+  autoLayoutPost()
 
 # }}}
 # {{{ Button
@@ -2134,20 +2148,20 @@ template button*(x, y, w, h: float,
 # {{{ CheckBox
 
 type CheckBoxStyle* = ref object
-  cornerRadius*:        float
-  strokeWidth*:         float
-  strokeColor*:         Color
-  strokeColorHover*:    Color
-  strokeColorDown*:     Color
-  strokeColorActive*:   Color
-  fillColor*:           Color
-  fillColorHover*:      Color
-  fillColorDown*:       Color
-  fillColorActive*:     Color
-  icon*:                LabelStyle
-  iconColorActive*:     Color
-  iconActive*:          string
-  iconInactive*:        string
+  cornerRadius*:      float
+  strokeWidth*:       float
+  strokeColor*:       Color
+  strokeColorHover*:  Color
+  strokeColorDown*:   Color
+  strokeColorActive*: Color
+  fillColor*:         Color
+  fillColorHover*:    Color
+  fillColorDown*:     Color
+  fillColorActive*:   Color
+  icon*:              LabelStyle
+  iconColorActive*:   Color
+  iconActive*:        string
+  iconInactive*:      string
 
 var DefaultCheckBoxStyle = CheckBoxStyle(
   cornerRadius      : 5.0,
@@ -2180,12 +2194,12 @@ proc setDefaultCheckBoxStyle*(style: CheckBoxStyle) =
 
 type
   CheckBoxDrawProc* = proc (vg: NVGContext,
-                            x, y, w: float, active: bool, state: WidgetState,
+                            x, y, w: float, state: WidgetState,
                             style: CheckBoxStyle)
 
 let DefaultCheckBoxDrawProc: CheckBoxDrawProc =
   proc (vg: NVGContext,
-        x, y, w: float, active: bool, state: WidgetState,
+        x, y, w: float, state: WidgetState,
         style: CheckBoxStyle) =
 
     alias(ui, g_uiState)
@@ -2212,19 +2226,21 @@ let DefaultCheckBoxDrawProc: CheckBoxDrawProc =
     vg.fill()
     vg.stroke()
 
-    let icon = if active: s.iconActive else: s.iconInactive
+    let icon = if state in {wsActive, wsActiveHover}: s.iconActive
+               else: s.iconInactive
+
     if icon != "":
       vg.drawLabel(x, y, w, w, icon, state, s.icon)
 
 # {{{ checkBox()
-proc checkBox(id:         ItemId,
-              x, y, w:    float,
-              active_out: var bool,
-              tooltip:    string,
-              drawProc:   CheckBoxDrawProc = DefaultCheckBoxDrawProc,
-              style:      CheckBoxStyle = DefaultCheckBoxStyle) =
+proc checkBox(id:          ItemId,
+              x, y, w:     float,
+              checked_out: var bool,
+              tooltip:     string,
+              drawProc:    CheckBoxDrawProc = DefaultCheckBoxDrawProc,
+              style:       CheckBoxStyle = DefaultCheckBoxStyle) =
 
-  var active = active_out
+  var checked = checked_out
 
   alias(ui, g_uiState)
   alias(s, style)
@@ -2238,17 +2254,19 @@ proc checkBox(id:         ItemId,
       setActive(id)
 
   # LMB released over active widget means it was clicked
-  active = if not ui.mbLeftDown and isHot(id) and isActive(id): not active
-           else: active
+  checked = if not ui.mbLeftDown and isHot(id) and isActive(id): not checked
+            else: checked
 
-  active_out = active
+  checked_out = checked
 
   addDrawLayer(ui.currentLayer, vg):
-    let state = if   isHot(id) and hasNoActiveItem(): wsHover
+    let state = if isHot(id) and hasNoActiveItem():
+                  if checked: wsActiveHover else: wsHover
                 elif isHot(id) and isActive(id): wsDown
-                else: wsNormal
+                else:
+                  if checked: wsActive else: wsNormal
 
-    drawProc(vg, x, y, w, active, state, style)
+    drawProc(vg, x, y, w, state, style)
 
 
   if isHot(id):
@@ -2279,9 +2297,11 @@ template checkBox*(active:   var bool,
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
+  autoLayoutPre()
+
   checkbox(id, a.x, a.y, a.nextItemHeight, active, tooltip, drawProc, style)
 
-  handleAutoLayout()
+  autoLayoutPost()
 
 # }}}
 # {{{ RadioButtons
@@ -2859,13 +2879,18 @@ template dropDown*(
   style:        DropDownStyle = DefaultDropDownStyle
 ) =
 
+  alias(ui, g_uiState)
+  alias(a, ui.autoLayoutState)
+
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
+
+  autoLayoutPre()
 
   dropDown(id, a.x, a.y, a.nextItemWidth, a.nextItemHeight, items,
            selectedItem, tooltip, disabled, style)
 
-  handleAutoLayout()
+  autoLayoutPost()
 
 # }}}
 # {{{ ScrollBar
@@ -4277,10 +4302,12 @@ template textField*(
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
+  autoLayoutPre()
+
   textField(id, a.x, a.y, a.nextItemWidth, a.nextItemHeight, text,
             tooltip, activate, drawWidget = true, constraint, style)
 
-  handleAutoLayout()
+  autoLayoutPost()
 
 # }}}
 # {{{ TextArea
@@ -5856,14 +5883,17 @@ template color*(col: var Color) =
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
+  autoLayoutPre()
+
   color(id, a.x, a.y, a.nextItemWidth, a.nextItemHeight, col)
 
-  handleAutoLayout()
+  autoLayoutPost()
 
 # }}}
 
 # {{{ SectionHeader
 
+# {{{ SectionHeaderStyle
 type SectionHeaderStyle* = ref object
   label*:           LabelStyle
   labelLeftPad*:    float
@@ -5888,7 +5918,7 @@ var DefaultSectionHeaderStyle = SectionHeaderStyle(
 )
 
 with DefaultSectionHeaderStyle.label:
-  color = gray(0.85)
+  color = gray(0.8)
 
 proc getDefaultSectionHeaderStyle*(): SectionHeaderStyle =
   DefaultSectionHeaderStyle.deepCopy
@@ -5896,8 +5926,31 @@ proc getDefaultSectionHeaderStyle*(): SectionHeaderStyle =
 proc setDefaultSectionHeaderStyle*(style: SectionHeaderStyle) =
   DefaultSectionHeaderStyle = style.deepCopy
 
+# }}}
+# {{{ SubSectionHeaderStyle
 
-let SectionHeaderCheckboxStyle = getDefaultCheckBoxStyle()
+var DefaultSubSectionHeaderStyle = SectionHeaderStyle(
+  label           : getDefaultLabelStyle(),
+  labelLeftPad    : 38.0,
+  height          : 25.0,
+  hitRightPad     : 13.0,
+  backgroundColor : gray(0.25),
+  separatorColor  : gray(0.3),
+  triangleSize    : 3.0,
+  triangleLeftPad : 21.0,
+  triangleColor   : gray(1.0)
+)
+
+with DefaultSubSectionHeaderStyle.label:
+  color = gray(0.9)
+
+proc getDefaultSubSectionHeaderStyle*(): SectionHeaderStyle =
+  DefaultSubSectionHeaderStyle.deepCopy
+
+proc setDefaultSubSectionHeaderStyle*(style: SectionHeaderStyle) =
+  DefaultSubSectionHeaderStyle = style.deepCopy
+
+# }}}
 
 # {{{ sectionHeader()
 proc sectionHeader(id:           ItemId,
@@ -5972,21 +6025,32 @@ template sectionHeader*(
   style:    SectionHeaderStyle = DefaultSectionHeaderStyle
 ): bool =
 
-  alias(ui, g_uiState)
-  alias(a, ui.autoLayoutState)
-  alias(ap, ui.autoLayoutParams)
+  alias(a, g_uiState.autoLayoutState)
+  alias(ap, g_uiState.autoLayoutParams)
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, label)
 
-  let result = sectionHeader(id, 0, a.y, a.rowWidth, label, expanded,
-                             tooltip, style)
+  autoLayoutPre(section=true)
 
-  let yPad = if expanded: float.none else: 0.0.some
+  let result = sectionHeader(
+    id, 0,
+    a.y,
+    a.rowWidth, label, expanded,
+    tooltip, style
+  )
 
-  handleAutoLayout(yPad=yPad, height=style.height.some,
-                   forceNextRow=true)
+  autoLayoutPost(height=style.height.some, section=true)
   result
+
+
+template subSectionHeader*(
+  label:    string,
+  expanded: var bool,
+  tooltip:  string = "",
+  style:    SectionHeaderStyle = DefaultSubSectionHeaderStyle
+): bool =
+  sectionHeader(label, expanded, tooltip, style)
 
 # }}}
 # {{{ ScrollView
@@ -6068,7 +6132,7 @@ proc endScrollView*() =
   var viewStartY = ss.viewStartY
 
   let visibleHeight = ss.h
-  let contentHeight = a.yNoPad
+  let contentHeight = a.y
 
   if contentHeight > visibleHeight:
     let thumbSize = visibleHeight *
