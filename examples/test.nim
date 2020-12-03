@@ -95,7 +95,7 @@ proc loadData(vg: NVGContext) =
 
 proc renderUI(winWidth, winHeight, pxRatio: float) =
   vg.beginFrame(winWidth.float, winHeight.float, pxRatio)
-  koi.beginFrame(winWidth.float, winHeight.float)
+  koi.beginFrame()
 
   let
     w = 110.0

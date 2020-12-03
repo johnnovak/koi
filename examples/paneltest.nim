@@ -93,11 +93,11 @@ propsSliderStyle.valueCornerRadius = 6.0
 
 proc renderUI(winWidth, winHeight, pxRatio: float) =
   vg.beginFrame(winWidth.float, winHeight.float, pxRatio)
-  koi.beginFrame(winWidth.float, winHeight.float)
+  koi.beginFrame()
 
   ############################################################################
 
-  koi.beginScrollView(x=100, y=100, w=310, h=600)
+  koi.beginScrollView(x=100, y=100, w=314, h=600)
 
   if koi.sectionHeader("User Interface", sectionUserInterface):
 

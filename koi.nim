@@ -309,6 +309,9 @@ type
     # Window dimensions (in virtual pixels)
     winWidth, winHeight: float
 
+    # Pixel ratio
+    pxRatio: float
+
     # Set if a widget has captured the focus (e.g. a textfield in edit mode) so
     # all other UI interactions (hovers, tooltips, etc.) should be disabled.
     focusCaptured:  bool
@@ -1045,7 +1048,7 @@ proc horizLine*(vg: NVGContext, x, y, w: float) =
 
 # {{{ renderToImage*()
 template renderToImage*(vg: NVGContext,
-                        width, height: int, pxRatio: float,
+                        width, height: int,
                         imageFlags: set[ImageFlags],
                         body: untyped): Image =
 
@@ -1053,8 +1056,8 @@ template renderToImage*(vg: NVGContext,
 
   let
     (fboWidth, fboHeight) = vg.imageSize(fb.image)
-    winWidth = floor(fboWidth.float / pxRatio)
-    winHeight = floor(fboHeight.float / pxRatio)
+    winWidth = floor(fboWidth.float / ui.pxRatio)
+    winHeight = floor(fboHeight.float / ui.pxRatio)
 
   nvgluBindFramebuffer(fb)
 
@@ -1062,7 +1065,7 @@ template renderToImage*(vg: NVGContext,
   glClearColor(0, 0, 0, 0)
   glClear(GL_COLOR_BUFFER_BIT or GL_STENCIL_BUFFER_BIT)
 
-  vg.beginFrame(winWidth, winHeight, pxRatio)
+  vg.beginFrame(width.float, height.float, ui.pxRatio)
 
   body
 
@@ -5564,18 +5567,36 @@ var ColorPickerTextFieldStyle = TextFieldStyle(
 )
 
 # {{{ createCheckeredPattern()
-var g_checkeredPattern: Image
+var g_checkeredPattern: Paint
 
 proc createCheckeredPattern(vg: NVGContext) =
   alias(ui, g_uiState)
 
-  let pxRatio = ui.winWidth / ui.winHeight
-  g_checkeredPattern = vg.renderToImage(
-    width  = 20 * pxRatio.int,
-    height = 20 * pxRatio.int,
-    pxRatio, {ifRepeatX, ifRepeatY}
+  const a = 14
+
+  var image = vg.renderToImage(
+    width  = a * ui.pxRatio.int,
+    height = a * ui.pxRatio.int,
+    {ifRepeatX, ifRepeatY}
   ):
-    discard
+    vg.strokeWidth(0)
+    vg.fillColor(gray(0.7))
+    vg.beginPath()
+    vg.rect(0, 0, a, a)
+    vg.fill()
+
+    vg.fillColor(gray(0.4))
+    vg.beginPath()
+    vg.rect(0, 0, a*0.5, a*0.5)
+    vg.fill()
+
+    vg.beginPath()
+    vg.rect(a*0.5, a*0.5, a, a)
+    vg.fill()
+
+  g_checkeredPattern = vg.imagePattern(
+    ox=0, oy=0, ex=a, ey=a, angle=0, image, alpha=1.0
+  )
 
 # }}}
 # {{{ colorWheel()
@@ -5838,9 +5859,15 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
     vg.roundedRect(x, y, colorWidth, h, cr, 0, 0, cr)
     vg.fill()
 
-    vg.fillColor(color)
+#    vg.fillColor(color)
+    if g_checkeredPattern.image == NoImage:
+      createCheckeredPattern(vg)
+
     vg.beginPath()
     vg.roundedRect(x+colorWidth, y, alphaWidth, h, 0, cr, cr, 0)
+    vg.fillPaint(g_checkeredPattern)
+    vg.fill()
+    vg.fillColor(color)
     vg.fill()
 
     vg.strokeColor(gray(0.1))
@@ -6555,10 +6582,17 @@ proc deinit*() =
 # }}}
 # {{{ beginFrame*()
 
-proc beginFrame*(winWidth, winHeight: float) =
+proc beginFrame*() =
+  alias(ui, g_uiState)
+
   let win = glfw.currentContext()
 
-  alias(ui, g_uiState)
+  let (winWidth, winHeight) = win.size
+  ui.winWidth = winWidth.float
+  ui.winHeight = winHeight.float
+
+  let (fbWidth, _) = win.framebufferSize
+  ui.pxRatio = fbWidth / winWidth
 
   ui.drawOffsetStack = @[
     DrawOffset(ox: 0, oy: 0)
@@ -6566,8 +6600,6 @@ proc beginFrame*(winWidth, winHeight: float) =
 
   ui.currentLayer = layerDefault
 
-  ui.winWidth = winWidth
-  ui.winHeight = winHeight
 
   # Store mouse state
   ui.lastmx = ui.mx
