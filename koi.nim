@@ -1051,6 +1051,7 @@ template renderToImage*(vg: NVGContext,
                         width, height: int,
                         imageFlags: set[ImageFlags],
                         body: untyped): Image =
+  alias(ui, g_uiState)
 
   var fb = vg.nvgluCreateFramebuffer(width, height, imageFlags)
 
@@ -2318,14 +2319,15 @@ template checkBox*(active:   var bool,
                    drawProc: CheckBoxDrawProc = DefaultCheckBoxDrawProc,
                    style:    CheckBoxStyle = DefaultCheckBoxStyle) =
 
-  alias(a, g_uiState.autoLayoutState)
+  alias(als, g_uiState.autoLayoutState)
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
   autoLayoutPre()
 
-  checkbox(id, a.x, a.y, a.nextItemHeight, active, tooltip, drawProc, style)
+  checkbox(id, als.x, als.y, als.nextItemHeight, active, tooltip, drawProc,
+           style)
 
   autoLayoutPost()
 
@@ -2905,14 +2907,14 @@ template dropDown*(
 ) =
 
   alias(ui, g_uiState)
-  alias(a, ui.autoLayoutState)
+  alias(als, ui.autoLayoutState)
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
   autoLayoutPre()
 
-  dropDown(id, a.x, a.y, a.nextItemWidth, a.nextItemHeight, items,
+  dropDown(id, als.x, als.y, als.nextItemWidth, als.nextItemHeight, items,
            selectedItem, tooltip, disabled, style)
 
   autoLayoutPost()
@@ -2950,7 +2952,7 @@ template dropDown*[E: enum](
   style:        DropDownStyle = DefaultDropDownStyle
 ) =
 
-  alias(a, g_uiState.autoLayoutState)
+  alias(als, g_uiState.autoLayoutState)
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
@@ -2964,8 +2966,8 @@ template dropDown*[E: enum](
 
   autoLayoutPre()
 
-  dropDown(id, a.x, a.y, a.nextItemWidth, a.nextItemHeight, itemsSeq, selItem,
-           tooltip, disabled, style)
+  dropDown(id, als.x, als.y, als.nextItemWidth, als.nextItemHeight, itemsSeq,
+           selItem, tooltip, disabled, style)
   selectedItem = items(selItem)
 
   autoLayoutPost()
@@ -4372,14 +4374,14 @@ template textField*(
 ) =
 
   alias(ui, g_uiState)
-  alias(a, ui.autoLayoutState)
+  alias(als, ui.autoLayoutState)
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
   autoLayoutPre()
 
-  textField(id, a.x, a.y, a.nextItemWidth, a.nextItemHeight, text,
+  textField(id, als.x, als.y, als.nextItemWidth, als.nextItemHeight, text,
             tooltip, activate, drawWidget = true, constraint, style)
 
   autoLayoutPost()
@@ -5299,14 +5301,14 @@ template horizSlider*(startVal:   float = 0.0,
                       style:      SliderStyle = DefaultSliderStyle,
                       grouping:   WidgetGrouping = wgNone) =
 
-  alias(a, g_uiState.autoLayoutState)
+  alias(als, g_uiState.autoLayoutState)
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
   autoLayoutPre()
 
-  horizSlider(id, a.x, a.y, a.nextItemWidth, a.nextItemHeight,
+  horizSlider(id, als.x, als.y, als.nextItemWidth, als.nextItemHeight,
               startVal, endVal, value, tooltip, label,
               style, grouping)
 
@@ -6010,14 +6012,14 @@ template color*(x, y, w, h: float, color: var Color) =
 
 
 template color*(col: var Color) =
-  alias(a, g_uiState.autoLayoutState)
+  alias(als, g_uiState.autoLayoutState)
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
   autoLayoutPre()
 
-  color(id, a.x, a.y, a.nextItemWidth, a.nextItemHeight, col)
+  color(id, als.x, als.y, als.nextItemWidth, als.nextItemHeight, col)
 
   autoLayoutPost()
 
@@ -6156,7 +6158,7 @@ template sectionHeader*(
   style:    SectionHeaderStyle = DefaultSectionHeaderStyle
 ): bool =
 
-  alias(a, g_uiState.autoLayoutState)
+  alias(als, g_uiState.autoLayoutState)
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, label)
@@ -6165,8 +6167,8 @@ template sectionHeader*(
 
   let result = sectionHeader(
     id, 0,
-    a.y,
-    a.rowWidth, label, expanded,
+    als.y,
+    als.rowWidth, label, expanded,
     tooltip, style
   )
 
