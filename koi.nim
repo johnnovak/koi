@@ -5,8 +5,6 @@ import math
 import options
 import sequtils
 import sets
-import std/decls
-import macros
 import strformat
 import strutils
 import tables
@@ -17,8 +15,8 @@ from glfw/wrapper import setCursor, createStandardCursor, CursorShape
 import nanovg
 import with
 
+import koi/glad/gl
 import koi/ringbuffer
-import koi/undomanager
 import koi/utils
 
 export CursorShape
@@ -740,7 +738,6 @@ proc textBreakLines*(text: string, maxWidth: float,
         # we're at the rune after the endline
         let newLineEndX           = glyphs[glyphPos-1].x
         let runeBeforeNewLineEndX = glyphs[glyphPos-2].x
-        let newLinePos = textPos - 1
 
         let row = TextRow(
           startPos:       rowStartPos,
@@ -1046,6 +1043,40 @@ proc horizLine*(vg: NVGContext, x, y, w: float) =
 
 # }}}
 
+# {{{ renderToImage*()
+template renderToImage*(vg: NVGContext,
+                        width, height: int, pxRatio: float,
+                        imageFlags: set[ImageFlags],
+                        body: untyped): Image =
+
+  var fb = vg.nvgluCreateFramebuffer(width, height, imageFlags)
+
+  let
+    (fboWidth, fboHeight) = vg.imageSize(fb.image)
+    winWidth = floor(fboWidth.float / pxRatio)
+    winHeight = floor(fboHeight.float / pxRatio)
+
+  nvgluBindFramebuffer(fb)
+
+  glViewport(0, 0, fboWidth.GLsizei, fboHeight.GLsizei)
+  glClearColor(0, 0, 0, 0)
+  glClear(GL_COLOR_BUFFER_BIT or GL_STENCIL_BUFFER_BIT)
+
+  vg.beginFrame(winWidth, winHeight, pxRatio)
+
+  body
+
+  vg.endFrame()
+
+  nvgluBindFramebuffer(nil)
+
+  let image = fb.image
+  fb.image = NoImage  # prevent deleting the image when deleting the FB
+  nvgluDeleteFramebuffer(fb)
+  image
+
+# }}}
+
 # }}}
 # {{{ Draw layers
 
@@ -1071,9 +1102,6 @@ template addDrawLayer(layer: DrawLayer, vg, body: untyped) =
   g_drawLayers.add(ord(layer), proc (vg: NVGContext) =
     body
   )
-
-proc removeLastAdded(dl: var DrawLayers) =
-  discard dl.layers[dl.lastUsedLayer].pop()
 
 proc draw(dl: DrawLayers, vg: NVGContext) =
   # Draw all layers on top of each other
@@ -1699,8 +1727,6 @@ proc handleTooltip*(id: ItemId, tooltip: string) =
 # {{{ drawTooltip()
 
 proc drawTooltip(x, y: float, text: string, alpha: float = 1.0) =
-  alias(vg, g_nvgContext)
-
   # TODO make visual parameters configurable
   addDrawLayer(layerTooltip, vg):
     var w = 300.0
@@ -2006,7 +2032,7 @@ proc label*(x, y, w, h: float,
            style:      LabelStyle = DefaultLabelStyle) =
 
   alias(ui, g_uiState)
-  alias(s, style)
+
 
   let (x, y) = addDrawOffset(x, y)
 
@@ -2105,17 +2131,16 @@ proc button(id:         ItemId,
                 elif isHot(id) and isActive(id): wsDown
                 else: wsNormal
 
-    let (fillColor, strokeColor, labelColor) =
+    let (fillColor, strokeColor) =
       case state
       of wsNormal, wsActive, wsActiveHover:
-        (s.fillColor, s.strokeColor, s.label.color)
+        (s.fillColor, s.strokeColor)
       of wsHover:
-        (s.fillColorHover, s.strokeColorHover, s.label.colorHover)
+        (s.fillColorHover, s.strokeColorHover)
       of wsDown:
-        (s.fillColorDown, s.strokeColorDown, s.label.colorDown)
+        (s.fillColorDown, s.strokeColorDown)
       of wsDisabled:
-        (s.fillColorDisabled, s.strokeColorDisabled,
-         s.label.colorDisabled)
+        (s.fillColorDisabled, s.strokeColorDisabled)
 
     if not s.labelOnly:
       vg.fillColor(fillColor)
@@ -2203,7 +2228,6 @@ let DefaultCheckBoxDrawProc: CheckBoxDrawProc =
         x, y, w: float, state: WidgetState,
         style: CheckBoxStyle) =
 
-    alias(ui, g_uiState)
     alias(s, style)
 
     var (fillColor, strokeColor) = case state
@@ -2244,7 +2268,6 @@ proc checkBox(id:          ItemId,
   var checked = checked_out
 
   alias(ui, g_uiState)
-  alias(s, style)
 
   let (x, y) = addDrawOffset(x, y)
 
@@ -2792,16 +2815,15 @@ proc dropDown[T](id:               ItemId,
     let sw = s.buttonStrokeWidth
     let (x, y, w, h) = snapToGrid(x, y, w, h, sw)
 
-    let (fillColor, strokeColor, textColor) = case state
+    let (fillColor, strokeColor) = case state
       of wsNormal, wsActive, wsActiveHover:
-        (s.buttonFillColor, s.buttonStrokeColor, s.label.color)
+        (s.buttonFillColor, s.buttonStrokeColor)
       of wsHover:
-        (s.buttonFillColorHover, s.buttonStrokeColorHover, s.label.colorHover)
+        (s.buttonFillColorHover, s.buttonStrokeColorHover)
       of wsDown:
-        (s.buttonFillColorDown, s.buttonStrokeColorDown, s.label.colorDown)
+        (s.buttonFillColorDown, s.buttonStrokeColorDown)
       of wsDisabled:
-        (s.buttonFillColorDisabled, s.buttonStrokeColorDisabled,
-         s.label.colorDisabled)
+        (s.buttonFillColorDisabled, s.buttonStrokeColorDisabled)
 
     vg.fillColor(fillColor)
     vg.strokeColor(strokeColor)
@@ -3172,8 +3194,6 @@ proc horizScrollBar(id:         ItemId,
     let dy = abs(y - ui.my)
 
     if not s.autoFade or (s.autoFade and dy < s.autoFadeDistance):
-      let (bx, by, bw, bh) = (x, y, w, h)
-
       let state = if   isHot(id) and hasNoActiveItem(): wsHover
                   elif isActive(id): wsDown
                   else: wsNormal
@@ -3397,9 +3417,6 @@ proc vertScrollBar(id:         ItemId,
 
     if not s.autoFade or (s.autoFade and dx < s.autoFadeDistance and
                           not ui.focusCaptured):
-      let value = newValue
-      let (bx, by, bw, bh) = (x, y, w, h)
-
       let state = if   isHot(id) and hasNoActiveItem(): wsHover
                   elif isActive(id): wsDown
                   else: wsNormal
@@ -5157,18 +5174,14 @@ proc horizSlider(id:         ItemId,
     var sw = s.trackStrokeWidth
     var (x, y, w, h) = snapToGrid(x, y, w, h, sw)
 
-    let (trackFillColor, trackStrokeColor,
-         sliderColor, labelColor, valueColor) =
+    let (trackFillColor, trackStrokeColor, sliderColor) =
       case state
       of wsHover:
-        (s.trackFillColorHover, s.trackStrokeColorHover,
-         s.sliderColorHover, s.label.colorHover, s.value.colorHover)
+        (s.trackFillColorHover, s.trackStrokeColorHover, s.sliderColorHover)
       of wsDown:
-        (s.trackFillColorDown, s.trackStrokeColorDown,
-         s.sliderColorDown, s.label.colorDown, s.value.colorDown)
+        (s.trackFillColorDown, s.trackStrokeColorDown, s.sliderColorDown)
       else:
-        (s.trackFillColor, s.trackStrokeColor,
-         s.sliderColor, s.label.color, s.value.color)
+        (s.trackFillColor, s.trackStrokeColor, s.sliderColor)
 
     # Draw track background
     proc drawTrackShape() =
@@ -5550,6 +5563,21 @@ var ColorPickerTextFieldStyle = TextFieldStyle(
   selectionColor      : rgb(0.5, 0.15, 0.15)
 )
 
+# {{{ createCheckeredPattern()
+var g_checkeredPattern: Image
+
+proc createCheckeredPattern(vg: NVGContext) =
+  alias(ui, g_uiState)
+
+  let pxRatio = ui.winWidth / ui.winHeight
+  g_checkeredPattern = vg.renderToImage(
+    width  = 20 * pxRatio.int,
+    height = 20 * pxRatio.int,
+    pxRatio, {ifRepeatX, ifRepeatY}
+  ):
+    discard
+
+# }}}
 # {{{ colorWheel()
 proc colorWheel(x, y, w, h: float; hue, sat, val: var float) =
   alias(ui, g_uiState)
@@ -5801,17 +5829,18 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
     let
       sw = 1.0
       (x, y, w, h) = snapToGrid(x, y, w, h, sw)
-      hw = w/2
       cr = 5.0
+      colorWidth = floor(w*0.5)+0.5
+      alphaWidth = w - colorWidth
 
     vg.fillColor(color.withAlpha(1.0))
     vg.beginPath()
-    vg.roundedRect(x, y, hw, h, cr, 0, 0, cr)
+    vg.roundedRect(x, y, colorWidth, h, cr, 0, 0, cr)
     vg.fill()
 
     vg.fillColor(color)
     vg.beginPath()
-    vg.roundedRect(x+hw, y, hw, h, 0, cr, cr, 0)
+    vg.roundedRect(x+colorWidth, y, alphaWidth, h, 0, cr, cr, 0)
     vg.fill()
 
     vg.strokeColor(gray(0.1))
@@ -6039,7 +6068,6 @@ proc sectionHeader(id:           ItemId,
   alias(ui, g_uiState)
   alias(s, style)
 
-  let (ox, oy) = (x, y)
   let (x, y) = addDrawOffset(x, y)
 
   let h = s.height
@@ -6102,7 +6130,6 @@ template sectionHeader*(
 ): bool =
 
   alias(a, g_uiState.autoLayoutState)
-  alias(ap, g_uiState.autoLayoutParams)
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, label)
@@ -6156,7 +6183,6 @@ let ScrollViewScrollBarWidth = 12.0
 
 # {{{ beginScrollView*()
 proc beginScrollView*(id: ItemId, x, y, w, h: float) =
-  alias(vg, g_nvgContext)
   alias(ui, g_uiState)
 
   let (x, y) = addDrawOffset(x, y)
@@ -6191,7 +6217,6 @@ template beginScrollView*(x, y, w, h: float) =
 # {{{ endScrollView*()
 proc endScrollView*() =
   alias(ui, g_uiState)
-  alias(vg, g_nvgContext)
   alias(a, ui.autoLayoutState)
 
   addDrawLayer(ui.currentLayer, vg):
@@ -6493,7 +6518,10 @@ proc menuItemSeparator*() =
 
 # {{{ init*()
 
-proc init*(nvg: NVGContext) =
+proc init*(nvg: NVGContext, getProcAddress: proc) =
+  if not gladLoadGL(getProcAddress):
+    quit "Error initialising OpenGL"
+
   g_nvgContext = nvg
 
   g_cursorArrow       = wrapper.createStandardCursor(csArrow)

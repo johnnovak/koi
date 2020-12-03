@@ -2,7 +2,7 @@ import lenientops
 import strformat
 import unicode
 
-import koi/glad/gl
+import glad/gl
 import glfw
 from glfw/wrapper import showWindow
 import nanovg
@@ -476,7 +476,7 @@ proc init(): Window =
 
   loadData(vg)
 
-  koi.init(vg)
+  koi.init(vg, getProcAddress)
 
   win.windowPositionCb = windowPosCb
   win.framebufferSizeCb = framebufSizeCb
