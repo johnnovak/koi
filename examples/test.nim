@@ -94,8 +94,7 @@ proc loadData(vg: NVGContext) =
 
 
 proc renderUI(winWidth, winHeight, pxRatio: float) =
-  vg.beginFrame(winWidth.float, winHeight.float, pxRatio)
-  koi.beginFrame()
+  koi.beginFrame(winWidth.float, winHeight.float, pxRatio)
 
   let
     w = 110.0
@@ -432,7 +431,6 @@ proc renderUI(winWidth, winHeight, pxRatio: float) =
   ############################################################
 
   koi.endFrame()
-  vg.endFrame()
 
 
 proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
