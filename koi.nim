@@ -28,13 +28,14 @@ type ItemId = int64
 # {{{ DrawLayer
 #
 type
-  DrawLayer = enum
+  DrawLayer* = enum
     layerDefault,
     layerDialog,
     layerPopup,
     layerWidgetOverlay,
     layerTooltip,
-    layerGlobalOverlay
+    layerGlobalOverlay,
+    layerWindowDecoration,
 
 # }}}
 
@@ -155,6 +156,7 @@ type
     tasDefault
     tasEditEntered,
     tasEdit
+    # TODO
 #    tasDragStart,
 #    tasDragDelay,
 #    tasDragScroll,
@@ -304,6 +306,8 @@ type
     framesLeft:     Natural
 
     # This is the draw layer all widgets will draw on
+    # TODO bit hacky, it needed only for drawing the CSD decoration on top of
+    # everything
     currentLayer:   DrawLayer
 
     # Window dimensions (in virtual pixels)
@@ -1103,7 +1107,7 @@ proc add(dl: var DrawLayers, layer: Natural, p: DrawProc) =
   dl.layers[layer].add(p)
   dl.lastUsedLayer = layer
 
-template addDrawLayer(layer: DrawLayer, vg, body: untyped) =
+template addDrawLayer*(layer: DrawLayer, vg, body: untyped) =
   g_drawLayers.add(ord(layer), proc (vg: NVGContext) =
     body
   )
@@ -1113,6 +1117,10 @@ proc draw(dl: DrawLayers, vg: NVGContext) =
   for layer in dl.layers:
     for drawProc in layer:
       drawProc(vg)
+
+# TODO shouldn't expose this...
+proc currentLayer*(): DrawLayer = g_uiState.currentLayer
+proc setCurrentLayer*(l: DrawLayer) = g_uiState.currentLayer = l
 
 # }}}
 # {{{ Keyboard handling
@@ -6351,6 +6359,7 @@ proc setDefaultDialogStyle*(style: DialogStyle) =
 
 # {{{ beginDialog()
 proc beginDialog*(w, h: float, title: string,
+                  x, y: Option[float] = float.none,
                   style: DialogStyle = DefaultDialogStyle) =
 
   alias(ui, g_uiState)
@@ -6359,9 +6368,8 @@ proc beginDialog*(w, h: float, title: string,
   ui.dialogOpen = true
   ui.focusCaptured = false
 
-  let
-    x = floor((ui.winWidth - w) / 2)
-    y = floor((ui.winHeight - h) / 2)
+  let x = if x.isSome: x.get else: floor((ui.winWidth - w) / 2)
+  let y = if y.isSome: y.get else: floor((ui.winHeight - h) / 2)
 
   ui.currentLayer = layerDialog
 
@@ -6594,14 +6602,14 @@ proc deinit*() =
 # }}}
 # {{{ beginFrame*()
 
-proc beginFrame*(winWidth, winHeight, pxRatio: float) =
+proc beginFrame*(winWidth, winHeight, fbWidth, fbHeight: int) =
   alias(ui, g_uiState)
   alias(vg, g_nvgContext)
 
   let win = glfw.currentContext()
 
-  ui.winWidth = winWidth
-  ui.winHeight = winHeight
+  ui.winWidth = winWidth.float
+  ui.winHeight = winHeight.float
 
   ui.drawOffsetStack = @[
     DrawOffset(ox: 0, oy: 0)
@@ -6659,7 +6667,17 @@ proc beginFrame*(winWidth, winHeight, pxRatio: float) =
   if g_checkeredImage == NoImage:
     createCheckeredImage(vg)
 
-  vg.beginFrame(winWidth, winHeight, pxRatio)
+  # Update and render
+  glViewport(0, 0, fbWidth.GLsizei, fbHeight.GLsizei)
+
+  glClearColor(0.0, 0.0, 0.0, 1.0)
+
+  glClear(GL_COLOR_BUFFER_BIT or
+          GL_DEPTH_BUFFER_BIT or
+          GL_STENCIL_BUFFER_BIT)
+
+  let pxRatio = fbWidth / winWidth
+  vg.beginFrame(winWidth.float, winHeight.float, pxRatio)
 
 # }}}
 # {{{ endFrame*()
@@ -6667,8 +6685,6 @@ proc beginFrame*(winWidth, winHeight, pxRatio: float) =
 proc endFrame*() =
   alias(ui, g_uiState)
   alias(vg, g_nvgContext)
-
-  vg.endFrame()
 
   # Post-frame processing
   tooltipPost()
@@ -6701,6 +6717,8 @@ proc endFrame*() =
 
   # Decrement remaining frames counter
   if ui.framesLeft > 0: dec(ui.framesLeft)
+
+  vg.endFrame()
 
 # }}}
 # {{{ shouldRenderNextFrame*()

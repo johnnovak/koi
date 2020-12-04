@@ -16,6 +16,7 @@ type
   GLenum* = uint32
 
 const
+  GL_DEPTH_BUFFER_BIT*: GLenum = GLenum(0x00000100)
   GL_STENCIL_BUFFER_BIT*: GLenum = GLenum(0x00000400)
   GL_COLOR_BUFFER_BIT*: GLenum = GLenum(0x00004000)
   GL_VERSION*: GLenum = GLenum(0x1F02)
