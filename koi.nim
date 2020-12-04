@@ -16,6 +16,7 @@ import nanovg
 import with
 
 import koi/glad/gl
+import koi/rect
 import koi/ringbuffer
 import koi/utils
 
@@ -325,6 +326,11 @@ type
     # Reset to empty seq at the start of the frame
     drawOffsetStack: seq[DrawOffset]
 
+    # Hit checking clip rectangle (e.g. when inside a scrollview)
+    # TODO should dialog and popup use this as well? or instead of
+    # focuscaptured?
+    hitClipRect:     Rect
+
     # Mouse state
     # -----------
     mx, my:          float
@@ -536,9 +542,22 @@ proc hasActiveItem*(): bool =
 proc isDialogOpen*(): bool =
   g_uiState.dialogOpen
 
+proc setHitClip*(x, y, w, h: float) =
+  alias(ui, g_uiState)
+  ui.hitClipRect = rect(x, y, w, h)
+
+proc resetHitClip*() =
+  alias(ui, g_uiState)
+  ui.hitClipRect = rect(0, 0, ui.winWidth, ui.winHeight)
+
 proc isHit*(x, y, w, h: float): bool =
   alias(ui, g_uiState)
-  not ui.focusCaptured and mouseInside(x, y, w, h)
+  let r = rect(x, y, w, h).intersect(ui.hitClipRect)
+  if r.isSome:
+    let r = r.get
+    result = not ui.focusCaptured and mouseInside(r.x, r.y, r.w, r.h)
+  else:
+    result = false
 
 proc winWidth*():  float = g_uiState.winWidth
 proc winHeight*(): float = g_uiState.winHeight
@@ -6249,12 +6268,16 @@ proc beginScrollView*(id: ItemId, x, y, w, h: float) =
 
   let (x, y) = addDrawOffset(x, y)
 
+  # Set up scissor
   addDrawLayer(ui.currentLayer, vg):
     vg.save()
     vg.intersectScissor(x, y, w, h)
 
   ui.scrollViewState.activeItem = id
 
+  setHitClip(x, y, w, h)
+
+  # Update scroll view instance state
   discard ui.itemState.hasKeyOrPut(id,
     ScrollViewState(x: x, y: y, w: w, h: h)
   )
@@ -6333,6 +6356,8 @@ proc endScrollView*() =
   ui.itemState[id] = ss
 
   ui.scrollViewState.activeItem = 0
+
+  resetHitClip()
 
 # }}}
 
