@@ -91,8 +91,13 @@ var propsSliderStyle = getDefaultSliderStyle()
 propsSliderStyle.trackCornerRadius = 8.0
 propsSliderStyle.valueCornerRadius = 6.0
 
-proc renderUI(winWidth, winHeight, pxRatio: float) =
-  koi.beginFrame(winWidth.float, winHeight.float, pxRatio)
+proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
+  koi.beginFrame(winWidth, winHeight, fbWidth, fbHeight)
+
+  vg.beginPath()
+  vg.rect(0, 0, winWidth.float, winHeight.float)
+  vg.fillColor(gray(0.3))
+  vg.fill()
 
   ############################################################################
 
@@ -484,18 +489,8 @@ proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
   let
     (winWidth, winHeight) = win.size
     (fbWidth, fbHeight) = win.framebufferSize
-    pxRatio = fbWidth / winWidth
 
-  # Update and render
-  glViewport(0, 0, fbWidth, fbHeight)
-
-  glClearColor(0.3, 0.3, 0.3, 1.0)
-
-  glClear(GL_COLOR_BUFFER_BIT or
-          GL_DEPTH_BUFFER_BIT or
-          GL_STENCIL_BUFFER_BIT)
-
-  renderUI(winWidth.float, winHeight.float, pxRatio)
+  renderUI(winWidth, winHeight, fbWidth, fbHeight)
 
   glfw.swapBuffers(win)
 
