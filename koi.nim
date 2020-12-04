@@ -1903,36 +1903,48 @@ proc beginPopup*(w, h: float,
      ((s.autoClose and not (inside or insideBorder)) or
      (ui.mbLeftDown and not inside)):
     closePopup()
-    result = false
-  else:
-    ps.prevLayer = ui.currentLayer
+    return false
 
-    # Draw popup window
-    addDrawLayer(layerPopup, vg):
-      drawShadow(vg, x, y, w, h, s.shadow)
+  # Handle ESC
+  if ui.hasEvent and (not ui.eventHandled) and
+     ui.currEvent.kind == ekKey and
+     ui.currEvent.action in {kaDown}:
 
-      # Draw background
-      let sw = s.backgroundStrokeWidth
-      let (x, y, w, h) = snapToGrid(x, y, w, h, sw)
+    setEventHandled()
 
-      vg.fillColor(s.backgroundFillColor)
-      vg.strokeColor(s.backgroundStrokeColor)
-      vg.strokeWidth(sw)
+    if ui.currEvent.key == keyEscape:
+      closePopup()
+      return false
 
-      vg.beginPath()
-      vg.roundedRect(x, y, w, h, s.backgroundCornerRadius)
-      vg.fill()
-      vg.stroke()
+  # Not closed
+  ps.prevLayer = ui.currentLayer
+
+  # Draw popup window
+  addDrawLayer(layerPopup, vg):
+    drawShadow(vg, x, y, w, h, s.shadow)
+
+    # Draw background
+    let sw = s.backgroundStrokeWidth
+    let (x, y, w, h) = snapToGrid(x, y, w, h, sw)
+
+    vg.fillColor(s.backgroundFillColor)
+    vg.strokeColor(s.backgroundStrokeColor)
+    vg.strokeWidth(sw)
+
+    vg.beginPath()
+    vg.roundedRect(x, y, w, h, s.backgroundCornerRadius)
+    vg.fill()
+    vg.stroke()
 
 
-    pushDrawOffset(
-      DrawOffset(ox: x, oy: y)
-    )
+  pushDrawOffset(
+    DrawOffset(ox: x, oy: y)
+  )
 
-    ui.focusCaptured = ps.widgetInsidePopupCapturedFocus
-    ui.currentLayer = layerPopup
+  ui.focusCaptured = ps.widgetInsidePopupCapturedFocus
+  ui.currentLayer = layerPopup
 
-    result = true
+  result = true
 
 # }}}
 # {{{ endPopup*()
@@ -2761,6 +2773,16 @@ proc dropDown[T](id:               ItemId,
   # We 'fall through' to the open state to avoid a 1-frame delay when clicking
   # the button
   if ds.activeItem == id and ds.state >= dsOpenLMBPressed:
+
+    # Handle ESC
+    if ui.hasEvent and (not ui.eventHandled) and
+       ui.currEvent.kind == ekKey and
+       ui.currEvent.action in {kaDown}:
+
+      setEventHandled()
+
+      if ui.currEvent.key == keyEscape:
+        closeDropDown()
 
     # Calculate the position of the box around the drop-down items
     var maxItemWidth = 0.0
