@@ -306,29 +306,29 @@ type
   UIState = object
     # General state
     # *************
-    hasEvent:       bool
-    currEvent:      Event
-    eventHandled:   bool
+    hasEvent:        bool
+    currEvent:       Event
+    eventHandled:    bool
 
     # Frames left to render; this is decremented in endFrame()
-    framesLeft:     Natural
+    framesLeft:      Natural
 
     # This is the draw layer all widgets will draw on
     # TODO bit hacky, it needed only for drawing the CSD decoration on top of
     # everything
-    currentLayer:   DrawLayer
+    currentLayer:    DrawLayer
 
     # Window dimensions (in virtual pixels)
     winWidth, winHeight: float
 
     # Set if a widget has captured the focus (e.g. a textfield in edit mode) so
     # all other UI interactions (hovers, tooltips, etc.) should be disabled.
-    focusCaptured:  bool
+    focusCaptured:   bool
 
-    tooltipState:     TooltipStateVars
+    tooltipState:    TooltipStateVars
 
     # True if a dialog is currently open
-    dialogOpen:       bool
+    dialogOpen:      bool
 
     # Reset to empty seq at the start of the frame
     drawOffsetStack: seq[DrawOffset]
@@ -557,6 +557,10 @@ proc setHitClip*(x, y, w, h: float) =
 proc resetHitClip*() =
   alias(ui, g_uiState)
   ui.hitClipRect = rect(0, 0, ui.winWidth, ui.winHeight)
+
+
+proc focusCaptured*(): bool = g_uiState.focusCaptured
+proc setFocusCaptured*(c: bool) = g_uiState.focusCaptured = c
 
 proc isHit*(x, y, w, h: float): bool =
   alias(ui, g_uiState)
@@ -1776,12 +1780,14 @@ proc drawTooltip(x, y: float, text: string, alpha: float = 1.0) =
     vg.setFont(fontSize, "sans-bold")
 
     var rows = textBreakLines(text, w-padX*2)
-    let h = fontSize * lineHeight * rows.len + padY*2
+    var h = fontSize * lineHeight * rows.len + padY*2
 
     if rows.len == 1:
       w = vg.textWidth(text) + padX*2
 
     var (x, y) = fitRectWithinWindow(w, h, x-8, y-8, 30, 30, haLeft)
+
+    (x, y, w, h) = snapToGrid(x, y, w, h, strokeWidth=0)
 
     vg.globalAlpha(alpha)
 
@@ -2036,7 +2042,11 @@ proc setDefaultLabelStyle*(style: LabelStyle) =
 proc drawLabel(vg: NVGContext; x, y, w, h: float; label: string;
                state: WidgetState = wsNormal,
                style: LabelStyle = DefaultLabelStyle) =
+
   alias(s, style)
+
+  let (x, y, w, h) = snapToGrid(x, y, w, h, strokeWidth=0)
+
   let
     textBoxX = x + s.padHoriz
     textBoxW = w - s.padHoriz*2
@@ -2453,6 +2463,8 @@ let DefaultRadioButtonDrawProc: RadioButtonsDrawProc =
         x, y, w, h: float, style: RadioButtonsStyle) =
 
     alias(s, style)
+
+    let (x, y, w, h) = snapToGrid(x, y, w, h, s.buttonStrokeWidth)
 
     let (fillColor, strokeColor) =
       case state
@@ -3938,8 +3950,9 @@ proc textField(
   x, y, w, h: float,
   text_out:   var string,
   tooltip:    string = "",
+  disabled:   bool = false,
   activate:   bool = false,
-  drawWidget: bool = true,
+  drawWidget: bool = true,  # TODO should be style option?
   constraint: Option[TextFieldConstraint] = TextFieldConstraint.none,
   style:      TextFieldStyle = DefaultTextFieldStyle
 ) =
@@ -3957,11 +3970,13 @@ proc textField(
   let (x, y) = addDrawOffset(x, y)
 
   # The text is displayed within this rectangle (used for drawing later)
-  let
-    textBoxX = x + s.textPadHoriz
-    textBoxW = w - s.textPadHoriz*2
-    textBoxY = y
-    textBoxH = h
+  let (textBoxX, textBoxY, textBoxW, textBoxH) = snapToGrid(
+    x = x + s.textPadHoriz,
+    y = y,
+    w = w - s.textPadHoriz*2,
+    h = h,
+    strokeWidth=0
+  )
 
   var glyphs: array[MaxTextLen, GlyphPosition]
 
@@ -3981,7 +3996,9 @@ proc textField(
     # Hit testing
     if isHit(x, y, w, h) or activate or tabActivate:
       setHot(id)
-      if (ui.mbLeftDown and hasNoActiveItem()) or activate or tabActivate:
+      if not disabled and (
+          (ui.mbLeftDown and hasNoActiveItem()) or activate or tabActivate
+        ):
         textFieldEnterEditMode(id, text, textBoxX)
         tf.state = tfsEditLMBPressed
 
@@ -4306,6 +4323,8 @@ proc textField(
   addDrawLayer(ui.currentLayer, vg):
     vg.save()
 
+    let (x, y, w, h) = snapToGrid(x, y, w, h, s.bgStrokeWidth)
+
     let state = if isHot(id) and hasNoActiveItem(): wsHover
       elif editing: wsActive
       else: wsNormal
@@ -4392,6 +4411,7 @@ template rawTextField*(
   x, y, w, h: float,
   text:       var string,
   tooltip:    string = "",
+  disabled:   bool = false,
   activate:   bool = false,
   constraint: Option[TextFieldConstraint] = TextFieldConstraint.none,
   style:      TextFieldStyle = DefaultTextFieldStyle
@@ -4400,14 +4420,15 @@ template rawTextField*(
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  textField(id, x, y, w, h, text, tooltip, activate, drawWidget = false,
-            constraint, style)
+  textField(id, x, y, w, h, text, tooltip, disabled, activate,
+            drawWidget = false, constraint, style)
 
 
 template textField*(
   x, y, w, h: float,
   text:       var string,
   tooltip:    string = "",
+  disabled:   bool = false,
   activate:   bool = false,
   constraint: Option[TextFieldConstraint] = TextFieldConstraint.none,
   style:      TextFieldStyle = DefaultTextFieldStyle
@@ -4416,13 +4437,14 @@ template textField*(
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  textField(id, x, y, w, h, text, tooltip, activate, drawWidget = true,
-            constraint, style)
+  textField(id, x, y, w, h, text, tooltip, disabled, activate,
+            drawWidget = true, constraint, style)
 
 
 template textField*(
   text:       var string,
   tooltip:    string = "",
+  disabled:   bool = false,
   activate:   bool = false,
   constraint: Option[TextFieldConstraint] = TextFieldConstraint.none,
   style:      TextFieldStyle = DefaultTextFieldStyle
@@ -4437,7 +4459,7 @@ template textField*(
   autoLayoutPre()
 
   textField(id, als.x, als.y, als.nextItemWidth, als.nextItemHeight, text,
-            tooltip, activate, drawWidget = true, constraint, style)
+            tooltip, disabled, activate, drawWidget = true, constraint, style)
 
   autoLayoutPost()
 
@@ -4924,6 +4946,9 @@ proc textArea(
       of wsHover:  (s.bgFillColorHover,  s.bgStrokeColorHover)
       of wsActive: (s.bgFillColorActive, s.bgStrokeColorActive)
       else:        (s.bgFillColor,       s.bgStrokeColor)
+
+    var sw = s.bgStrokeWidth
+    var (x, y, w, h) = snapToGrid(x, y, w, h, sw)
 
     # Draw text field background
     if drawWidget:
@@ -6468,6 +6493,8 @@ proc beginDialog*(w, h: float, title: string,
 
   addDrawLayer(ui.currentLayer, vg):
     const TitleBarHeight = 30.0
+
+    var (x, y, w, h) = snapToGrid(x, y, w, h, strokeWidth=0)
 
     drawShadow(vg, x, y, w, h, s.shadow)
 
