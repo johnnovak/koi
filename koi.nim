@@ -135,10 +135,11 @@ type
   SliderState = enum
     ssDefault,
     ssDragHidden,
-    ssEditValue
+    ssEditValue,
+    ssCancel
 
   SliderStateVars = object
-    state:       SliderState
+    state:        SliderState
 
     # Whether the cursor was moved before releasing the LMB in drag mode
     cursorMoved:  bool
@@ -148,6 +149,8 @@ type
     valueText:    string
     editModeItem: ItemId
     textFieldId:  ItemId
+
+    oldValue:     float
 
 # }}}
 # {{{ TextAreaState
@@ -5211,6 +5214,7 @@ proc horizSlider(id:         ItemId,
       ui.widgetMouseDrag = true
       ss.state = ssDragHidden
       ss.cursorMoved = false
+      ss.oldValue = value
       disableCursor()
 
     of ssDragHidden:
@@ -5250,6 +5254,10 @@ proc horizSlider(id:         ItemId,
     of ssEditValue:
       discard
 
+    of ssCancel:
+      value = ss.oldValue
+      if not ui.mbLeftDown:
+        ss.state = ssDefault
 
   value_out = value
 
@@ -5446,6 +5454,7 @@ proc vertSlider(id:         ItemId,
       ui.dragX = -1.0
       ui.dragY = ui.my
       ui.widgetMouseDrag = true
+      ss.oldValue = value
       disableCursor()
       ss.state = ssDragHidden
 
@@ -5473,6 +5482,11 @@ proc vertSlider(id:         ItemId,
 
     of ssEditValue:
       discard
+
+    of ssCancel:
+      value = ss.oldValue
+      if not ui.mbLeftDown:
+        ss.state = ssDefault
 
   value_out = value
 
@@ -5547,16 +5561,17 @@ proc sliderPost() =
   alias(ss, ui.sliderState)
 
   # Handle release active slider outside of the widget
-  if not ui.mbLeftDown and hasActiveItem():
-    if ss.state == ssDragHidden:
-      ss.state = ssDefault
-      showCursor()
-      if ui.dragX > -1.0:
-        setCursorPosX(ss.cursorPosX)
-      else:
-        setCursorPosY(ss.cursorPosY)
+  if hasActiveItem():
+    if not ui.mbLeftDown or ui.mbRightDown:
+      if ss.state == ssDragHidden:
+        ss.state = if ui.mbRightDown: ssCancel else: ssDefault
+        showCursor()
+        if ui.dragX > -1.0:
+          setCursorPosX(ss.cursorPosX)
+        else:
+          setCursorPosY(ss.cursorPosY)
 
-    ui.widgetMouseDrag = false
+      ui.widgetMouseDrag = false
 
 # }}}
 
