@@ -16,14 +16,14 @@ var vg: NVGContext
 ### UI DATA ##################################################################
 var
   sectionUserInterface = true
-  sectionUserInterfaceGeneral = true
-  sectionWidget = true
-  sectionTextField = true
+  sectionUserInterfaceGeneral = false
+  sectionWidget = false
+  sectionTextField = false
   sectionDialog = true
-  sectionTitleBar = true
-  sectionStatusBar = true
+  sectionTitleBar = false
+  sectionStatusBar = false
   sectionLeveldropDown = true
-  sectionAboutButton = true
+  sectionAboutButton = false
 
   sectionLevel = true
   sectionLevelGeneral = true
@@ -32,7 +32,7 @@ var
   sectionBackgroundHatch = true
   sectionFloorColors = true
   sectionNotes = true
-  
+
   sectionPanes = true
   sectionNotesPane = true
   sectionToolbarPane = true

@@ -93,6 +93,13 @@ type
     activeItem: Natural
 
 # }}}
+# {{{ SectionHeaderState
+
+type
+  SectionHeaderStateVars = object
+    openSubHeaders: bool
+
+# }}}
 # {{{ ScrollBarState
 
 type
@@ -386,15 +393,16 @@ type
     # **********************
 
     # Global widget states (per widget type)
-    colorPickerState: ColorPickerStateVars
-    dropDownState:    DropDownStateVars
-    popupState:       PopupStateVars
-    radioButtonState: RadioButtonStateVars
-    scrollBarState:   ScrollBarStateVars
-    scrollViewState:  ScrollViewStateVars
-    sliderState:      SliderStateVars
-    textAreaState:    TextAreaStateVars
-    textFieldState:   TextFieldStateVars
+    colorPickerState:   ColorPickerStateVars
+    dropDownState:      DropDownStateVars
+    popupState:         PopupStateVars
+    radioButtonState:   RadioButtonStateVars
+    sectionHeaderState: SectionHeaderStateVars
+    scrollBarState:     ScrollBarStateVars
+    scrollViewState:    ScrollViewStateVars
+    sliderState:        SliderStateVars
+    textAreaState:      TextAreaStateVars
+    textFieldState:     TextFieldStateVars
 
     # Per-instance data storage for widgets that require it (e.g. ScrollView)
     itemState:        Table[ItemId, ref RootObj]
@@ -6143,22 +6151,38 @@ proc sectionHeader(id:           ItemId,
                    x, y, w:      float,
                    label:        string,
                    expanded_out: var bool,
+                   subHeader:    bool,
                    tooltip:      string,
                    style:        SectionHeaderStyle): bool =
 
   alias(ui, g_uiState)
+  alias(ss, ui.sectionHeaderState)
   alias(s, style)
 
   let (x, y) = addDrawOffset(x, y)
 
   let h = s.height
 
-  # Hit testing
-  if isHit(x, y, w - s.hitRightPad, h):
-    setHot(id)
-    if ui.mbLeftDown and hasNoActiveItem():
-      setActive(id)
-      expanded_out = not expanded_out
+  # Cascade-open sub-headers in action
+  if ss.openSubHeaders:
+    if subHeader:
+      expanded_out = true
+    else:
+      ss.openSubHeaders = false
+
+  else:
+    # Hit testing
+    if isHit(x, y, w - s.hitRightPad, h):
+      setHot(id)
+      if ui.mbLeftDown and hasNoActiveItem():
+        setActive(id)
+
+        # Ctrl+LMB cascade-opens all sub-headers of this header
+        if not subHeader and ctrlDown():
+          expanded_out = true
+          ss.openSubHeaders = true
+        else:
+          expanded_out = not expanded_out
 
   let expanded = expanded_out
 
@@ -6220,7 +6244,7 @@ template sectionHeader*(
   let result = sectionHeader(
     id, 0,
     als.y,
-    als.rowWidth, label, expanded,
+    als.rowWidth, label, expanded, subHeader=false,
     tooltip, style
   )
 
@@ -6234,7 +6258,23 @@ template subSectionHeader*(
   tooltip:  string = "",
   style:    SectionHeaderStyle = DefaultSubSectionHeaderStyle
 ): bool =
-  sectionHeader(label, expanded, tooltip, style)
+
+  alias(als, g_uiState.autoLayoutState)
+
+  let i = instantiationInfo(fullPaths=true)
+  let id = generateId(i.filename, i.line, label)
+
+  autoLayoutPre(section=true)
+
+  let result = sectionHeader(
+    id, 0,
+    als.y,
+    als.rowWidth, label, expanded, subHeader=true,
+    tooltip, style
+  )
+
+  autoLayoutPost(height=style.height.some, section=true)
+  result
 
 # }}}
 # {{{ ScrollView
@@ -6356,6 +6396,11 @@ proc endScrollView*() =
   ui.itemState[id] = ss
 
   ui.scrollViewState.activeItem = 0
+
+  # If cascade opening sub-headers was activated on the last subheader of the
+  # scrollview, there's no further header elements that would reset the flag,
+  # so we must do it here.
+  ui.sectionHeaderState.openSubHeaders = false
 
   resetHitClip()
 
