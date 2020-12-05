@@ -1076,10 +1076,8 @@ proc horizLine*(vg: NVGContext, x, y, w: float) =
 
   var (x, y, w, _) = snapToGrid(x, y, w, 0, strokeWidth=1.0)
 
-  vg.beginPath()
   vg.moveTo(x-1,   y)
   vg.lineTo(x-1+w, y)
-  vg.stroke()
 
 # }}}
 
@@ -5639,7 +5637,7 @@ proc createCheckeredImage(vg: NVGContext) =
   let pxRatio = getPxRatio()
 
   g_checkeredImage = vg.renderToImage(
-    width=a * pxRatio.int, height=a * pxRatio.int, pxRatio,
+    width=(a*pxRatio).int, height=(a*pxRatio).int, pxRatio,
     {ifRepeatX, ifRepeatY}
   ):
     vg.scale(pxRatio, pxRatio)
@@ -5908,6 +5906,12 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
 
   # Draw color widget
   addDrawLayer(ui.currentLayer, vg):
+    # it's important to use "unsnapped" x & y coords here
+    let paint = vg.imagePattern(
+      ox=ox+x, oy=oy+y, ex=g_checkeredImageSize, ey=g_checkeredImageSize,
+      angle=0, g_checkeredImage, alpha=1.0
+    )
+
     let
       sw = 1.0
       (x, y, w, h) = snapToGrid(x, y, w, h, sw)
@@ -5923,10 +5927,6 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
     vg.beginPath()
     vg.roundedRect(x+colorWidth, y, alphaWidth, h, 0, cr, cr, 0)
 
-    var paint = vg.imagePattern(
-      ox=ox+x, oy=oy+y, ex=g_checkeredImageSize, ey=g_checkeredImageSize,
-      angle=0, g_checkeredImage, alpha=1.0
-    )
     vg.fillPaint(paint)
     vg.fill()
     vg.fillColor(color)
@@ -6196,7 +6196,9 @@ proc sectionHeader(id:           ItemId,
     vg.fill()
 
     vg.strokeColor(s.separatorColor)
+    vg.beginPath()
     vg.horizLine(x, y+h, w)
+    vg.stroke()
 
     # Draw triangle
     vg.save()
