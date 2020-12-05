@@ -50,14 +50,15 @@ type
     cmmNormal, cmmLMBDown, cmmDragWheel, cmmDragTriangle
 
   ColorPickerStateVars = object
-    opened:        bool
-    colorMode:     ColorPickerColorMode
-    lastColorMode: ColorPickerColorMode
-    mouseMode:     ColorPickerMouseMode
-    activeItem:    ItemId
-    h, s, v:       float
-    hexString:     string
-    lastHue:       float
+    opened:          bool
+    colorMode:       ColorPickerColorMode
+    lastColorMode:   ColorPickerColorMode
+    mouseMode:       ColorPickerMouseMode
+    activeItem:      ItemId
+    h, s, v:         float
+    hexString:       string
+    lastHue:         float
+    colorCopyBuffer: Color
 
 # }}}
 # {{{ DropDownState
@@ -1945,12 +1946,11 @@ proc beginPopup*(w, h: float,
   # Handle ESC
   if hasEvent() and
      ui.currEvent.kind == ekKey and
-     ui.currEvent.action in {kaDown}:
-
-    if ui.currEvent.key == keyEscape:
-      setEventHandled()
-      closePopup()
-      return false
+     ui.currEvent.action in {kaDown} and
+     ui.currEvent.key == keyEscape:
+    setEventHandled()
+    closePopup()
+    return false
 
   # Not closed
   ps.prevLayer = ui.currentLayer
@@ -5651,6 +5651,10 @@ var ColorPickerTextFieldStyle = TextFieldStyle(
   selectionColor      : rgb(0.5, 0.15, 0.15)
 )
 
+# TODO mac shortcuts
+let g_copyColorShortcut  = mkKeyShortcut(keyC, {mkCtrl})
+let g_pasteColorShortcut = mkKeyShortcut(keyV, {mkCtrl})
+
 # {{{ createCheckeredImage()
 var g_checkeredImage: Image
 var g_checkeredImageSize: float
@@ -5926,6 +5930,23 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
   let (x, y) = addDrawOffset(x, y)
 
   if isHit(x, y, w, h):
+    # Handle copy/paste color
+    if hasEvent() and
+       ui.currEvent.kind == ekKey and
+       ui.currEvent.action in {kaDown}:
+
+      let sc = mkKeyShortcut(ui.currEvent.key, ui.currEvent.mods)
+
+      if sc == g_copyColorShortcut:
+        setEventHandled()
+        cs.colorCopyBuffer = color
+        echo "COPY"
+      elif sc == g_pasteColorShortcut:
+        setEventHandled()
+        color_out = cs.colorCopyBuffer
+        echo "PASTE"
+
+    # Handle open colorpicker popup
     if ui.mbLeftDown and hasNoActiveItem():
       cs.activeItem = id
       cs.opened = true
