@@ -337,6 +337,7 @@ type
     # TODO should dialog and popup use this as well? or instead of
     # focuscaptured?
     hitClipRect:     Rect
+    oldHitClipRect:  Rect
 
     # Mouse state
     # -----------
@@ -583,17 +584,7 @@ proc lastmy*(): float = g_uiState.lastmy
 
 proc hasEvent*(): bool =
   alias(ui, g_uiState)
-
   not ui.focusCaptured and ui.hasEvent and (not ui.eventHandled)
-
-#  template calcHasEvent(): bool =
-#    ui.hasEvent and (not ui.eventHandled) and not ui.focusCaptured
-
-  # TODO isn't this a bit hacky?
-#  if ui.isDialogOpen:
-#    if ui.insideDialog: calcHasEvent()
-#    else: false
-#  else: calcHasEvent()
 
 proc currEvent*(): Event = g_uiState.currEvent
 
@@ -1914,6 +1905,8 @@ proc closePopup*() =
   ps.state = psOpenLMBDown  # just resetting the default state
   ps.closed = true
 
+  ui.hitClipRect = ui.oldHitClipRect
+
 # }}}
 # {{{  beginPopup*()
 proc beginPopup*(w, h: float,
@@ -1925,6 +1918,10 @@ proc beginPopup*(w, h: float,
 
   var (x, y) = addDrawOffset(ax, ay)
   (x, y) = fitRectWithinWindow(w, h, x, y, aw, ah, haLeft)
+
+  # TODO maybe use a stack or something?
+  ui.oldHitClipRect = ui.hitClipRect
+  ui.hitClipRect = rect(x, y, w, h)
 
   # Hit testing
   let
@@ -1943,14 +1940,15 @@ proc beginPopup*(w, h: float,
     closePopup()
     return false
 
+  ui.focusCaptured = ps.widgetInsidePopupCapturedFocus
+
   # Handle ESC
-  if ui.hasEvent and (not ui.eventHandled) and
+  if hasEvent() and
      ui.currEvent.kind == ekKey and
      ui.currEvent.action in {kaDown}:
 
-    setEventHandled()
-
     if ui.currEvent.key == keyEscape:
+      setEventHandled()
       closePopup()
       return false
 
@@ -1979,7 +1977,6 @@ proc beginPopup*(w, h: float,
     DrawOffset(ox: x, oy: y)
   )
 
-  ui.focusCaptured = ps.widgetInsidePopupCapturedFocus
   ui.currentLayer = layerPopup
 
   result = true
@@ -1990,10 +1987,7 @@ proc endPopup*() =
   alias(ui, g_uiState)
   alias(ps, ui.popupState)
 
-  if ui.focusCaptured:
-    ps.widgetInsidePopupCapturedFocus = true
-  else:
-    ps.widgetInsidePopupCapturedFocus = false
+  ps.widgetInsidePopupCapturedFocus = ui.focusCaptured
 
   popDrawOffset()
 
@@ -2001,6 +1995,8 @@ proc endPopup*() =
   if not ps.closed:
     ui.focusCaptured = true
     ui.currentLayer = ps.prevLayer
+
+  ui.hitClipRect = ui.oldHitClipRect
 
 # }}}
 
@@ -2822,9 +2818,8 @@ proc dropDown[T](id:               ItemId,
        ui.currEvent.kind == ekKey and
        ui.currEvent.action in {kaDown}:
 
-      setEventHandled()
-
       if ui.currEvent.key == keyEscape:
+        setEventHandled()
         closeDropDown()
 
     # Calculate the position of the box around the drop-down items
@@ -4175,6 +4170,7 @@ proc textField(
     # exitEditMode() clears the key buffer.)
 
     # "Fall-through" into edit mode happens here
+
     if ui.hasEvent and (not ui.eventHandled) and
        ui.currEvent.kind == ekKey and
        ui.currEvent.action in {kaDown, kaRepeat}:
