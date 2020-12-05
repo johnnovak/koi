@@ -2083,7 +2083,6 @@ proc label*(x, y, w, h: float,
 
   alias(ui, g_uiState)
 
-
   let (x, y) = addDrawOffset(x, y)
 
   addDrawLayer(ui.currentLayer, vg):
@@ -6752,9 +6751,13 @@ proc beginFrame*(winWidth, winHeight, fbWidth, fbHeight: int) =
   # Reset hot item
   ui.hotItem = 0
 
+  # Reset hit area clipping
+  resetHitClip()
+
   # Reset layout params
   ui.autoLayoutParams = DefaultAutoLayoutParams
 
+  # Clear all draw layers
   g_drawLayers.init()
 
   # Render to FBO before starting the main frame
