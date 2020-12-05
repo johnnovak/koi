@@ -1090,8 +1090,6 @@ template renderToImage*(vg: NVGContext,
                         width, height: int, pxRatio: float,
                         imageFlags: set[ImageFlags],
                         body: untyped): Image =
-  alias(ui, g_uiState)
-
   var fb = vg.nvgluCreateFramebuffer(width, height, imageFlags)
 
   let (fboWidth, fboHeight) = vg.imageSize(fb.image)
@@ -1646,6 +1644,15 @@ proc autoLayoutPost(height: Option[float] = float.none,
     a.nextItemHeight = h
 
   a.groupBegin = false
+
+# }}}
+# {{{ autoLayoutFinal()
+proc autoLayoutFinal() =
+  alias(ui, g_uiState)
+  alias(a, ui.autoLayoutState)
+
+  if a.currColIndex == 0:
+    a.y -= ui.autoLayoutParams.sectionPad
 
 # }}}
 
@@ -6379,6 +6386,8 @@ proc endScrollView*() =
     vg.restore()
 
   popDrawOffset()
+
+  autoLayoutFinal()
 
   # TODO make this configurable
   const ScrollSensitivity = if defined(macosx): 10 else: 40
