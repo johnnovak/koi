@@ -592,8 +592,8 @@ proc hasEvent*(): bool =
 
 proc currEvent*(): Event = g_uiState.currEvent
 
-proc setEventHandled*() =
-  g_uiState.eventHandled = true
+proc eventHandled*(): bool = g_uiState.eventHandled
+proc setEventHandled*() = g_uiState.eventHandled = true
 
 proc mbLeftDown*():   bool = g_uiState.mbLeftDown
 proc mbRightDown*():  bool = g_uiState.mbRightDown
@@ -1951,6 +1951,7 @@ proc beginPopup*(w, h: float,
      ui.currEvent.kind == ekKey and
      ui.currEvent.action in {kaDown} and
      ui.currEvent.key == keyEscape:
+
     setEventHandled()
     closePopup()
     return false
@@ -5955,11 +5956,9 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
       if sc == g_copyColorShortcut:
         setEventHandled()
         cs.colorCopyBuffer = color
-        echo "COPY"
       elif sc == g_pasteColorShortcut:
         setEventHandled()
         color_out = cs.colorCopyBuffer
-        echo "PASTE"
 
     # Handle open colorpicker popup
     if ui.mbLeftDown and hasNoActiveItem():

@@ -159,28 +159,28 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
 
     if koi.subSectionHeader("Title Bar", sectionTitleBar):
       koi.label("Background")
-      koi.color(currTheme.titleBar.backgroundColor)
+      koi.color(currTheme.window.backgroundColor)
 
       koi.label("Background Unfocused")
-      koi.color(currTheme.titleBar.bgColorUnfocused)
+      koi.color(currTheme.window.bgColorUnfocused)
 
       koi.label("Text")
-      koi.color(currTheme.titleBar.textColor)
+      koi.color(currTheme.window.textColor)
 
       koi.label("Text Unfocused")
-      koi.color(currTheme.titleBar.textColorUnfocused)
+      koi.color(currTheme.window.textColorUnfocused)
 
       koi.label("Modified Flag")
-      koi.color(currTheme.titleBar.modifiedFlagColor)
+      koi.color(currTheme.window.modifiedFlagColor)
 
       koi.label("Button")
-      koi.color(currTheme.titleBar.buttonColor)
+      koi.color(currTheme.window.buttonColor)
 
       koi.label("Button Hover")
-      koi.color(currTheme.titleBar.buttonColorHover)
+      koi.color(currTheme.window.buttonColorHover)
 
       koi.label("Button Down")
-      koi.color(currTheme.titleBar.buttonColorDown)
+      koi.color(currTheme.window.buttonColorDown)
 
     if koi.subSectionHeader("Status Bar", sectionStatusBar):
       koi.label("Background")
@@ -282,7 +282,7 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
 
     if koi.subSectionHeader("Background Hatch", sectionBackgroundHatch):
       koi.label("Background Hatch?")
-      koi.checkBox(currTheme.level.bgHatchEnabled)
+      koi.checkBox(currTheme.level.bgHatch)
 
       koi.label("Hatch")
       koi.color(currTheme.level.bgHatchColor)
@@ -315,7 +315,7 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
     if koi.subSectionHeader("Shadow", sectionShadow):
       group:
         koi.label("Inner Shadow?")
-        koi.checkBox(currTheme.level.innerShadowEnabled)
+        koi.checkBox(currTheme.level.innerShadow)
 
         koi.label("Inner Shadow")
         koi.color(currTheme.level.innerShadowColor)
@@ -326,7 +326,7 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
 
       group:
         koi.label("Outer Shadow?")
-        koi.checkBox(currTheme.level.outerShadowEnabled)
+        koi.checkBox(currTheme.level.outerShadow)
 
         koi.label("Outer Shadow")
         koi.color(currTheme.level.outerShadowColor)
