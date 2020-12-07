@@ -463,8 +463,9 @@ var
   g_cursorHand:        Cursor
 
   # TODO remove these once theming is implemented
-  HILITE     = rgb(1.0, 0.4, 0.4)
-  HILITE_LO  = rgb(0.9, 0.3, 0.3)
+#  HILITE     = rgb(1.0, 0.4, 0.4)
+  HILITE     = rgb(1.0, 0.65, 0.0)
+  HILITE_LO  = rgb(0.9, 0.55, 0.0)
   GRAY_MID   = gray(0.6)
   GRAY_HI    = gray(0.7)
   GRAY_LO    = gray(0.25)
@@ -1564,7 +1565,7 @@ proc isDoubleClick*(): bool =
 # }}}
 # {{{ Layout handling
 
-const DefaultAutoLayoutParams = AutoLayoutParams(
+const DefaultAutoLayoutParams* = AutoLayoutParams(
   labelWidth:       175.0,
   itemsPerRow:      2,
   sectionPad:       12.0,
@@ -3904,9 +3905,9 @@ var DefaultTextFieldStyle = TextFieldStyle(
   textColorHover      : GRAY_LO, # TODO
   textColorActive     : GRAY_HI,
 
-  cursorColor         : HILITE,
+  cursorColor         : rgb(255, 190, 0),
   cursorWidth         : 1.0,
-  selectionColor      : rgb(0.5, 0.15, 0.15)
+  selectionColor      : rgba(200, 130, 0, 100)
 )
 
 proc getDefaultTextFieldStyle*(): TextFieldStyle =
@@ -4268,6 +4269,9 @@ proc textField(
       tf.cursorPos = res.cursorPos
       tf.selection = res.selection
 
+      # TODO this might not be entirely correct
+      setEventHandled()
+
     # Update textfield state vars based on the new text & current cursor
     # position
     let textLen = text.runeLen
@@ -4508,18 +4512,18 @@ var DefaultTextAreaStyle = TextAreaStyle(
   bgFillColorActive   : GRAY_LO,
 
   # TODO use labelStyle?
-  textPadHoriz       : 8.0,
-  textPadVert        : 2.0,
-  textFontSize       : 14.0,
-  textFontFace       : "sans-bold", # TODO
-  textLineHeight     : 1.4,
-  textColor          : GRAY_LO,
-  textColorHover     : GRAY_LO, # TODO
-  textColorActive    : GRAY_HI,
+  textPadHoriz        : 8.0,
+  textPadVert         : 2.0,
+  textFontSize        : 14.0,
+  textFontFace        : "sans-bold", # TODO
+  textLineHeight      : 1.4,
+  textColor           : GRAY_LO,
+  textColorHover      : GRAY_LO, # TODO
+  textColorActive     : GRAY_HI,
 
-  cursorColor        : HILITE,
-  cursorWidth        : 1.0,
-  selectionColor     : rgb(0.5, 0.15, 0.15)
+  cursorColor         : rgb(255, 190, 0),
+  cursorWidth         : 1.0,
+  selectionColor      : rgba(200, 130, 0, 100)
 )
 
 proc getDefaultTextAreaStyle*(): TextAreaStyle =
@@ -4894,6 +4898,9 @@ proc textArea(
       text = res.text
       ta.cursorPos = res.cursorPos
       ta.selection = res.selection
+
+      # TODO this might not be entirely correct
+      setEventHandled()
 
     # Update textarea field vars after the edits
     let textLen = text.runeLen
@@ -5662,9 +5669,9 @@ var ColorPickerTextFieldStyle = TextFieldStyle(
   textColor           : gray(0.8),
   textColorHover      : gray(0.8),
   textColorActive     : gray(0.8),
-  cursorColor         : rgb(1.0, 0.8, 0.0),
+  cursorColor         : rgb(255, 190, 0),
   cursorWidth         : 1.0,
-  selectionColor      : rgb(0.5, 0.15, 0.15)
+  selectionColor      : rgba(200, 130, 0, 100)
 )
 
 # TODO mac shortcuts
@@ -6343,9 +6350,19 @@ template subSectionHeader*(
 # }}}
 # {{{ ScrollView
 
-var DefaultScrollViewScrollBarStyle = getDefaultScrollBarStyle()
+type ScrollViewStyle* = ref object
+  vertScrollBarWidth*:     float
+  scrollBarStyle*:         ScrollBarStyle
+  scrollWheelSensitivity*: float
 
-with DefaultScrollViewScrollBarStyle:
+var DefaultScrollViewStyle = ScrollViewStyle(
+  vertScrollBarWidth     : 12.0,
+  scrollWheelSensitivity : if defined(macosx): 10.0 else: 40.0
+)
+
+DefaultScrollViewStyle.scrollBarStyle = getDefaultScrollBarStyle()
+
+with DefaultScrollViewStyle.scrollBarStyle:
   trackCornerRadius   = 6.0
   trackFillColor      = gray(0, 0)
   trackFillColorHover = gray(0, 0.15)
@@ -6359,15 +6376,21 @@ with DefaultScrollViewScrollBarStyle:
   autoFadeEndAlpha    = 1.0
   autoFadeDistance    = 60.0
 
+proc getDefaultScrollViewStyle*(): ScrollViewStyle =
+  DefaultScrollViewStyle.deepCopy
+
+proc setDefaultScrollViewStyle*(style: ScrollViewStyle) =
+  DefaultScrollViewStyle = style.deepCopy
+
+
 type ScrollViewState = ref object of RootObj
   x, y, w, h: float
   viewStartY: float
-
-# TODO style param
-let ScrollViewScrollBarWidth = 12.0
+  style:      ScrollViewStyle
 
 # {{{ beginScrollView*()
-proc beginScrollView*(id: ItemId, x, y, w, h: float) =
+proc beginScrollView*(id: ItemId, x, y, w, h: float,
+                      style: ScrollViewStyle = DefaultScrollViewStyle) =
   alias(ui, g_uiState)
 
   let (x, y) = addDrawOffset(x, y)
@@ -6383,7 +6406,13 @@ proc beginScrollView*(id: ItemId, x, y, w, h: float) =
 
   # Update scroll view instance state
   discard ui.itemState.hasKeyOrPut(id,
-    ScrollViewState(x: x, y: y, w: w, h: h)
+    ScrollViewState(
+      x: x,
+      y: y,
+      w: w,
+      h: h,
+      style: style
+    )
   )
   var ss = cast[ScrollViewState](ui.itemState[id])
 
@@ -6398,14 +6427,16 @@ proc beginScrollView*(id: ItemId, x, y, w, h: float) =
 
   ui.itemState[id] = ss
 
-  initAutoLayout(rowWidth=w, scrollBarWidth=ScrollViewScrollBarWidth)
+  initAutoLayout(rowWidth=w, scrollBarWidth=style.vertScrollBarWidth)
 
 
-template beginScrollView*(x, y, w, h: float) =
+template beginScrollView*(x, y, w, h: float,
+                          style: ScrollViewStyle = DefaultScrollViewStyle) =
+
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  beginScrollView(id, x, y, w, h)
+  beginScrollView(id, x, y, w, h, style)
 
 # }}}
 # {{{ endScrollView*()
@@ -6419,9 +6450,6 @@ proc endScrollView*() =
   popDrawOffset()
 
   autoLayoutFinal()
-
-  # TODO make this configurable
-  const ScrollSensitivity = if defined(macosx): 10 else: 40
 
   let id = ui.scrollViewState.activeItem
   var ss = cast[ScrollViewState](ui.itemState[id])
@@ -6439,7 +6467,7 @@ proc endScrollView*() =
 
     if isHit(ss.x, ss.y, ss.w, ss.h):
       if hasEvent() and ui.currEvent.kind == ekScroll:
-        viewStartY -= ui.currEvent.oy * ScrollSensitivity
+        viewStartY -= ui.currEvent.oy * ss.style.scrollWheelSensitivity
         ui.eventHandled = true
 
     viewStartY = viewStartY.clamp(0, endVal)
@@ -6448,12 +6476,12 @@ proc endScrollView*() =
 
     vertScrollBar(
       sbId,
-      x=(ss.x + ss.w - ScrollViewScrollBarWidth), y=ss.y,
-      w=ScrollViewScrollBarWidth, h=visibleHeight,
+      x=(ss.x + ss.w - ss.style.vertScrollBarWidth), y=ss.y,
+      w=ss.style.vertScrollBarWidth, h=visibleHeight,
       startVal=0, endVal=endVal,
       viewStartY,
       thumbSize=thumbSize, clickStep=20,
-      style=DefaultScrollViewScrollBarStyle)
+      style=ss.style.scrollBarStyle)
 
   else:
     viewStartY = 0
