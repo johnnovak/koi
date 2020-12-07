@@ -2037,7 +2037,7 @@ var DefaultLabelStyle = LabelStyle(
   colorDown        : gray(0.7),
   colorActive      : gray(1.0),
   colorActiveHover : gray(1.0),
-  colorDisabled    : gray(0.25)
+  colorDisabled    : gray(0.7, 0.5)
 )
 
 proc getDefaultLabelStyle*(): LabelStyle =
@@ -2146,7 +2146,7 @@ var DefaultButtonStyle = ButtonStyle(
   fillColor           : gray(0.6),
   fillColorHover      : GRAY_HI,
   fillColorDown       : HILITE,
-  fillColorDisabled   : GRAY_LO,
+  fillColorDisabled   : gray(0.6, 0.5),
   labelOnly           : false,
   label               : getDefaultLabelStyle()
 )
@@ -2157,7 +2157,7 @@ with DefaultButtonStyle.label:
   color         = GRAY_LO
   colorHover    = GRAY_LO
   colorDown     = GRAY_LO
-  colorDisabled = GRAY_HI
+  colorDisabled = GRAY_LO.withAlpha(0.7)
 
 
 proc getDefaultButtonStyle*(): ButtonStyle =
