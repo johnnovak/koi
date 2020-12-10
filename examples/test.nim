@@ -70,9 +70,12 @@ proc createWindow(): Window =
   cfg.size = (w: 1000, h: 800)
   cfg.title = "Koi Test"
   cfg.resizable = true
-  cfg.visible = false
+  cfg.visible = true
   cfg.bits = (r: 8, g: 8, b: 8, a: 8, stencil: 8, depth: 16)
-  cfg.debugContext = true
+  cfg.transparentFramebuffer = true
+  cfg.focusOnShow = true
+  cfg.decorated = false
+  cfg.floating = true
   cfg.nMultiSamples = 4
 
   when defined(macosx):
@@ -96,10 +99,10 @@ proc loadData(vg: NVGContext) =
 proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
   koi.beginFrame(winWidth, winHeight, fbWidth, fbHeight)
 
-  vg.beginPath()
-  vg.rect(0, 0, winWidth.float, winHeight.float)
-  vg.fillColor(gray(0.3))
-  vg.fill()
+#  vg.beginPath()
+#  vg.rect(0, 0, winWidth.float, winHeight.float)
+#  vg.fillColor(gray(0.3))
+#  vg.fill()
 
   let
     w = 110.0

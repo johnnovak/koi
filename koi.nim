@@ -1093,7 +1093,6 @@ template renderToImage*(vg: NVGContext,
   nvgluBindFramebuffer(fb)
 
   glViewport(0, 0, fboWidth.GLsizei, fboHeight.GLsizei)
-  glClearColor(0, 0, 0, 0)
   glClear(GL_COLOR_BUFFER_BIT or GL_STENCIL_BUFFER_BIT)
 
   vg.beginFrame(width.float, height.float, pxRatio)
@@ -1647,7 +1646,7 @@ proc autoLayoutFinal() =
   alias(ui, g_uiState)
   alias(a, ui.autoLayoutState)
 
-  if a.currColIndex == 0:
+  if a.prevSection:
     a.y -= ui.autoLayoutParams.sectionPad
 
 # }}}
@@ -6861,8 +6860,6 @@ proc beginFrame*(winWidth, winHeight, fbWidth, fbHeight: int) =
 
   # Update and render
   glViewport(0, 0, fbWidth.GLsizei, fbHeight.GLsizei)
-
-  glClearColor(0.0, 0.0, 0.0, 1.0)
 
   glClear(GL_COLOR_BUFFER_BIT or
           GL_DEPTH_BUFFER_BIT or
