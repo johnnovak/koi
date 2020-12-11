@@ -3950,6 +3950,27 @@ proc textFieldEnterEditMode(id: ItemId, text: string, startX: float) =
   ui.focusCaptured = true
 
 # }}}
+# proc textFieldExitEditMode()
+proc textFieldExitEditMode(id: ItemId, startX: float) =
+  alias(ui, g_uiState)
+  alias(tf, ui.textFieldState)
+
+  clearEventBuf()
+  clearCharBuf()
+
+  tf.state = tfsDefault
+  tf.activeItem = 0
+  tf.cursorPos = 0
+  tf.selection = NoSelection
+  tf.displayStartPos = 0
+  tf.displayStartX = startX
+  tf.originalText = ""
+  tf.lastActiveItem = id
+
+  ui.focusCaptured = false
+  setCursorShape(csArrow)
+
+# }}}
 # {{{ textField()
 proc textField(
   id:         ItemId,
@@ -4009,29 +4030,14 @@ proc textField(
         tf.state = tfsEditLMBPressed
 
 
+  proc exitEditMode() = textFieldExitEditMode(id, textBoxX)
+
   proc setFont() =
     g_nvgContext.setFont(s.textFontSize, name=s.textFontFace)
 
   proc calcGlyphPos() =
     setFont()
     discard g_nvgContext.textGlyphPositions(0, 0, text, glyphs)
-
-
-  proc exitEditMode() =
-    clearEventBuf()
-    clearCharBuf()
-
-    tf.state = tfsDefault
-    tf.activeItem = 0
-    tf.cursorPos = 0
-    tf.selection = NoSelection
-    tf.displayStartPos = 0
-    tf.displayStartX = textBoxX
-    tf.originalText = ""
-    tf.lastActiveItem = id
-
-    ui.focusCaptured = false
-    setCursorShape(csArrow)
 
 
   proc enforceConstraint(text, originalText: string): string =
@@ -4550,6 +4556,28 @@ with DefaultTextAreaScrollBarStyle:
 
 var DefaultTextAreaScrollBarStyle_EditMode = DefaultTextAreaScrollBarStyle.deepCopy()
 
+
+# {{{ textAreaExitEditMode()
+proc textAreaExitEditMode(id: ItemId) =
+  alias(ui, g_uiState)
+  alias(ta, ui.textAreaState)
+
+  clearEventBuf()
+  clearCharBuf()
+
+  ta.state = tasDefault
+  ta.activeItem = 0
+  ta.cursorPos = 0
+  ta.displayStartRow = 0
+  ta.displayStartY = 0
+  ta.selection = NoSelection
+  ta.originalText = ""
+  ta.lastActiveItem = id
+
+  ui.focusCaptured = false
+  setCursorShape(csArrow)
+
+# }}}
 # {{{ textArea()
 proc textArea(
   id:         ItemId,
@@ -4614,23 +4642,6 @@ proc textArea(
     ui.focusCaptured = true
 
 
-  proc exitEditMode() =
-    clearEventBuf()
-    clearCharBuf()
-
-    ta.state = tasDefault
-    ta.activeItem = 0
-    ta.cursorPos = 0
-    ta.displayStartRow = 0
-    ta.displayStartY = 0
-    ta.selection = NoSelection
-    ta.originalText = ""
-    ta.lastActiveItem = id
-
-    ui.focusCaptured = false
-    setCursorShape(csArrow)
-
-
   var tabActivate = false
 
   if not ui.focusCaptured and ta.state == tasDefault:
@@ -4651,6 +4662,8 @@ proc textArea(
         enterEditMode(id, text, textBoxX)
         ta.state = tasEditEntered
 
+
+  proc exitEditMode() = textAreaExitEditMode(id)
 
   proc calcGlypPosForRow(x, y: float, row: TextRow): Natural =
     setFont()
@@ -6626,6 +6639,9 @@ proc closeDialog*() =
 
   ui.focusCaptured = false
   ui.dialogOpen = false
+
+  textFieldExitEditMode(id=0, startX=0.0)
+  textAreaExitEditMode(id=0)
 
 # }}}
 
