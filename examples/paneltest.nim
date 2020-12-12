@@ -500,12 +500,8 @@ proc init(): Window =
 
   var win = createWindow()
 
-  if not nvgInit(getProcAddress):
-    quit "Error initialising NanoVG"
-
+  nvgInit(getProcAddress)
   vg = nvgCreateContext({nifStencilStrokes, nifAntialias, nifDebug})
-  if vg == nil:
-    quit "Error creating NanoVG context"
 
   if not gladLoadGL(getProcAddress):
     quit "Error initialising OpenGL"

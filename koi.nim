@@ -1109,50 +1109,6 @@ template renderToImage*(vg: NVGContext,
 
 # }}}
 
-# {{{ loadImage*()
-proc stbi_load(filename: cstring, x, y, channels: ptr cint,
-               desiredChannels: cint): ptr UncheckedArray[byte]
-    {.cdecl, importc: "stbi_load".}
-
-proc stbi_image_free(data: ptr UncheckedArray[byte])
-    {.cdecl, importc: "stbi_image_free".}
-
-
-type ImageData* = object
-  width*, height*: Natural
-  numChannels*:    Natural
-  data*:           ptr UncheckedArray[byte]
-
-proc size*(d: ImageData): Natural =
-  d.width * d.height * d.numChannels
-
-proc `=destroy`*(d: var ImageData) =
-  if d.data != nil:
-    stbi_image_free(d.data)
-    d.width = 0
-    d.height = 0
-    d.numChannels = 0
-    d.data = nil
-
-
-proc loadImage*(filename: string, desiredChannels: Natural): ImageData =
-  var w, h, channels: cint
-
-  var data = stbi_load(filename, w.addr, h.addr, channels.addr,
-                       desiredChannels.cint)
-
-  if data == nil:
-    raise newException(IOError, fmt"Could not load image '{filename}'")
-
-  result = ImageData(
-    width:  w.Natural,
-    height: h.Natural,
-    numChannels: desiredChannels,
-    data: data
-  )
-
-# }}}
-
 # }}}
 # {{{ Draw layers
 
