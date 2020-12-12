@@ -314,9 +314,6 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
 
     if koi.subSectionHeader("Shadow", sectionShadow):
       group:
-        koi.label("Inner Shadow?")
-        koi.checkBox(currTheme.level.innerShadow)
-
         koi.label("Inner Shadow")
         koi.color(currTheme.level.innerShadowColor)
 
@@ -325,9 +322,6 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
                         style=propsSliderStyle)
 
       group:
-        koi.label("Outer Shadow?")
-        koi.checkBox(currTheme.level.outerShadow)
-
         koi.label("Outer Shadow")
         koi.color(currTheme.level.outerShadowColor)
 
@@ -506,8 +500,10 @@ proc init(): Window =
 
   var win = createWindow()
 
-  var flags = {nifStencilStrokes, nifAntialias, nifDebug}
-  vg = nvgInit(getProcAddress, flags)
+  if not nvgInit(getProcAddress):
+    quit "Error initialising NanoVG"
+
+  vg = nvgCreateContext({nifStencilStrokes, nifAntialias, nifDebug})
   if vg == nil:
     quit "Error creating NanoVG context"
 
@@ -531,7 +527,7 @@ proc init(): Window =
 
 proc cleanup() =
   koi.deinit()
-  nvgDeinit(vg)
+  nvgDeleteContext(vg)
   glfw.terminate()
 
 

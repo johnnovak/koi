@@ -72,10 +72,9 @@ proc createWindow(): Window =
   cfg.resizable = true
   cfg.visible = true
   cfg.bits = (r: 8, g: 8, b: 8, a: 8, stencil: 8, depth: 16)
-  cfg.transparentFramebuffer = true
-  cfg.focusOnShow = true
-  cfg.decorated = false
-  cfg.floating = true
+#  cfg.transparentFramebuffer = true
+#  cfg.focusOnShow = true
+#  cfg.decorated = false
   cfg.nMultiSamples = 4
 
   when defined(macosx):
@@ -86,6 +85,8 @@ proc createWindow(): Window =
   newWindow(cfg)
 
 
+var g_img: ImageData
+
 proc loadData(vg: NVGContext) =
   let regularFont = vg.createFont("sans", "data/Roboto-Regular.ttf")
   if regularFont == NoFont:
@@ -95,14 +96,22 @@ proc loadData(vg: NVGContext) =
   if boldFont == NoFont:
     quit "Could not add font italic.\n"
 
+  g_img = loadImage("data/logo-mask-inner.png", desiredChannels=4)
+
+  for i in 0..<g_img.width * g_img.height:
+    g_img.data[i*4+3] = g_img.data[i*4]
+    g_img.data[i*4] = 255
+    g_img.data[i*4+1] = 180
+    g_img.data[i*4+2] = 0
+
 
 proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
   koi.beginFrame(winWidth, winHeight, fbWidth, fbHeight)
 
-#  vg.beginPath()
-#  vg.rect(0, 0, winWidth.float, winHeight.float)
-#  vg.fillColor(gray(0.3))
-#  vg.fill()
+  vg.beginPath()
+  vg.rect(0, 0, winWidth.float, winHeight.float)
+  vg.fillColor(gray(0.3))
+  vg.fill()
 
   let
     w = 110.0
@@ -115,6 +124,18 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
   var labelStyle = getDefaultLabelStyle()
   labelStyle.fontSize = 15.0
   labelStyle.color = gray(0.8)
+
+  let image = vg.createImageRGBA(
+    g_img.width, g_img.height,
+    data = toOpenArray(g_img.data, 0, g_img.size()-1)
+  )
+
+  let paint = vg.imagePattern(ox=0, oy=0, ex=g_img.width/2, ey=g_img.height/2, angle=0, image, alpha=1.0)
+
+  vg.beginPath()
+  vg.fillPaint(paint)
+  vg.rect(0, 0, 2000, 2000)
+  vg.fill()
 
 #  vg.scissor(0, 0, 630, 100)
 
@@ -462,8 +483,10 @@ proc init(): Window =
 
   var win = createWindow()
 
-  var flags = {nifStencilStrokes, nifAntialias, nifDebug}
-  vg = nvgInit(getProcAddress, flags)
+  if not nvgInit(getProcAddress):
+    quit "Error initialising NanoVG"
+
+  vg = nvgCreateContext({nifStencilStrokes, nifAntialias, nifDebug})
   if vg == nil:
     quit "Error creating NanoVG context"
 
@@ -487,7 +510,7 @@ proc init(): Window =
 
 proc cleanup() =
   koi.deinit()
-  nvgDeinit(vg)
+  nvgDeleteContext(vg)
   glfw.terminate()
 
 
