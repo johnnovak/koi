@@ -11,7 +11,6 @@ import tables
 import unicode
 
 import glfw
-from glfw/wrapper import setCursor, createStandardCursor, CursorShape
 import nanovg
 import with
 
@@ -459,9 +458,12 @@ var
   g_cursorArrow:       Cursor
   g_cursorIBeam:       Cursor
   g_cursorCrosshair:   Cursor
-  g_cursorHorizResize: Cursor
-  g_cursorVertResize:  Cursor
   g_cursorHand:        Cursor
+  g_cursorResizeEW:    Cursor
+  g_cursorResizeNS:    Cursor
+  g_cursorResizeNWSE:  Cursor
+  g_cursorResizeNESW:  Cursor
+  g_cursorResizeAll:   Cursor
 
   # TODO remove these once theming is implemented
 #  HILITE     = rgb(1.0, 0.4, 0.4)
@@ -1538,10 +1540,13 @@ proc setCursorMode*(cs: CursorShape) =
   elif cs == csIBeam:       c = g_cursorIBeam
   elif cs == csCrosshair:   c = g_cursorCrosshair
   elif cs == csHand:        c = g_cursorHand
-  elif cs == csHorizResize: c = g_cursorHorizResize
-  elif cs == csVertResize:  c = g_cursorVertResize
+  elif cs == csResizeEW:    c = g_cursorResizeEW
+  elif cs == csResizeNS:    c = g_cursorResizeNS
+  elif cs == csResizeNWSE:  c = g_cursorResizeNWSE
+  elif cs == csResizeNESW:  c = g_cursorResizeNESW
+  elif cs == csResizeAll:   c = g_cursorResizeAll
 
-  wrapper.setCursor(win.getHandle, c)
+  win.cursor = c
 
 
 proc setCursorPosX*(x: float) =
@@ -2108,7 +2113,8 @@ proc label*(x, y, w, h: float,
 
 # }}}
 
-proc label*(labelText: string, state: WidgetState = wsNormal,
+proc label*(labelText: string,
+            state: WidgetState = wsNormal,
             style: LabelStyle = DefaultLabelStyle) =
   alias(ui, g_uiState)
   alias(a, ui.autoLayoutState)
@@ -3008,7 +3014,7 @@ template dropDown*[E: enum](
   let id = generateId(i.filename, i.line, "")
 
   # TODO common. extract
-  var itemsSeq: seq[string] = @[]
+  var itemsSeq = newSeq[string]()
   for e in items.low..items.high:
     itemsSeq.add($e)
 
@@ -3032,7 +3038,7 @@ template dropDown*[E: enum](
   let id = generateId(i.filename, i.line, "")
 
   # TODO common. extract
-  var itemsSeq: seq[string] = @[]
+  var itemsSeq = newSeq[string]()
   for e in items.low..items.high:
     itemsSeq.add($e)
 
@@ -3951,7 +3957,7 @@ proc textFieldEnterEditMode(id: ItemId, text: string, startX: float) =
   ui.focusCaptured = true
 
 # }}}
-# proc textFieldExitEditMode()
+# {{{ textFieldExitEditMode()
 proc textFieldExitEditMode(id: ItemId, startX: float) =
   alias(ui, g_uiState)
   alias(tf, ui.textFieldState)
@@ -6773,12 +6779,15 @@ proc init*(nvg: NVGContext, getProcAddress: proc) =
 
   g_nvgContext = nvg
 
-  g_cursorArrow       = wrapper.createStandardCursor(csArrow)
-  g_cursorIBeam       = wrapper.createStandardCursor(csIBeam)
-  g_cursorCrosshair   = wrapper.createStandardCursor(csCrosshair)
-  g_cursorHorizResize = wrapper.createStandardCursor(csHorizResize)
-  g_cursorVertResize  = wrapper.createStandardCursor(csVertResize)
-  g_cursorHand        = wrapper.createStandardCursor(csHand)
+  g_cursorArrow       = createStandardCursor(csArrow)
+  g_cursorIBeam       = createStandardCursor(csIBeam)
+  g_cursorCrosshair   = createStandardCursor(csCrosshair)
+  g_cursorHand        = createStandardCursor(csHand)
+  g_cursorResizeEW    = createStandardCursor(csResizeEW)
+  g_cursorResizeNS    = createStandardCursor(csResizeNS)
+  g_cursorResizeNWSE  = createStandardCursor(csResizeNWSE)
+  g_cursorResizeNESW  = createStandardCursor(csResizeNESW)
+  g_cursorResizeAll   = createStandardCursor(csResizeAll)
 
   let win = currentContext()
 
@@ -6799,9 +6808,15 @@ proc init*(nvg: NVGContext, getProcAddress: proc) =
 # {{{ deinit*()
 
 proc deinit*() =
-  wrapper.destroyCursor(g_cursorArrow)
-  wrapper.destroyCursor(g_cursorIBeam)
-  wrapper.destroyCursor(g_cursorHorizResize)
+  destroyCursor(g_cursorArrow)
+  destroyCursor(g_cursorIBeam)
+  destroyCursor(g_cursorCrosshair)
+  destroyCursor(g_cursorHand)
+  destroyCursor(g_cursorResizeEW)
+  destroyCursor(g_cursorResizeNS)
+  destroyCursor(g_cursorResizeNWSE)
+  destroyCursor(g_cursorResizeNESW)
+  destroyCursor(g_cursorResizeAll)
 
 # }}}
 # {{{ beginFrame*()
