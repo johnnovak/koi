@@ -2388,14 +2388,16 @@ template checkBox*(active:   var bool,
                    drawProc: CheckBoxDrawProc = DefaultCheckBoxDrawProc,
                    style:    CheckBoxStyle = DefaultCheckBoxStyle) =
 
-  alias(als, g_uiState.autoLayoutState)
-
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
   autoLayoutPre()
 
-  checkbox(id, als.x, als.y, als.nextItemHeight, active, tooltip, drawProc,
+  checkbox(id,
+           g_uiState.autoLayoutState.x,
+           g_uiState.autoLayoutState.y,
+           g_uiState.autoLayoutState.nextItemHeight,
+           active, tooltip, drawProc,
            style)
 
   autoLayoutPost()
@@ -2986,15 +2988,17 @@ template dropDown*(
   style:        DropDownStyle = DefaultDropDownStyle
 ) =
 
-  alias(ui, g_uiState)
-  alias(als, ui.autoLayoutState)
-
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
   autoLayoutPre()
 
-  dropDown(id, als.x, als.y, als.nextItemWidth, als.nextItemHeight, items,
+  dropDown(id,
+           g_uiState.autoLayoutState.x,
+           g_uiState.autoLayoutState.y,
+           g_uiState.autoLayoutState.nextItemWidth,
+           g_uiState.autoLayoutState.nextItemHeight,
+           items,
            selectedItem, tooltip, disabled, style)
 
   autoLayoutPost()
@@ -3032,8 +3036,6 @@ template dropDown*[E: enum](
   style:        DropDownStyle = DefaultDropDownStyle
 ) =
 
-  alias(als, g_uiState.autoLayoutState)
-
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
@@ -3046,7 +3048,12 @@ template dropDown*[E: enum](
 
   autoLayoutPre()
 
-  dropDown(id, als.x, als.y, als.nextItemWidth, als.nextItemHeight, itemsSeq,
+  dropDown(id,
+           g_uiState.autoLayoutState.x,
+           g_uiState.autoLayoutState.y,
+           g_uiState.autoLayoutState.nextItemWidth,
+           g_uiState.autoLayoutState.nextItemHeight,
+           itemsSeq,
            selItem, tooltip, disabled, style)
   selectedItem = items(selItem)
 
@@ -4473,15 +4480,17 @@ template textField*(
   style:      TextFieldStyle = DefaultTextFieldStyle
 ) =
 
-  alias(ui, g_uiState)
-  alias(als, ui.autoLayoutState)
-
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
   autoLayoutPre()
 
-  textField(id, als.x, als.y, als.nextItemWidth, als.nextItemHeight, text,
+  textField(id,
+            g_uiState.autoLayoutState.x,
+            g_uiState.autoLayoutState.y,
+            g_uiState.autoLayoutState.nextItemWidth,
+            g_uiState.autoLayoutState.nextItemHeight,
+            text,
             tooltip, disabled, activate, drawWidget = true, constraint, style)
 
   autoLayoutPost()
@@ -5419,14 +5428,16 @@ template horizSlider*(startVal:   float = 0.0,
                       style:      SliderStyle = DefaultSliderStyle,
                       grouping:   WidgetGrouping = wgNone) =
 
-  alias(als, g_uiState.autoLayoutState)
-
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
   autoLayoutPre()
 
-  horizSlider(id, als.x, als.y, als.nextItemWidth, als.nextItemHeight,
+  horizSlider(id,
+              g_uiState.autoLayoutState.x,
+              g_uiState.autoLayoutState.y,
+              g_uiState.autoLayoutState.nextItemWidth,
+              g_uiState.autoLayoutState.nextItemHeight,
               startVal, endVal, value, tooltip, label,
               style, grouping)
 
@@ -6160,14 +6171,19 @@ template color*(x, y, w, h: float, color: var Color) =
 
 
 template color*(col: var Color) =
-  alias(als, g_uiState.autoLayoutState)
-
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
   autoLayoutPre()
 
-  color(id, als.x, als.y, als.nextItemWidth, als.nextItemHeight, col)
+  color(
+    id,
+    g_uiState.autoLayoutState.x,
+    g_uiState.autoLayoutState.y,
+    g_uiState.autoLayoutState.nextItemWidth,
+    g_uiState.autoLayoutState.nextItemHeight,
+    col
+  )
 
   autoLayoutPost()
 
@@ -6324,8 +6340,6 @@ template sectionHeader*(
   style:    SectionHeaderStyle = DefaultSectionHeaderStyle
 ): bool =
 
-  alias(als, g_uiState.autoLayoutState)
-
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, label)
 
@@ -6333,8 +6347,9 @@ template sectionHeader*(
 
   let result = sectionHeader(
     id, 0,
-    als.y,
-    als.rowWidth, label, expanded, subHeader=false,
+    g_uiState.autoLayoutState.y,
+    g_uiState.autoLayoutState.rowWidth,
+    label, expanded, subHeader=false,
     tooltip, style
   )
 
@@ -6349,8 +6364,6 @@ template subSectionHeader*(
   style:    SectionHeaderStyle = DefaultSubSectionHeaderStyle
 ): bool =
 
-  alias(als, g_uiState.autoLayoutState)
-
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, label)
 
@@ -6358,8 +6371,9 @@ template subSectionHeader*(
 
   let result = sectionHeader(
     id, 0,
-    als.y,
-    als.rowWidth, label, expanded, subHeader=true,
+    g_uiState.autoLayoutState.y,
+    g_uiState.autoLayoutState.rowWidth,
+    label, expanded, subHeader=true,
     tooltip, style
   )
 
