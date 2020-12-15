@@ -96,14 +96,6 @@ proc loadData(vg: NVGContext) =
   if boldFont == NoFont:
     quit "Could not add font italic.\n"
 
-  g_img = loadImage("data/logo-mask-inner.png", desiredChannels=4)
-
-  for i in 0..<g_img.width * g_img.height:
-    g_img.data[i*4+3] = g_img.data[i*4]
-    g_img.data[i*4] = 255
-    g_img.data[i*4+1] = 180
-    g_img.data[i*4+2] = 0
-
 
 proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
   koi.beginFrame(winWidth, winHeight, fbWidth, fbHeight)
@@ -124,18 +116,6 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
   var labelStyle = getDefaultLabelStyle()
   labelStyle.fontSize = 15.0
   labelStyle.color = gray(0.8)
-
-  let image = vg.createImageRGBA(
-    g_img.width, g_img.height,
-    data = toOpenArray(g_img.data, 0, g_img.size()-1)
-  )
-
-  let paint = vg.imagePattern(ox=0, oy=0, ex=g_img.width/2, ey=g_img.height/2, angle=0, image, alpha=1.0)
-
-  vg.beginPath()
-  vg.fillPaint(paint)
-  vg.rect(0, 0, 2000, 2000)
-  vg.fill()
 
 #  vg.scissor(0, 0, 630, 100)
 

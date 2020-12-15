@@ -3877,50 +3877,56 @@ proc handleCommonTextEditingShortcuts(
 # {{{ TextField
 
 type TextFieldStyle* = ref object
-  bgCornerRadius*:      float
-  bgStrokeWidth*:       float
-  bgStrokeColor*:       Color
-  bgStrokeColorHover*:  Color
-  bgStrokeColorActive*: Color
-  bgFillColor*:         Color
-  bgFillColorHover*:    Color
-  bgFillColorActive*:   Color
+  bgCornerRadius*:        float
+  bgStrokeWidth*:         float
+  bgStrokeColor*:         Color
+  bgStrokeColorHover*:    Color
+  bgStrokeColorActive*:   Color
+  bgStrokeColorDisabled*: Color
+  bgFillColor*:           Color
+  bgFillColorHover*:      Color
+  bgFillColorActive*:     Color
+  bgFillColorDisabled*:   Color
 
   # TODO use labelstyle?
-  textPadHoriz*:        float
-  textPadVert*:         float
-  textFontSize*:        float
-  textFontFace*:        string
-  textColor*:           Color
-  textColorHover*:      Color
-  textColorActive*:     Color
+  textPadHoriz*:          float
+  textPadVert*:           float
+  textFontSize*:          float
+  textFontFace*:          string
+  textColor*:             Color
+  textColorHover*:        Color
+  textColorActive*:       Color
+  textColorDisabled*:     Color
 
-  cursorWidth*:         float
-  cursorColor*:         Color
-  selectionColor*:      Color
+  cursorWidth*:           float
+  cursorColor*:           Color
+  selectionColor*:        Color
 
 var DefaultTextFieldStyle = TextFieldStyle(
-  bgCornerRadius      : 5.0,
-  bgStrokeWidth       : 0.0, # TODO
-  bgStrokeColor       : black(),
-  bgStrokeColorHover  : black(),
-  bgStrokeColorActive : black(),
-  bgFillColor         : GRAY_MID,
-  bgFillColorHover    : GRAY_HI,
-  bgFillColorActive   : GRAY_LO,
+  bgCornerRadius        : 5.0,
+  bgStrokeWidth         : 0.0, # TODO
+  bgStrokeColor         : black(),
+  bgStrokeColorHover    : black(),
+  bgStrokeColorActive   : black(),
+  bgStrokeColorDisabled : black(),
+  bgFillColor           : GRAY_MID,
+  bgFillColorHover      : GRAY_HI,
+  bgFillColorActive     : GRAY_LO,
+  bgFillColorDisabled   : GRAY_LO,
 
   # TODO use labelstyle?
-  textPadHoriz        : 8.0,
-  textPadVert         : 2.0,
-  textFontSize        : 14.0,
-  textFontFace        : "sans-bold",
-  textColor           : GRAY_LO,
-  textColorHover      : GRAY_LO, # TODO
-  textColorActive     : GRAY_HI,
+  textPadHoriz          : 8.0,
+  textPadVert           : 2.0,
+  textFontSize          : 14.0,
+  textFontFace          : "sans-bold",
+  textColor             : GRAY_LO,
+  textColorHover        : GRAY_LO, # TODO
+  textColorActive       : GRAY_HI,
+  textColorDisabled     : GRAY_HI,
 
-  cursorColor         : rgb(255, 190, 0),
-  cursorWidth         : 1.0,
-  selectionColor      : rgba(200, 130, 0, 100)
+  cursorColor           : rgb(255, 190, 0),
+  cursorWidth           : 1.0,
+  selectionColor        : rgba(200, 130, 0, 100)
 )
 
 proc getDefaultTextFieldStyle*(): TextFieldStyle =
@@ -4355,14 +4361,18 @@ proc textField(
 
     let (x, y, w, h) = snapToGrid(x, y, w, h, s.bgStrokeWidth)
 
-    let state = if isHot(id) and hasNoActiveItem(): wsHover
-      elif editing: wsActive
-      else: wsNormal
+    let state = if   disabled: wsDisabled
+                elif isHot(id) and hasNoActiveItem(): wsHover
+                elif editing: wsActive
+                else: wsNormal
 
     let (fillColor, strokeColor) = case state
-      of wsHover:  (s.bgFillColorHover,  s.bgStrokeColorHover)
-      of wsActive: (s.bgFillColorActive, s.bgStrokeColorActive)
-      else:        (s.bgFillColor,       s.bgStrokeColor)
+      of wsNormal:   (s.bgFillColor,         s.bgStrokeColor)
+      of wsHover:    (s.bgFillColorHover,    s.bgStrokeColorHover)
+      of wsActive,
+         wsActiveHover,
+         wsDown:     (s.bgFillColorActive,   s.bgStrokeColorActive)
+      of wsDisabled: (s.bgFillColorDisabled, s.bgStrokeColorDisabled)
 
     var
       textX = textBoxX
@@ -4418,8 +4428,16 @@ proc textField(
 
     # Draw text
     # TODO text color hover
-    let textColor = if editing: s.textColorActive else: s.textColor
+#    let textColor = if editing: s.textColorActive else: s.textColor
 
+    let textColor = case state
+      of wsNormal:   s.textColor
+      of wsHover:    s.textColorHover
+      of wsActive,
+         wsActiveHover,
+         wsDown:     s.textColorActive
+      of wsDisabled: s.textColorDisabled
+ 
     setFont()
     vg.fillColor(textColor)
     discard vg.text(textX, textY, text)
