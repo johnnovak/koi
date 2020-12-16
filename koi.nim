@@ -423,8 +423,9 @@ type
     ox, oy: float
 
   AutoLayoutParams* = object
-    labelWidth*:       float
     itemsPerRow*:      Natural
+    rowWidth*:         float
+    labelWidth*:       float
     sectionPad*:       float
     leftPad*:          float
     rightPad*:         float
@@ -434,10 +435,6 @@ type
 
   AutoLayoutStateVars = object
     rowWidth:          float
-
-    # TODO this is just for the padding of the right side scrollbar. maybe
-    # use some more generic name?
-    scrollBarWidth:    float
     x, y:              float
     currColIndex:      Natural
     nextItemWidth:     float
@@ -1571,8 +1568,9 @@ proc isDoubleClick*(): bool =
 # {{{ Layout handling
 
 const DefaultAutoLayoutParams* = AutoLayoutParams(
-  labelWidth:       175.0,
   itemsPerRow:      2,
+  rowWidth:         320.0,
+  labelWidth:       175.0,
   sectionPad:       12.0,
   leftPad:          13.0,
   rightPad:         4.0,
@@ -1581,20 +1579,17 @@ const DefaultAutoLayoutParams* = AutoLayoutParams(
   defaultRowHeight: 21.0
 )
 
-proc setAutoLayoutParams*(params: AutoLayoutParams) =
-  g_uiState.autoLayoutParams = params
-
 # {{{ initAutoLayout()
-proc initAutoLayout(rowWidth: float, scrollBarWidth: float) =
+proc initAutoLayout*(params: AutoLayoutParams) =
   alias(ui, g_uiState)
   alias(a,  ui.autoLayoutState)
-  alias(ap, ui.autoLayoutParams)
+
+  ui.autoLayoutParams = params
 
   a = AutoLayoutStateVars.default
-  a.rowWidth = rowWidth
-  a.scrollBarWidth = scrollBarWidth
-  a.nextItemWidth  = ap.labelWidth
-  a.nextItemHeight = ap.defaultRowHeight
+  a.rowWidth = params.rowWidth
+  a.nextItemWidth  = params.labelWidth
+  a.nextItemHeight = params.defaultRowHeight
   a.firstRow = true
 
 # }}}
@@ -1641,7 +1636,7 @@ proc autoLayoutPost(height: Option[float] = float.none,
   # TODO this only works for the default 2-column layout
   else:
     a.x += ap.labelWidth
-    a.nextItemWidth = a.rowWidth - a.x - ap.rightPad - (a.scrollBarWidth+1)
+    a.nextItemWidth = a.rowWidth - a.x - ap.rightPad
     a.nextItemHeight = h
 
   a.groupBegin = false
@@ -1656,6 +1651,11 @@ proc autoLayoutFinal() =
     a.y -= ui.autoLayoutParams.sectionPad
 
 # }}}
+
+proc `nextItemWidth`*(w: float) =
+  alias(ui, g_uiState)
+  alias(a, ui.autoLayoutState)
+  a.nextItemWidth = w
 
 # {{{ beginGroup*()
 proc beginGroup*() =
@@ -6477,8 +6477,6 @@ proc beginScrollView*(id: ItemId, x, y, w, h: float,
   ss.h = h
 
   ui.itemState[id] = ss
-
-  initAutoLayout(rowWidth=w, scrollBarWidth=style.vertScrollBarWidth)
 
 
 template beginScrollView*(x, y, w, h: float,

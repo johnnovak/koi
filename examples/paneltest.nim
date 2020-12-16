@@ -101,7 +101,14 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
 
   ############################################################################
 
-  koi.beginScrollView(x=100, y=100, w=314, h=600)
+  var w = 314.0
+  koi.beginScrollView(x=100, y=100, w=w, h=600)
+
+  var ap = DefaultAutoLayoutParams
+  ap.rowWidth = w
+  ap.rightPad = 16
+
+  initAutoLayout(ap)
 
   if koi.sectionHeader("User Interface", sectionUserInterface):
 
@@ -427,9 +434,14 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
 ]#
 
 
+  w = 300.0
+  koi.beginScrollView(x=600, y=150, w=w, h=300)
 
+  ap = DefaultAutoLayoutParams
+  ap.rowWidth = w
+  ap.rightPad = 16
 
-  koi.beginScrollView(x=600, y=150, w=300, h=300)
+  initAutoLayout(ap)
 
   if koi.sectionHeader("First section", section1):
     koi.beginGroup()
