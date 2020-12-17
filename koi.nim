@@ -1579,7 +1579,7 @@ const DefaultAutoLayoutParams* = AutoLayoutParams(
   defaultRowHeight: 21.0
 )
 
-# {{{ initAutoLayout()
+# {{{ initAutoLayout*()
 proc initAutoLayout*(params: AutoLayoutParams) =
   alias(ui, g_uiState)
   alias(a,  ui.autoLayoutState)
@@ -1593,6 +1593,25 @@ proc initAutoLayout*(params: AutoLayoutParams) =
   a.firstRow = true
 
 # }}}
+# {{{ nextItemWidth*()
+proc nextItemWidth*(w: float) =
+  alias(ui, g_uiState)
+  ui.autoLayoutState.nextItemWidth = w
+
+# }}}
+# {{{ nextItemHeight*()
+proc nextItemHeight*(h: float) =
+  alias(ui, g_uiState)
+  ui.autoLayoutState.nextItemHeight = h
+
+# }}}
+# {{{ currAutoLayoutY*()
+proc currAutoLayoutY*(): float =
+  alias(ui, g_uiState)
+  ui.autoLayoutState.y
+
+# }}}
+
 # {{{ autoLayoutPre()
 proc autoLayoutPre(section: bool = false) =
   alias(ui, g_uiState)
@@ -1651,11 +1670,18 @@ proc autoLayoutFinal() =
     a.y -= ui.autoLayoutParams.sectionPad
 
 # }}}
-
-proc `nextItemWidth`*(w: float) =
+# {{{ autoLayoutCalcY()
+proc autoLayoutCalcY(): float =
   alias(ui, g_uiState)
   alias(a, ui.autoLayoutState)
-  a.nextItemWidth = w
+  alias(ap, ui.autoLayoutParams)
+
+  result = a.y
+  let dy = ap.defaultRowHeight - a.nextItemHeight
+  if dy > 0:
+    result += round(dy*0.5)
+
+# }}}
 
 # {{{ beginGroup*()
 proc beginGroup*() =
@@ -2395,7 +2421,7 @@ template checkBox*(active:   var bool,
 
   checkbox(id,
            g_uiState.autoLayoutState.x,
-           g_uiState.autoLayoutState.y,
+           autoLayoutCalcY(),
            g_uiState.autoLayoutState.nextItemHeight,
            active, tooltip, drawProc,
            style)
@@ -2495,12 +2521,7 @@ let DefaultRadioButtonDrawProc: RadioButtonsDrawProc =
       of wsActiveHover:
         (s.buttonFillColorActiveHover, s.buttonStrokeColorActiveHover)
 
-    let
-      sw = s.buttonStrokeWidth
-      buttonW = w - s.buttonPadHoriz
-      bx = round(x)
-      bw = round(x + buttonW) - bx
-      bh = h - s.buttonPadVert
+    let sw = s.buttonStrokeWidth
 
     vg.setFont(s.label.fontSize)
 
@@ -2510,17 +2531,26 @@ let DefaultRadioButtonDrawProc: RadioButtonsDrawProc =
     vg.beginPath()
 
     let cr = s.buttonCornerRadius
-    if   first: vg.roundedRect(bx, y, bw, bh, cr, 0, 0, cr)
-    elif last:  vg.roundedRect(bx, y, bw, bh, 0, cr, cr, 0)
-    else:       vg.rect(bx, y, bw, bh)
+    if   first: vg.roundedRect(x, y, w, h, cr, 0, 0, cr)
+    elif last:  vg.roundedRect(x, y, w, h, 0, cr, cr, 0)
+    else:       vg.rect(x, y, w, h)
 
     vg.fill()
     vg.stroke()
 
-    vg.drawLabel(bx, y, bw, bh, label, state, s.label)
+    vg.drawLabel(x, y, w, h, label, state, s.label)
 
 # }}}
 # {{{ radioButtons()
+
+# TODO
+func calcHorizButtonIdx(x, w: float, numButtons: Natural): int =
+  if x < 0 or x > w: -1
+  else:
+    let bw = w / numButtons
+    min(floor(x / bw).int, numButtons-1)
+
+
 proc radioButtons[T](
   id:               ItemId,
   x, y, w, h:       float,
@@ -2539,6 +2569,7 @@ proc radioButtons[T](
 
   alias(ui, g_uiState)
   alias(rs, ui.radioButtonState)
+  alias(s, style)
 
   let (x, y) = addDrawOffset(x, y)
 
@@ -2559,9 +2590,7 @@ proc radioButtons[T](
 
   case layout.kind
   of rblHoriz:
-    let buttonW = w / numButtons.float
-    let button = min(((ui.mx - x) / buttonW).int, numButtons-1)
-
+    let button = calcHorizButtonIdx(x = ui.mx-x, w, numButtons)
     setHotButton(button)
 
     if isHit(x, y, w, h) and hotButton > -1: setHotAndActive()
@@ -2578,6 +2607,7 @@ proc radioButtons[T](
     if row >= 0 and col >= 0 and button < numButtons:
       setHotButton(button)
 
+    # TODO why twice?
     setHotButton(button)
 
     if isHit(x, y, bbWidth, bbHeight) and hotButton > -1: setHotAndActive()
@@ -2630,17 +2660,18 @@ proc radioButtons[T](
 
     case layout.kind
     of rblHoriz:
-      let buttonW = w / numButtons.float
+      let bw = (w - (s.buttonPadHoriz * (numButtons-1))) / numButtons
       for i, label in labels:
         let
           state = buttonDrawState(i)
           first = i == 0
           last = i == labels.len-1
-          w = round(x + buttonW) - round(x)
+          w = round(x + bw) - round(x)
 
-        drawProc(vg, i, label, state, first, last,
-                 round(x), y, w, h, style)
-        x += buttonW
+        drawProc(vg, i, label, state, first, last, round(x), y, w, h, style)
+
+        x += bw
+        if not last: x += s.buttonPadHoriz
 
     of rblGridHoriz:
       let startX = x
@@ -2709,8 +2740,17 @@ template radioButtons*[T](
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  radioButtons(id, x, y, w, h, labels, activeButton, tooltips,
+  autoLayoutPre()
+
+  radioButtons(id,
+               g_uiState.autoLayoutState.x,
+               autoLayoutCalcY(),
+               g_uiState.autoLayoutState.nextItemWidth,
+               g_uiState.autoLayoutState.nextItemHeight,
+               labels, activeButton, tooltips,
                layout, drawProc, style)
+
+  autoLayoutPost()
 
 # }}}
 # {{{ DropDown
@@ -2995,7 +3035,7 @@ template dropDown*(
 
   dropDown(id,
            g_uiState.autoLayoutState.x,
-           g_uiState.autoLayoutState.y,
+           autoLayoutCalcY(),
            g_uiState.autoLayoutState.nextItemWidth,
            g_uiState.autoLayoutState.nextItemHeight,
            items,
@@ -3050,7 +3090,7 @@ template dropDown*[E: enum](
 
   dropDown(id,
            g_uiState.autoLayoutState.x,
-           g_uiState.autoLayoutState.y,
+           autoLayoutCalcY(),
            g_uiState.autoLayoutState.nextItemWidth,
            g_uiState.autoLayoutState.nextItemHeight,
            itemsSeq,
@@ -4437,7 +4477,7 @@ proc textField(
          wsActiveHover,
          wsDown:     s.textColorActive
       of wsDisabled: s.textColorDisabled
- 
+
     setFont()
     vg.fillColor(textColor)
     discard vg.text(textX, textY, text)
@@ -4505,7 +4545,7 @@ template textField*(
 
   textField(id,
             g_uiState.autoLayoutState.x,
-            g_uiState.autoLayoutState.y,
+            autoLayoutCalcY(),
             g_uiState.autoLayoutState.nextItemWidth,
             g_uiState.autoLayoutState.nextItemHeight,
             text,
@@ -5453,7 +5493,7 @@ template horizSlider*(startVal:   float = 0.0,
 
   horizSlider(id,
               g_uiState.autoLayoutState.x,
-              g_uiState.autoLayoutState.y,
+              autoLayoutCalcY(),
               g_uiState.autoLayoutState.nextItemWidth,
               g_uiState.autoLayoutState.nextItemHeight,
               startVal, endVal, value, tooltip, label,
@@ -6197,7 +6237,7 @@ template color*(col: var Color) =
   color(
     id,
     g_uiState.autoLayoutState.x,
-    g_uiState.autoLayoutState.y,
+    autoLayoutCalcY(),
     g_uiState.autoLayoutState.nextItemWidth,
     g_uiState.autoLayoutState.nextItemHeight,
     col
@@ -6548,6 +6588,45 @@ proc endScrollView*() =
   resetHitClip()
 
 # }}}
+
+# }}}
+
+# {{{ beginView*()
+proc beginView*(id: ItemId, x, y, w, h: float) =
+  alias(ui, g_uiState)
+
+  let (x, y) = addDrawOffset(x, y)
+
+  # Set up scissor
+  addDrawLayer(ui.currentLayer, vg):
+    vg.save()
+    vg.intersectScissor(x, y, w, h)
+
+  setHitClip(x, y, w, h)
+
+  pushDrawOffset(
+    DrawOffset(ox: x, oy: y)
+  )
+
+
+template beginView*(x, y, w, h: float) =
+
+  let i = instantiationInfo(fullPaths=true)
+  let id = generateId(i.filename, i.line, "")
+
+  beginScrollView(id, x, y, w, h)
+
+# }}}
+# {{{ endView*()
+proc endView*() =
+  alias(ui, g_uiState)
+
+  addDrawLayer(ui.currentLayer, vg):
+    vg.restore()
+
+  popDrawOffset()
+  autoLayoutFinal()
+  resetHitClip()
 
 # }}}
 
@@ -6985,5 +7064,6 @@ proc nvgContext*(): NVGContext =
 # }}}
 
 # }}}
+
 
 # vim: et:ts=2:sw=2:fdm=marker
