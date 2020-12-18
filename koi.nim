@@ -4152,9 +4152,8 @@ proc textField(
     # Hit testing
     if isHit(x, y, w, h) or activate or tabActivate:
       setHot(id)
-      if not disabled and (
-          (ui.mbLeftDown and hasNoActiveItem()) or activate or tabActivate
-        ):
+      if not disabled and 
+         ((ui.mbLeftDown and hasNoActiveItem()) or activate or tabActivate):
         textFieldEnterEditMode(id, text, textBoxX)
         tf.state = tfsEditLMBPressed
 
@@ -4536,9 +4535,6 @@ proc textField(
       text = text.runeSubStr(tf.displayStartPos)
 
     # Draw text
-    # TODO text color hover
-#    let textColor = if editing: s.textColorActive else: s.textColor
-
     let textColor = case state
       of wsNormal:   s.textColor
       of wsHover:    s.textColorHover
@@ -4626,14 +4622,16 @@ template textField*(
 # {{{ TextArea
 
 type TextAreaStyle* = object
-  bgCornerRadius*:      float
-  bgStrokeWidth*:       float
-  bgStrokeColor*:       Color
-  bgStrokeColorHover*:  Color
-  bgStrokeColorActive*: Color
-  bgFillColor*:         Color
-  bgFillColorHover*:    Color
-  bgFillColorActive*:   Color
+  bgCornerRadius*:        float
+  bgStrokeWidth*:         float
+  bgStrokeColor*:         Color
+  bgStrokeColorHover*:    Color
+  bgStrokeColorActive*:   Color
+  bgStrokeColorDisabled*: Color
+  bgFillColor*:           Color
+  bgFillColorHover*:      Color
+  bgFillColorActive*:     Color
+  bgFillColorDisabled*:   Color
 
   # TODO use labelStyle?
   textPadHoriz*:        float
@@ -4644,30 +4642,34 @@ type TextAreaStyle* = object
   textColor*:           Color
   textColorHover*:      Color
   textColorActive*:     Color
+  textColorDisabled*:   Color
 
   cursorWidth*:         float
   cursorColor*:         Color
   selectionColor*:      Color
 
 var DefaultTextAreaStyle = TextAreaStyle(
-  bgCornerRadius      : 5.0,
-  bgStrokeWidth       : 0.0, # TODO
-  bgStrokeColor       : black(),
-  bgStrokeColorHover  : black(),
-  bgStrokeColorActive : black(),
-  bgFillColor         : GRAY_MID,
-  bgFillColorHover    : GRAY_HI,
-  bgFillColorActive   : GRAY_LO,
+  bgCornerRadius        : 5.0,
+  bgStrokeWidth         : 0.0,
+  bgStrokeColor         : black(),
+  bgStrokeColorHover    : black(),
+  bgStrokeColorActive   : black(),
+  bgStrokeColorDisabled : black(),
+  bgFillColor           : GRAY_MID,
+  bgFillColorHover      : GRAY_HI,
+  bgFillColorActive     : GRAY_LO,
+  bgFillColorDisabled   : GRAY_LO,
 
   # TODO use labelStyle?
   textPadHoriz        : 8.0,
   textPadVert         : 2.0,
   textFontSize        : 14.0,
-  textFontFace        : "sans-bold", # TODO
+  textFontFace        : "sans-bold",
   textLineHeight      : 1.4,
   textColor           : GRAY_LO,
-  textColorHover      : GRAY_LO, # TODO
+  textColorHover      : GRAY_LO,
   textColorActive     : GRAY_HI,
+  textColorDisabled   : GRAY_MID,
 
   cursorColor         : rgb(255, 190, 0),
   cursorWidth         : 1.0,
@@ -4728,6 +4730,7 @@ proc textArea(
   x, y, w, h: float,
   text_out:   var string,
   tooltip:    string = "",
+  disabled:   bool = false,
   activate:   bool = false,
   drawWidget: bool = false,
   constraint: Option[TextAreaConstraint] = TextAreaConstraint.none,
@@ -4796,7 +4799,8 @@ proc textArea(
     # Hit testing
     if isHit(x, y, w - ScrollBarWidth, h) or activate or tabActivate:
       setHot(id)
-      if (ui.mbLeftDown and hasNoActiveItem()) or activate or tabActivate:
+      if not disabled and
+         ((ui.mbLeftDown and hasNoActiveItem()) or activate or tabActivate):
         enterEditMode(id, text, textBoxX)
         ta.state = tasEditEntered
 
@@ -5102,14 +5106,18 @@ proc textArea(
   addDrawLayer(ui.currentLayer, vg):
     vg.save()
 
-    let state = if isHot(id) and hasNoActiveItem(): wsHover
-      elif editing: wsActive
-      else: wsNormal
+    let state = if   disabled: wsDisabled
+                elif isHot(id) and hasNoActiveItem(): wsHover
+                elif editing: wsActive
+                else: wsNormal
 
     let (fillColor, strokeColor) = case state
-      of wsHover:  (s.bgFillColorHover,  s.bgStrokeColorHover)
-      of wsActive: (s.bgFillColorActive, s.bgStrokeColorActive)
-      else:        (s.bgFillColor,       s.bgStrokeColor)
+      of wsNormal:   (s.bgFillColor,         s.bgStrokeColor)
+      of wsHover:    (s.bgFillColorHover,    s.bgStrokeColorHover)
+      of wsActive,
+         wsActiveHover,
+         wsDown:     (s.bgFillColorActive,   s.bgStrokeColorActive)
+      of wsDisabled: (s.bgFillColorDisabled, s.bgStrokeColorDisabled)
 
     var sw = s.bgStrokeWidth
     var (x, y, w, h) = snapToGrid(x, y, w, h, sw)
@@ -5179,7 +5187,14 @@ proc textArea(
             vg.fill()
 
       # Draw text
-      let textColor = if editing: s.textColorActive else: s.textColor
+      let textColor = case state
+        of wsNormal:   s.textColor
+        of wsHover:    s.textColorHover
+        of wsActive,
+           wsActiveHover,
+           wsDown:     s.textColorActive
+        of wsDisabled: s.textColorDisabled
+
       vg.fillColor(textColor)
       discard vg.text(textX, textY, text, row.startBytePos, row.endBytePos)
 
@@ -5245,6 +5260,7 @@ template textArea*(
   x, y, w, h: float,
   text:       var string,
   tooltip:    string = "",
+  disabled:   bool = false,
   activate:   bool = false,
   constraint: Option[TextAreaConstraint] = TextAreaConstraint.none,
   style:      TextAreaStyle = DefaultTextAreaStyle
@@ -5253,7 +5269,7 @@ template textArea*(
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  textArea(id, x, y, w, h, text, tooltip, activate, drawWidget = true,
+  textArea(id, x, y, w, h, text, tooltip, disabled, activate, drawWidget = true,
            constraint, style)
 
 # }}}
