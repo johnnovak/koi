@@ -61,6 +61,13 @@ type
     colorCopyBuffer: Color
 
 # }}}
+# {{{ DialogState
+
+type
+  DialogStateVars = object
+    widgetInsidePopupCapturedFocus: bool
+
+# }}}
 # {{{ DropDownState
 
 type
@@ -385,12 +392,13 @@ type
 
     # Global widget states (per widget type)
     colorPickerState:   ColorPickerStateVars
+    dialogState:        DialogStateVars
     dropDownState:      DropDownStateVars
     popupState:         PopupStateVars
     radioButtonState:   RadioButtonStateVars
-    sectionHeaderState: SectionHeaderStateVars
     scrollBarState:     ScrollBarStateVars
     scrollViewState:    ScrollViewStateVars
+    sectionHeaderState: SectionHeaderStateVars
     sliderState:        SliderStateVars
     textAreaState:      TextAreaStateVars
     textFieldState:     TextFieldStateVars
@@ -4077,8 +4085,8 @@ proc textFieldEnterEditMode(id: ItemId, text: string, startX: float) =
   ui.focusCaptured = true
 
 # }}}
-# {{{ textFieldExitEditMode()
-proc textFieldExitEditMode(id: ItemId, startX: float) =
+# {{{ textFieldExitEditMode*()
+proc textFieldExitEditMode*(id: ItemId = 0, startX: float = 0) =
   alias(ui, g_uiState)
   alias(tf, ui.textFieldState)
   alias(tab, ui.tabActivationState)
@@ -4692,8 +4700,8 @@ with DefaultTextAreaScrollBarStyle:
 var DefaultTextAreaScrollBarStyle_EditMode = DefaultTextAreaScrollBarStyle.deepCopy()
 
 
-# {{{ textAreaExitEditMode()
-proc textAreaExitEditMode(id: ItemId) =
+# {{{ textAreaExitEditMode*()
+proc textAreaExitEditMode*(id: ItemId = 0) =
   alias(ui, g_uiState)
   alias(ta, ui.textAreaState)
   alias(tab, ui.tabActivationState)
@@ -6303,6 +6311,48 @@ template color*(col: var Color) =
 
 # }}}
 
+# {{{ View
+
+# {{{ beginView*()
+proc beginView*(id: ItemId, x, y, w, h: float) =
+  alias(ui, g_uiState)
+
+  let (x, y) = addDrawOffset(x, y)
+
+  # Set up scissor
+  addDrawLayer(ui.currentLayer, vg):
+    vg.save()
+    vg.intersectScissor(x, y, w, h)
+
+  setHitClip(x, y, w, h)
+
+  pushDrawOffset(
+    DrawOffset(ox: x, oy: y)
+  )
+
+
+template beginView*(x, y, w, h: float) =
+
+  let i = instantiationInfo(fullPaths=true)
+  let id = generateId(i.filename, i.line, "")
+
+  beginScrollView(id, x, y, w, h)
+
+# }}}
+# {{{ endView*()
+proc endView*() =
+  alias(ui, g_uiState)
+
+  addDrawLayer(ui.currentLayer, vg):
+    vg.restore()
+
+  popDrawOffset()
+  autoLayoutFinal()
+  resetHitClip()
+
+# }}}
+
+# }}}
 # {{{ SectionHeader
 
 # {{{ SectionHeaderStyle
@@ -6647,45 +6697,6 @@ proc endScrollView*() =
 
 # }}}
 
-# {{{ beginView*()
-proc beginView*(id: ItemId, x, y, w, h: float) =
-  alias(ui, g_uiState)
-
-  let (x, y) = addDrawOffset(x, y)
-
-  # Set up scissor
-  addDrawLayer(ui.currentLayer, vg):
-    vg.save()
-    vg.intersectScissor(x, y, w, h)
-
-  setHitClip(x, y, w, h)
-
-  pushDrawOffset(
-    DrawOffset(ox: x, oy: y)
-  )
-
-
-template beginView*(x, y, w, h: float) =
-
-  let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
-
-  beginScrollView(id, x, y, w, h)
-
-# }}}
-# {{{ endView*()
-proc endView*() =
-  alias(ui, g_uiState)
-
-  addDrawLayer(ui.currentLayer, vg):
-    vg.restore()
-
-  popDrawOffset()
-  autoLayoutFinal()
-  resetHitClip()
-
-# }}}
-
 # {{{ Dialog
 
 type DialogStyle* = ref object
@@ -6733,10 +6744,11 @@ proc beginDialog*(w, h: float, title: string,
                   style: DialogStyle = DefaultDialogStyle) =
 
   alias(ui, g_uiState)
+  alias(ds, ui.dialogState)
   alias(s, style)
 
   ui.dialogOpen = true
-  ui.focusCaptured = false
+  ui.focusCaptured = ds.widgetInsidePopupCapturedFocus
 
   let x = if x.isSome: x.get else: floor((ui.winWidth - w) / 2)
   let y = if y.isSome: y.get else: floor((ui.winHeight - h) / 2)
@@ -6798,10 +6810,12 @@ proc beginDialog*(w, h: float, title: string,
 # {{{ endDialog()
 proc endDialog*() =
   alias(ui, g_uiState)
+  alias(ds, ui.dialogState)
 
   popDrawOffset()
   ui.currentLayer = layerDefault
   if ui.dialogOpen:
+    ds.widgetInsidePopupCapturedFocus = ui.focusCaptured
     ui.focusCaptured = true
 
 # }}}
@@ -6812,8 +6826,8 @@ proc closeDialog*() =
   ui.focusCaptured = false
   ui.dialogOpen = false
 
-  textFieldExitEditMode(id=0, startX=0.0)
-  textAreaExitEditMode(id=0)
+  textFieldExitEditMode()
+  textAreaExitEditMode()
 
 # }}}
 
@@ -6934,6 +6948,8 @@ proc menuItemSeparator*() =
 
 # }}}
 
+# }}}
+#
 # {{{ General
 
 # {{{ init*()
