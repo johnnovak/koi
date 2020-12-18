@@ -202,13 +202,6 @@ type
     # Used by the move cursor to next/previous line actions
     lastCursorXPos:  Option[float]
 
-    # State variables for tabbing back and forth between textfields
-    prevItem:        ItemId
-    lastActiveItem:  ItemId
-    itemToActivate:  ItemId
-    activateNext:    bool
-    activatePrev:    bool
-
 # }}}
 # {{{ TextFieldState
 type
@@ -245,13 +238,6 @@ type
     # The original text is stored when going into edit mode so it can be
     # restored if the editing is cancelled.
     originalText:    string
-
-    # State variables for tabbing back and forth between textfields
-    prevItem:        ItemId
-    lastActiveItem:  ItemId
-    itemToActivate:  ItemId
-    activateNext:    bool
-    activatePrev:    bool
 
 # }}}
 # {{{ TooltipState
@@ -410,12 +396,16 @@ type
     textFieldState:     TextFieldStateVars
 
     # Per-instance data storage for widgets that require it (e.g. ScrollView)
-    itemState:        Table[ItemId, ref RootObj]
+    itemState:          Table[ItemId, ref RootObj]
 
     # Auto-layout
     # ***********
-    autoLayoutParams: AutoLayoutParams
-    autoLayoutState:  AutoLayoutStateVars
+    autoLayoutParams:   AutoLayoutParams
+    autoLayoutState:    AutoLayoutStateVars
+
+    # Tab-activation
+    # **************
+    tabActivationState: TabActivationStateVars
 
 
   DrawOffset = object
@@ -442,6 +432,13 @@ type
     firstRow:          bool
     prevSection:       bool
     groupBegin:        bool
+
+  TabActivationStateVars = object
+    prevItem:          ItemId
+    lastActiveItem:    ItemId
+    itemToActivate:    ItemId
+    activateNext:      bool
+    activatePrev:      bool
 
 # }}}
 
@@ -2273,43 +2270,46 @@ template button*(x, y, w, h: float,
 # {{{ CheckBox
 
 type CheckBoxStyle* = ref object
-  cornerRadius*:      float
-  strokeWidth*:       float
-  strokeColor*:       Color
-  strokeColorHover*:  Color
-  strokeColorDown*:   Color
-  strokeColorActive*: Color
-  fillColor*:         Color
-  fillColorHover*:    Color
-  fillColorDown*:     Color
-  fillColorActive*:   Color
-  icon*:              LabelStyle
-  iconColorActive*:   Color
-  iconActive*:        string
-  iconInactive*:      string
+  cornerRadius*:        float
+  strokeWidth*:         float
+  strokeColor*:         Color
+  strokeColorHover*:    Color
+  strokeColorDown*:     Color
+  strokeColorActive*:   Color
+  strokeColorDisabled*: Color
+  fillColor*:           Color
+  fillColorHover*:      Color
+  fillColorDown*:       Color
+  fillColorActive*:     Color
+  fillColorDisabled*:   Color
+  icon*:                LabelStyle
+  iconActive*:          string
+  iconInactive*:        string
 
 var DefaultCheckBoxStyle = CheckBoxStyle(
-  cornerRadius      : 5.0,
-  strokeWidth       : 0.0,
-  strokeColor       : black(),
-  strokeColorHover  : black(),
-  strokeColorDown   : black(),
-  strokeColorActive : black(),
-  fillColor         : GRAY_MID,
-  fillColorHover    : GRAY_HI,
-  fillColorDown     : GRAY_LOHI,
-  fillColorActive   : GRAY_LO,
-  icon              : getDefaultLabelStyle(),
-  iconColorActive   : GRAY_HI,
-  iconActive        : "",
-  iconInactive      : ""
+  cornerRadius        : 5.0,
+  strokeWidth         : 0.0,
+  strokeColor         : black(),
+  strokeColorHover    : black(),
+  strokeColorDown     : black(),
+  strokeColorActive   : black(),
+  strokeColorDisabled : black(),
+  fillColor           : GRAY_MID,
+  fillColorHover      : GRAY_HI,
+  fillColorDown       : GRAY_LOHI,
+  fillColorActive     : GRAY_LO,
+  fillColorDisabled   : gray(0.6, 0.5),
+  icon                : getDefaultLabelStyle(),
+  iconActive          : "",
+  iconInactive        : ""
 )
 
 with DefaultCheckBoxStyle.icon:
-  align       = haCenter
-  color       = GRAY_LO
-  colorHover  = GRAY_LO
-  colorDown   = GRAY_HI
+  align         = haCenter
+  color         = GRAY_LO
+  colorHover    = GRAY_LO
+  colorDown     = GRAY_HI
+  colorDisabled = GRAY_LO
 
 proc getDefaultCheckBoxStyle*(): CheckBoxStyle =
   DefaultCheckBoxStyle.deepCopy
@@ -2319,18 +2319,18 @@ proc setDefaultCheckBoxStyle*(style: CheckBoxStyle) =
 
 type
   CheckBoxDrawProc* = proc (vg: NVGContext,
-                            x, y, w: float, state: WidgetState,
+                            x, y, w: float, checked: bool, state: WidgetState,
                             style: CheckBoxStyle)
 
 let DefaultCheckBoxDrawProc: CheckBoxDrawProc =
   proc (vg: NVGContext,
-        x, y, w: float, state: WidgetState,
+        x, y, w: float, checked: bool, state: WidgetState,
         style: CheckBoxStyle) =
 
     alias(s, style)
 
     var (fillColor, strokeColor) = case state
-      of wsNormal, wsDisabled:
+      of wsNormal:
         (s.fillColor, s.strokeColor)
       of wsHover:
         (s.fillColorHover, s.strokeColorHover)
@@ -2338,6 +2338,8 @@ let DefaultCheckBoxDrawProc: CheckBoxDrawProc =
         (s.fillColorDown, s.strokeColorDown)
       of wsActive, wsActiveHover:
         (s.fillColorActive, s.strokeColorActive)
+      of wsDisabled:
+        (s.fillColorDisabled, s.strokeColorDisabled)
 
     let sw = s.strokeWidth
     let (x, y, w, _) = snapToGrid(x, y, w, w, sw)
@@ -2350,8 +2352,7 @@ let DefaultCheckBoxDrawProc: CheckBoxDrawProc =
     vg.fill()
     vg.stroke()
 
-    let icon = if state in {wsActive, wsActiveHover}: s.iconActive
-               else: s.iconInactive
+    let icon = if checked: s.iconActive else: s.iconInactive
 
     if icon != "":
       vg.drawLabel(x, y, w, w, icon, state, s.icon)
@@ -2361,6 +2362,7 @@ proc checkBox(id:          ItemId,
               x, y, w:     float,
               checked_out: var bool,
               tooltip:     string,
+              disabled:    bool = false,
               drawProc:    CheckBoxDrawProc = DefaultCheckBoxDrawProc,
               style:       CheckBoxStyle = DefaultCheckBoxStyle) =
 
@@ -2373,7 +2375,7 @@ proc checkBox(id:          ItemId,
   # Hit testing
   if isHit(x, y, w, w):
     setHot(id)
-    if ui.mbLeftDown and hasNoActiveItem():
+    if not disabled and ui.mbLeftDown and hasNoActiveItem():
       setActive(id)
 
   # LMB released over active widget means it was clicked
@@ -2383,13 +2385,14 @@ proc checkBox(id:          ItemId,
   checked_out = checked
 
   addDrawLayer(ui.currentLayer, vg):
-    let state = if isHot(id) and hasNoActiveItem():
+    let state = if disabled: wsDisabled
+                elif isHot(id) and hasNoActiveItem():
                   if checked: wsActiveHover else: wsHover
                 elif isHot(id) and isActive(id): wsDown
                 else:
                   if checked: wsActive else: wsNormal
 
-    drawProc(vg, x, y, w, state, style)
+    drawProc(vg, x, y, w, checked, state, style)
 
 
   if isHot(id):
@@ -2400,17 +2403,19 @@ proc checkBox(id:          ItemId,
 template checkBox*(x, y, w:  float,
                    active:   var bool,
                    tooltip:  string = "",
+                   disabled: bool = false,
                    drawProc: CheckBoxDrawProc = DefaultCheckBoxDrawProc,
                    style:    CheckBoxStyle = DefaultCheckBoxStyle) =
 
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  checkbox(id, x, y, w, active, tooltip, drawProc, style)
+  checkbox(id, x, y, w, active, tooltip, disabled, drawProc, style)
 
 
 template checkBox*(active:   var bool,
                    tooltip:  string = "",
+                   disabled: bool = false,
                    drawProc: CheckBoxDrawProc = DefaultCheckBoxDrawProc,
                    style:    CheckBoxStyle = DefaultCheckBoxStyle) =
 
@@ -2423,7 +2428,7 @@ template checkBox*(active:   var bool,
            g_uiState.autoLayoutState.x,
            autoLayoutCalcY(),
            g_uiState.autoLayoutState.nextItemHeight,
-           active, tooltip, drawProc,
+           active, tooltip, disabled, drawProc,
            style)
 
   autoLayoutPost()
@@ -2541,15 +2546,53 @@ let DefaultRadioButtonDrawProc: RadioButtonsDrawProc =
     vg.drawLabel(x, y, w, h, label, state, s.label)
 
 # }}}
+# {{{ DefaultRadioButtonGridDrawProc
+let DefaultRadioButtonGridDrawProc: RadioButtonsDrawProc =
+  proc (vg: NVGContext, buttonIdx: Natural, label: string,
+        state: WidgetState, first, last: bool,
+        x, y, w, h: float, style: RadioButtonsStyle) =
+
+    alias(s, style)
+
+    let (x, y, w, h) = snapToGrid(x, y, w, h, s.buttonStrokeWidth)
+
+    let (fillColor, strokeColor) =
+      case state
+      of wsNormal, wsDisabled:
+        (s.buttonFillColor, s.buttonStrokeColor)
+      of wsHover:
+        (s.buttonFillColorHover, s.buttonStrokeColorHover)
+      of wsDown:
+        (s.buttonFillColorDown, s.buttonStrokeColorDown)
+      of wsActive:
+        (s.buttonFillColorActive, s.buttonStrokeColorActive)
+      of wsActiveHover:
+        (s.buttonFillColorActiveHover, s.buttonStrokeColorActiveHover)
+
+    let sw = s.buttonStrokeWidth
+
+    vg.setFont(s.label.fontSize)
+
+    vg.fillColor(fillColor)
+    vg.strokeColor(strokeColor)
+    vg.strokeWidth(sw)
+    vg.beginPath()
+
+    let bw = w - s.buttonPadHoriz
+    let bh = h - s.buttonPadVert
+
+    let cr = s.buttonCornerRadius
+    if   first: vg.roundedRect(x, y, bw, bh, cr, 0, 0, cr)
+    elif last:  vg.roundedRect(x, y, bw, bh, 0, cr, cr, 0)
+    else:       vg.rect(x, y, bw, bh)
+
+    vg.fill()
+    vg.stroke()
+
+    vg.drawLabel(x, y, bw, bh, label, state, s.label)
+
+# }}}
 # {{{ radioButtons()
-
-# TODO
-func calcHorizButtonIdx(x, w: float, numButtons: Natural): int =
-  if x < 0 or x > w: -1
-  else:
-    let bw = w / numButtons
-    min(floor(x / bw).int, numButtons-1)
-
 
 proc radioButtons[T](
   id:               ItemId,
@@ -2587,6 +2630,12 @@ proc radioButtons[T](
   proc setHotButton(button: int) =
     if hasNoActiveItem() or (hasActiveItem() and button == rs.activeItem):
       hotButton = button
+
+  func calcHorizButtonIdx(x, w: float, numButtons: Natural): int =
+    if x < 0 or x > w: -1
+    else:
+      let bw = w / numButtons
+      min(floor(x / bw).int, numButtons-1)
 
   case layout.kind
   of rblHoriz:
@@ -2655,8 +2704,13 @@ proc radioButtons[T](
   addDrawLayer(ui.currentLayer, vg):
     var x = x
     var y = y
-    let drawProc = if drawProc.isSome: drawProc.get
-                   else: DefaultRadioButtonDrawProc
+
+    let drawProc = if
+      drawProc.isSome: drawProc.get
+    else:
+      case layout.kind
+      of rblHoriz: DefaultRadioButtonDrawProc
+      else:        DefaultRadioButtonGridDrawProc
 
     case layout.kind
     of rblHoriz:
@@ -3913,6 +3967,19 @@ proc handleCommonTextEditingShortcuts(
 
 # }}}
 
+proc handleTabActivation(id: ItemId): bool =
+  alias(tab, g_uiState.tabActivationState)
+
+  if tab.activateNext and tab.lastActiveItem == tab.prevItem and
+     id != tab.prevItem:  # exit editing textfield/textarea if there's just one
+    tab.activateNext = false
+    result = true
+
+  elif tab.activatePrev and id == tab.itemToActivate and
+       id != tab.prevItem:  # exit editing textfield/textarea if there's just one
+    tab.activatePrev = false
+    result = true
+
 # }}}
 # {{{ TextField
 
@@ -4014,6 +4081,7 @@ proc textFieldEnterEditMode(id: ItemId, text: string, startX: float) =
 proc textFieldExitEditMode(id: ItemId, startX: float) =
   alias(ui, g_uiState)
   alias(tf, ui.textFieldState)
+  alias(tab, ui.tabActivationState)
 
   clearEventBuf()
   clearCharBuf()
@@ -4025,7 +4093,7 @@ proc textFieldExitEditMode(id: ItemId, startX: float) =
   tf.displayStartPos = 0
   tf.displayStartX = startX
   tf.originalText = ""
-  tf.lastActiveItem = id
+  tab.lastActiveItem = id
 
   ui.focusCaptured = false
   setCursorShape(csArrow)
@@ -4053,6 +4121,7 @@ proc textField(
   alias(ui, g_uiState)
   alias(tf, ui.textFieldState)
   alias(s, style)
+  alias(tab, ui.tabActivationState)
 
   let (x, y) = addDrawOffset(x, y)
 
@@ -4070,15 +4139,7 @@ proc textField(
   var tabActivate = false
 
   if not ui.focusCaptured and tf.state == tfsDefault:
-    if tf.activateNext and tf.lastActiveItem == tf.prevItem and
-       id != tf.prevItem:  # exit editing textfield if there's just one
-      tf.activateNext = false
-      tabActivate = true
-
-    elif tf.activatePrev and id == tf.itemToActivate and
-         id != tf.prevItem:  # exit editing textfield if there's just one
-      tf.activatePrev = false
-      tabActivate = true
+    tabActivate = handleTabActivation(id)
 
     # Hit testing
     if isHit(x, y, w, h) or activate or tabActivate:
@@ -4301,13 +4362,13 @@ proc textField(
         elif sc in shortcuts[tesPrevTextField]:
           text = enforceConstraint(text, tf.originalText)
           exitEditMode()
-          tf.activatePrev = true
-          tf.itemToActivate = tf.prevItem
+          tab.activatePrev = true
+          tab.itemToActivate = tab.prevItem
 
         elif sc in shortcuts[tesNextTextField]:
           text = enforceConstraint(text, tf.originalText)
           exitEditMode()
-          tf.activateNext = true
+          tab.activateNext = true
 
         elif sc in shortcuts[tesAccept]:
           text = enforceConstraint(text, tf.originalText)
@@ -4491,7 +4552,7 @@ proc textField(
   if activate or tabActivate:
     ui.tooltipState.state = tsOff
 
-  tf.prevItem = id
+  tab.prevItem = id
 
 # }}}
 
@@ -4635,6 +4696,7 @@ var DefaultTextAreaScrollBarStyle_EditMode = DefaultTextAreaScrollBarStyle.deepC
 proc textAreaExitEditMode(id: ItemId) =
   alias(ui, g_uiState)
   alias(ta, ui.textAreaState)
+  alias(tab, ui.tabActivationState)
 
   clearEventBuf()
   clearCharBuf()
@@ -4646,7 +4708,7 @@ proc textAreaExitEditMode(id: ItemId) =
   ta.displayStartY = 0
   ta.selection = NoSelection
   ta.originalText = ""
-  ta.lastActiveItem = id
+  tab.lastActiveItem = id
 
   ui.focusCaptured = false
   setCursorShape(csArrow)
@@ -4667,6 +4729,7 @@ proc textArea(
   alias(vg, g_nvgContext)
   alias(ui, g_uiState)
   alias(ta, ui.textAreaState)
+  alias(tab, ui.tabActivationState)
   alias(s, style)
 
   var text = text_out
@@ -4679,6 +4742,7 @@ proc textArea(
   # TODO style param
   let ScrollBarWidth = 12.0
 
+  let (ox, oy) = (x, y)
   let (x, y) = addDrawOffset(x, y)
 
   # The text is displayed within this rectangle (used for drawing later)
@@ -4719,15 +4783,7 @@ proc textArea(
   var tabActivate = false
 
   if not ui.focusCaptured and ta.state == tasDefault:
-    if ta.activateNext and ta.lastActiveItem == ta.prevItem and
-       id != ta.prevItem:  # exit editing textarea if there's just one
-      ta.activateNext = false
-      tabActivate = true
-
-    elif ta.activatePrev and id == ta.itemToActivate and
-         id != ta.prevItem:  # exit editing textarea if there's just one
-      ta.activatePrev = false
-      tabActivate = true
+    tabActivate = handleTabActivation(id)
 
     # Hit testing
     if isHit(x, y, w - ScrollBarWidth, h) or activate or tabActivate:
@@ -4954,12 +5010,12 @@ proc textArea(
         # General
         elif sc in shortcuts[tesPrevTextField]:
           exitEditMode()
-          ta.activatePrev = true
-          ta.itemToActivate = ta.prevItem
+          tab.activatePrev = true
+          tab.itemToActivate = tab.prevItem
 
         elif sc in shortcuts[tesNextTextField]:
           exitEditMode()
-          ta.activateNext = true
+          tab.activateNext = true
 
         elif sc in shortcuts[tesAccept]:
           exitEditMode()
@@ -5159,7 +5215,7 @@ proc textArea(
   # TODO offset
   vertScrollBar(
     sbId,
-    x+w - ScrollBarWidth, y,
+    ox+w - ScrollBarWidth, oy,
     ScrollBarWidth, h,
     startVal=0, endVal=endVal,
     ta.displayStartRow,
@@ -5173,7 +5229,7 @@ proc textArea(
   if activate or tabActivate:
     ui.tooltipState.state = tsOff
 
-  ta.prevItem = id
+  tab.prevItem = id
 
 # }}}
 
