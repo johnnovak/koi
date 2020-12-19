@@ -615,12 +615,12 @@ proc ctrlDown*():  bool = isKeyDown(keyLeftControl) or isKeyDown(keyRightControl
 proc superDown*(): bool = isKeyDown(keyLeftSuper)   or isKeyDown(keyRightSuper)
 
 # }}}
-# {{{ Drawing utils
+# {{{ Drawing & widget utils 
 
 # {{{ getPxRatio*()
 proc getPxRatio*(): float =
   let win = glfw.currentContext()
-  let (winWidth, winHeight) = win.size
+  let (winWidth, _) = win.size
   let (fbWidth, _) = win.framebufferSize
 
   result = fbWidth / winWidth
@@ -1110,6 +1110,13 @@ template renderToImage*(vg: NVGContext,
   fb.image = NoImage  # prevent deleting the image when deleting the FB
   nvgluDeleteFramebuffer(fb)
   image
+
+# }}}
+
+# {{{ clampToRange*()
+func clampToRange*(value, startVal, endVal: float): float =
+  if startVal <= endVal: value.clamp(startVal, endVal)
+  else:                  value.clamp(endVal, startVal)
 
 # }}}
 
@@ -2615,7 +2622,10 @@ proc radioButtons[T](
 
   var activeButton = activeButton_out
 
+  # TODO clamp instead?
   assert activeButton.ord >= 0 and activeButton.ord <= labels.high
+
+  # TODO clamp instead?
   assert tooltips.len == 0 or tooltips.len == labels.len
 
   alias(ui, g_uiState)
@@ -2892,7 +2902,10 @@ proc dropDown[T](id:               ItemId,
 
   var selectedItem = selectedItem_out
 
+  # TODO allow?
   assert items.len > 0
+
+  # TODO clamp instead?
   assert selectedItem.ord <= items.high
 
   alias(ui, g_uiState)
@@ -3234,25 +3247,21 @@ proc horizScrollBar(id:         ItemId,
                     clickStep:  float = -1.0,
                     style:      ScrollBarStyle) =
 
-  # TODO only for debugging, too fragile
-#  assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
-#         (endVal   < startVal and value >= endVal   and value <= startVal)
-
-#  assert thumbSize < 0.0 or thumbSize < abs(startVal - endVal)
-#  assert clickStep < 0.0 or clickStep < abs(startVal - endVal)
-
-  var value = value_out
-
   alias(ui, g_uiState)
   alias(sb, ui.scrollBarState)
   alias(s, style)
 
+  var value = value_out.clampToRange(startVal, endVal)
+
+  var thumbSize = if thumbSize > abs(startVal - endVal): -1.0 else: thumbSize
+  let clickStep = if clickStep > abs(startVal - endVal): -1.0 else: clickStep
+
   let (x, y) = addDrawOffset(x, y)
 
   # Calculate current thumb position
-  let
-    thumbSize = if thumbSize < 0: 0.000001 else: thumbSize
+  if thumbSize < 0: thumbSize = 0.000001
 
+  let
     thumbW = max((w - s.thumbPad*2) / (abs(startVal - endVal) / thumbSize),
                  s.thumbMinSize)
 
@@ -3458,24 +3467,21 @@ proc vertScrollBar(id:         ItemId,
                    clickStep:  float = -1.0,
                    style:      ScrollBarStyle) =
 
-  # TODO only for debugging, too fragile
-#  assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
-#         (endVal   < startVal and value >= endVal   and value <= startVal)
-
-#  assert thumbSize < 0.0 or thumbSize < abs(startVal - endVal)
-#  assert clickStep < 0.0 or clickStep < abs(startVal - endVal)
-
-  var value = value_out
-
   alias(ui, g_uiState)
   alias(sb, ui.scrollBarState)
   alias(s, style)
 
+  var value = value_out.clampToRange(startVal, endVal)
+
+  var thumbSize = if thumbSize > abs(startVal - endVal): -1.0 else: thumbSize
+  let clickStep = if clickStep > abs(startVal - endVal): -1.0 else: clickStep
+
   let (x, y) = addDrawOffset(x, y)
 
   # Calculate current thumb position
+  if thumbSize < 0: thumbSize = 0.000001
+
   let
-    thumbSize = if thumbSize < 0: 0.000001 else: thumbSize
     thumbW = w - s.thumbPad*2
 
     thumbH = max((h - s.thumbPad*2) / (abs(startVal - endVal) / thumbSize),
@@ -4124,6 +4130,7 @@ proc textField(
 
   var text = text_out
 
+  # TODO clamp?
   assert text.runeLen <= MaxTextLen
 
   alias(ui, g_uiState)
@@ -4746,6 +4753,7 @@ proc textArea(
   var text = text_out
 
   const MaxLineLen = 1000
+  # TODO clamp?
   assert text.runeLen <= MaxLineLen
 
   let TextRightPad = s.textFontSize
@@ -5092,14 +5100,6 @@ proc textArea(
     let maxDisplayStartRow = max(rows.len.int - maxDisplayRows, 0)
     ta.displayStartRow = min(ta.displayStartRow.int, maxDisplayStartRow).float
 
-  # Scrollbar
-  let sbStyle = if editing: DefaultTextAreaScrollBarStyle_EditMode
-                else:       DefaultTextAreaScrollBarStyle
-
-  let endVal = max(rows.len.float - maxDisplayRows, ta.displayStartRow)
-  let thumbSize = maxDisplayRows.float *
-                  ((rows.len.float - maxDisplayRows) / rows.len)
-
   text_out = text
 
 
@@ -5154,7 +5154,8 @@ proc textArea(
       cursorYAdjust = floor(lineHeight*0.77)
       numGlyphs: Natural
 
-    let displayEndRow = min(ta.displayStartRow.int + maxDisplayRows-1, rows.high)
+    let displayEndRow = min(ta.displayStartRow.int + maxDisplayRows-1,
+                            rows.high)
 
     for rowIdx in ta.displayStartRow.int..displayEndRow:
       let row = rows[rowIdx]
@@ -5233,14 +5234,29 @@ proc textArea(
     vg.restore()
 
 
+  # Handle scrollwheel
+  let scrollBarEndVal = max(rows.len.float - maxDisplayRows, 0)
+
+  if isHot(id) and hasEvent() and ui.currEvent.kind == ekScroll:
+    ta.displayStartRow = (ta.displayStartRow - ui.currEvent.oy)
+                           .clamp(0, scrollBarEndVal)
+
+    ui.eventHandled = true
+
+
+  # Scrollbar
   let sbId = hashId(lastIdString() & ":scrollBar")
 
-  # TODO offset
+  let sbStyle = if editing: DefaultTextAreaScrollBarStyle_EditMode
+                else:       DefaultTextAreaScrollBarStyle
+
+  let thumbSize = maxDisplayRows.float *
+                  ((rows.len.float - maxDisplayRows) / rows.len)
+
   vertScrollBar(
     sbId,
-    ox+w - ScrollBarWidth, oy,
-    ScrollBarWidth, h,
-    startVal=0, endVal=endVal,
+    x=(ox+w - ScrollBarWidth), y = oy, w=ScrollBarWidth, h=h,
+    startVal=0, endVal=scrollBarEndVal,
     ta.displayStartRow,
     thumbSize=thumbSize, clickStep=2, style=sbStyle)
 
@@ -5345,14 +5361,11 @@ proc horizSlider(id:         ItemId,
                  style:      SliderStyle = DefaultSliderStyle,
                  grouping:   WidgetGrouping = wgNone) =
 
-  var value = value_out
-
-  assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
-         (endVal   < startVal and value >= endVal   and value <= startVal)
-
   alias(ui, g_uiState)
   alias(ss, ui.sliderState)
   alias(s, style)
+
+  var value = value_out.clampToRange(startVal, endVal)
 
   let (ox, oy) = (x, y)
   let (x, y) = addDrawOffset(x, y)
@@ -5592,14 +5605,11 @@ proc vertSlider(id:         ItemId,
                 tooltip:    string = "",
                 style:      SliderStyle = DefaultSliderStyle) =
 
-  var value = value_out
-
-  assert (startVal <   endVal and value >= startVal and value <= endVal  ) or
-         (endVal   < startVal and value >= endVal   and value <= startVal)
-
   alias(ui, g_uiState)
   alias(ss, ui.sliderState)
   alias(s,  style)
+
+  var value = value_out.clampToRange(startVal, endVal)
 
   let (x, y) = addDrawOffset(x, y)
 
@@ -6964,8 +6974,6 @@ proc menuItemSeparator*() =
 
 # }}}
 
-# }}}
-#
 # {{{ General
 
 # {{{ init*()
@@ -7152,6 +7160,5 @@ proc nvgContext*(): NVGContext =
 # }}}
 
 # }}}
-
 
 # vim: et:ts=2:sw=2:fdm=marker

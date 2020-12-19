@@ -85,16 +85,14 @@ proc createWindow(): Window =
   newWindow(cfg)
 
 
-var g_img: ImageData
-
 proc loadData(vg: NVGContext) =
   let regularFont = vg.createFont("sans", "data/Roboto-Regular.ttf")
   if regularFont == NoFont:
-    quit "Could not add font italic.\n"
+    quit "Could not load regular font.\n"
 
   let boldFont = vg.createFont("sans-bold", "data/Roboto-Bold.ttf")
   if boldFont == NoFont:
-    quit "Could not add font italic.\n"
+    quit "Could not load bold font.\n"
 
 
 proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
