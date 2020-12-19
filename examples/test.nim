@@ -1,6 +1,5 @@
 import lenientops
 import strformat
-import unicode
 
 import glad/gl
 import glfw
@@ -88,7 +87,7 @@ proc createWindow(): Window =
 proc loadData(vg: NVGContext) =
   let regularFont = vg.createFont("sans", "data/Roboto-Regular.ttf")
   if regularFont == NoFont:
-    quit "Could not load regular font.\n"
+    quit "Could not load regular italic.\n"
 
   let boldFont = vg.createFont("sans-bold", "data/Roboto-Bold.ttf")
   if boldFont == NoFont:

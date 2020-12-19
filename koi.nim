@@ -3804,25 +3804,33 @@ proc drawCursor(vg: NVGContext, x, y1, y2: float, color: Color, width: float) =
 # }}}
 # {{{ insertString()
 proc insertString(
-  text: string, cursorPos: Natural, selection: TextSelection, toInsert: string
+  text: string, cursorPos: Natural, selection: TextSelection, toInsert: string,
+  maxLen: Option[Natural]
 ): TextEditResult =
 
-  if toInsert.len > 0:
+  let insertLen = toInsert.runeLen
+
+  if insertLen > 0:
+    let textLen = text.runeLen
+    let toInsert = if maxLen.isSome and textLen + insertLen > maxLen.get:
+                     toInsert.runeSubStr(0, maxLen.get - textLen)
+                   else: toInsert
+
     if hasSelection(selection):
       let ns = normaliseSelection(selection)
       result.text = text.runeSubStr(0, ns.startPos) & toInsert &
                     text.runeSubStr(ns.endPos)
-      result.cursorPos = ns.startPos + toInsert.runeLen()
+      result.cursorPos = ns.startPos + toInsert.runeLen
 
     else:
       result.text = text
 
       let insertPos = cursorPos
-      if insertPos == text.runeLen():
+      if insertPos == text.runeLen:
         result.text.add(toInsert)
       else:
         result.text.insert(toInsert, text.runeOffset(insertPos))
-      result.cursorPos = cursorPos + toInsert.runeLen()
+      result.cursorPos = cursorPos + toInsert.runeLen
 
     result.selection = NoSelection
 
@@ -3838,7 +3846,8 @@ proc deleteSelection(text: string, selection: TextSelection,
 # }}}
 # {{{ handleCommonTextEditingShortcuts()
 proc handleCommonTextEditingShortcuts(
-  sc: KeyShortcut, text: string, cursorPos: Natural, selection: TextSelection
+  sc: KeyShortcut, text: string, cursorPos: Natural, selection: TextSelection,
+  maxLen: Option[Natural]
 ): Option[TextEditResult] =
 
   alias(shortcuts, g_textFieldEditShortcuts)
@@ -3968,7 +3977,7 @@ proc handleCommonTextEditingShortcuts(
   elif sc in shortcuts[tesPasteText]:
     try:
       let toInsert = fromClipboard()
-      res = insertString(text, cursorPos, selection, toInsert)
+      res = insertString(text, cursorPos, selection, toInsert, maxLen)
     except GLFWError:
       # attempting to retrieve non-text data raises an exception
       discard
@@ -4057,16 +4066,16 @@ proc setDefaultTextFieldStyle*(style: TextFieldStyle) =
 
 type
   TextFieldConstraintKind* = enum
-    tckString, tckInteger
+    tckString, tckInteger  # TODO tckFloat
 
   TextFieldConstraint* = object
     case kind*: TextFieldConstraintKind
     of tckString:
       minLen*: Natural
-      maxLen*: int
+      maxLen*: Option[Natural]
 
     of tckInteger:
-      min*, max*: int
+      minInt*, maxInt*: int
 
 # {{{ textFieldEnterEditMode()
 proc textFieldEnterEditMode(id: ItemId, text: string, startX: float) =
@@ -4125,12 +4134,12 @@ proc textField(
   style:      TextFieldStyle = DefaultTextFieldStyle
 ) =
 
-  const MaxTextLen = 5000
+  const MaxTextRuneLen = 1024
 
   var text = text_out
 
   # TODO clamp?
-  assert text.runeLen <= MaxTextLen
+  assert text.runeLen <= MaxTextRuneLen
 
   alias(ui, g_uiState)
   alias(tf, ui.textFieldState)
@@ -4148,7 +4157,7 @@ proc textField(
     strokeWidth=0
   )
 
-  var glyphs: array[MaxTextLen, GlyphPosition]
+  var glyphs: array[MaxTextRuneLen, GlyphPosition]
 
   var tabActivate = false
 
@@ -4186,15 +4195,12 @@ proc textField(
         if text.len < c.minLen:
           result = originalText
 
-        if c.maxLen > -1 and text.len > c.maxLen:
-          result = text[0..<c.maxLen]
-
       of tckInteger:
         try:
           let i = parseInt(text)
-          if   i < c.min: result = $c.min
-          elif i > c.max: result = $c.max
-          else:           result = $i
+          if   i < c.minInt: result = $c.minInt
+          elif i > c.maxInt: result = $c.maxInt
+          else:              result = $i
         except ValueError:
           result = originalText
 
@@ -4314,6 +4320,9 @@ proc textField(
     # exitEditMode() clears the key buffer.)
 
     # "Fall-through" into edit mode happens here
+    var maxLen = MaxTextRuneLen.Natural.some
+    if constraint.isSome and constraint.get.kind == tckString:
+      maxLen = min(constraint.get.maxLen.get, MaxTextRuneLen).Natural.some
 
     if ui.hasEvent and (not ui.eventHandled) and
        ui.currEvent.kind == ekKey and
@@ -4324,8 +4333,8 @@ proc textField(
 
       setEventHandled()
 
-      let res = handleCommonTextEditingShortcuts(sc, text,
-                                                 tf.cursorPos, tf.selection)
+      let res = handleCommonTextEditingShortcuts(sc, text, tf.cursorPos,
+                                                 tf.selection, maxLen)
       if res.isSome:
         text = res.get.text
         tf.cursorPos = res.get.cursorPos
@@ -4403,7 +4412,7 @@ proc textField(
     # a noop as exitEditMode() clears the char buffer.)
     if not charBufEmpty():
       var newChars = consumeCharBuf()
-      let res = insertString(text, tf.cursorPos, tf.selection, newChars)
+      let res = insertString(text, tf.cursorPos, tf.selection, newChars, maxLen)
       text = res.text
       tf.cursorPos = res.cursorPos
       tf.selection = res.selection
@@ -4690,8 +4699,7 @@ proc setDefaultTextAreaStyle*(style: TextAreaStyle) =
 
 type
   TextAreaConstraint* = object
-    minLen*: Natural
-    maxLen*: int
+    maxLen*: Option[Natural]
 
 var DefaultTextAreaScrollBarStyle = getDefaultScrollBarStyle()
 
@@ -4751,9 +4759,9 @@ proc textArea(
 
   var text = text_out
 
-  const MaxLineLen = 1000
+  const MaxTextRuneLen = 4096
   # TODO clamp?
-  assert text.runeLen <= MaxLineLen
+  assert text.runeLen <= MaxTextRuneLen
 
   let TextRightPad = s.textFontSize
 
@@ -4779,7 +4787,7 @@ proc textArea(
 
   var maxDisplayRows = (textBoxH / lineHeight).int
 
-  var glyphs: array[MaxLineLen, GlyphPosition]
+  var glyphs: array[MaxTextRuneLen, GlyphPosition]
 
 
   proc enterEditMode(id: ItemId, text: string, startX: float) =
@@ -4843,6 +4851,10 @@ proc textArea(
     # exitEditMode() clears the key buffer.)
 
     # "Fall-through" into edit mode happens here
+    var maxLen = MaxTextRuneLen.Natural.some
+    if constraint.isSome:
+      maxLen = min(constraint.get.maxLen.get, MaxTextRuneLen).Natural.some
+
     if ui.hasEvent and (not ui.eventHandled) and
        ui.currEvent.kind == ekKey and
        ui.currEvent.action in {kaDown, kaRepeat}:
@@ -4867,7 +4879,7 @@ proc textArea(
         ta.lastCursorXPos = float.none
 
       let res = handleCommonTextEditingShortcuts(sc, text, ta.cursorPos,
-                                                 ta.selection)
+                                                 ta.selection, maxLen)
 
       if res.isSome:
         text = res.get.text
@@ -5057,7 +5069,7 @@ proc textArea(
     # a noop as exitEditMode() clears the char buffer.)
     if not charBufEmpty():
       var newChars = consumeCharBuf()
-      let res = insertString(text, ta.cursorPos, ta.selection, newChars)
+      let res = insertString(text, ta.cursorPos, ta.selection, newChars, maxLen)
       text = res.text
       ta.cursorPos = res.cursorPos
       ta.selection = res.selection
@@ -5415,7 +5427,7 @@ proc horizSlider(id:         ItemId,
 
       if not ui.mbLeftDown and not ss.cursorMoved:
         ss.state = ssEditValue
-        ss.valueText = fmt"{value:.6f}"
+        ss.valueText = fmt"{value:.4f}"
         trimZeros(ss.valueText)
 
         ss.editModeItem = id
@@ -5866,8 +5878,6 @@ var g_checkeredImage: Image
 var g_checkeredImageSize: float
 
 proc createCheckeredImage(vg: NVGContext) =
-  alias(ui, g_uiState)
-
   const a = 14
   g_checkeredImageSize = a.float
 
