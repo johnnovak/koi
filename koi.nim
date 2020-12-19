@@ -615,7 +615,7 @@ proc ctrlDown*():  bool = isKeyDown(keyLeftControl) or isKeyDown(keyRightControl
 proc superDown*(): bool = isKeyDown(keyLeftSuper)   or isKeyDown(keyRightSuper)
 
 # }}}
-# {{{ Drawing & widget utils 
+# {{{ Drawing & widget utils
 
 # {{{ getPxRatio*()
 proc getPxRatio*(): float =
@@ -1794,7 +1794,8 @@ proc handleTooltip*(id: ItemId, tooltip: string) =
       setFramesLeft()
 
     # Hide the tooltip immediately if the LMB is pressed inside the widget
-    if ui.mbLeftDown and hasActiveItem():
+    if (isActive(id) and ui.mbLeftDown) or
+       (isHot(id) and ui.eventHandled and ui.currEvent.kind == ekScroll):
       tt.state = tsOff
 
     # Start the show delay if we just entered the widget with LMB up and no
@@ -1871,6 +1872,7 @@ proc tooltipPost() =
 
   case tt.state:
   of tsOff: discard
+
   of tsShowDelay:
     if getTime() - tt.t0 > TooltipShowDelay:
       tt.state = tsShow
@@ -1908,9 +1910,6 @@ proc tooltipPost() =
   # Make sure to keep drawing until the tooltip animation cycle is over
   if tt.state > tsOff:
     setFramesLeft()
-
-  if tt.state == tsShow:
-    ui.framesLeft = 0
 
   tt.lastHotItem = ui.hotItem
 
@@ -4159,7 +4158,7 @@ proc textField(
     # Hit testing
     if isHit(x, y, w, h) or activate or tabActivate:
       setHot(id)
-      if not disabled and 
+      if not disabled and
          ((ui.mbLeftDown and hasNoActiveItem()) or activate or tabActivate):
         textFieldEnterEditMode(id, text, textBoxX)
         tf.state = tfsEditLMBPressed
@@ -4823,6 +4822,8 @@ proc textArea(
   # TODO suboptimal to do this on every frame?
   var rows = textBreakLines(text, textBoxW)
 
+  # {{{ Event handling
+
   # We 'fall through' to the edit state to avoid a 1-frame delay when going
   # into edit mode
   if ta.activeItem == id and ta.state >= tasEditEntered:
@@ -5075,6 +5076,7 @@ proc textArea(
     # correctly
     rows = textBreakLines(text, textBoxW)
 
+  # }}}
 
   let editing = ta.activeItem == id
 
@@ -5102,6 +5104,8 @@ proc textArea(
 
   text_out = text
 
+
+  # {{{ Draw widget
 
   addDrawLayer(ui.currentLayer, vg):
     vg.save()
@@ -5233,6 +5237,7 @@ proc textArea(
 
     vg.restore()
 
+  # }}}
 
   # Handle scrollwheel
   let scrollBarEndVal = max(rows.len.float - maxDisplayRows, 0)
