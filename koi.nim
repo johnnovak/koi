@@ -181,7 +181,7 @@ type
 #    tasDragScroll,
 #    tasDoubleClicked
 
-  TextAreaStateVars = object
+  TextAreaStateVars = ref object of RootObj
     state:           TextAreaState
 
     # The cursor is before the Rune with this index. If the cursor is at the end
@@ -197,10 +197,6 @@ type
 
     # The text is displayed starting from the row of this index
     displayStartRow: float
-
-    # The text will be drawn at thix Y coordinate (can be smaller than the
-    # starting Y coordinate of the textbox)
-    displayStartY:   float
 
     # The original text is stored when going into edit mode so it can be
     # restored if the editing is cancelled.
@@ -400,7 +396,6 @@ type
     scrollViewState:    ScrollViewStateVars
     sectionHeaderState: SectionHeaderStateVars
     sliderState:        SliderStateVars
-    textAreaState:      TextAreaStateVars
     textFieldState:     TextFieldStateVars
 
     # Per-instance data storage for widgets that require it (e.g. ScrollView)
@@ -4717,9 +4712,8 @@ var DefaultTextAreaScrollBarStyle_EditMode = DefaultTextAreaScrollBarStyle.deepC
 
 
 # {{{ textAreaExitEditMode*()
-proc textAreaExitEditMode*(id: ItemId = 0) =
+proc textAreaExitEditMode*(id: ItemId, ta: var TextAreaStateVars) =
   alias(ui, g_uiState)
-  alias(ta, ui.textAreaState)
   alias(tab, ui.tabActivationState)
 
   clearEventBuf()
@@ -4729,7 +4723,6 @@ proc textAreaExitEditMode*(id: ItemId = 0) =
   ta.activeItem = 0
   ta.cursorPos = 0
   ta.displayStartRow = 0
-  ta.displayStartY = 0
   ta.selection = NoSelection
   ta.originalText = ""
   tab.lastActiveItem = id
@@ -4753,7 +4746,6 @@ proc textArea(
 
   alias(vg, g_nvgContext)
   alias(ui, g_uiState)
-  alias(ta, ui.textAreaState)
   alias(tab, ui.tabActivationState)
   alias(s, style)
 
@@ -4762,6 +4754,9 @@ proc textArea(
   const MaxTextRuneLen = 4096
   # TODO clamp?
   assert text.runeLen <= MaxTextRuneLen
+
+  discard ui.itemState.hasKeyOrPut(id, TextAreaStateVars())
+  var ta = cast[TextAreaStateVars](ui.itemState[id])
 
   let TextRightPad = s.textFontSize
 
@@ -4820,7 +4815,7 @@ proc textArea(
         ta.state = tasEditEntered
 
 
-  proc exitEditMode() = textAreaExitEditMode(id)
+  proc exitEditMode() = textAreaExitEditMode(id, ta)
 
   proc calcGlypPosForRow(x, y: float, row: TextRow): Natural =
     setFont()
@@ -5286,6 +5281,8 @@ proc textArea(
     ui.tooltipState.state = tsOff
 
   tab.prevItem = id
+
+  ui.itemState[id] = ta
 
 # }}}
 
@@ -6866,9 +6863,6 @@ proc closeDialog*() =
 
   ui.focusCaptured = false
   ui.dialogOpen = false
-
-  textFieldExitEditMode()
-  textAreaExitEditMode()
 
 # }}}
 
