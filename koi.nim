@@ -4624,7 +4624,7 @@ template textField*(
             g_uiState.autoLayoutState.nextItemWidth,
             g_uiState.autoLayoutState.nextItemHeight,
             text,
-            tooltip, disabled, activate, drawWidget = true, constraint, style)
+            tooltip, disabled, activate, drawWidget=true, constraint, style)
 
   autoLayoutPost()
 
@@ -4644,19 +4644,23 @@ type TextAreaStyle* = object
   bgFillColorDisabled*:   Color
 
   # TODO use labelStyle?
-  textPadHoriz*:        float
-  textPadVert*:         float
-  textFontSize*:        float
-  textFontFace*:        string
-  textLineHeight*:      float
-  textColor*:           Color
-  textColorHover*:      Color
-  textColorActive*:     Color
-  textColorDisabled*:   Color
+  textPadHoriz*:          float
+  textPadVert*:           float
+  textFontSize*:          float
+  textFontFace*:          string
+  textLineHeight*:        float
+  textColor*:             Color
+  textColorHover*:        Color
+  textColorActive*:       Color
+  textColorDisabled*:     Color
 
-  cursorWidth*:         float
-  cursorColor*:         Color
-  selectionColor*:      Color
+  cursorWidth*:           float
+  cursorColor*:           Color
+  selectionColor*:        Color
+
+  scrollBarStyleNormal*:  ScrollBarStyle
+  scrollBarStyleEdit*:    ScrollBarStyle
+
 
 var DefaultTextAreaStyle = TextAreaStyle(
   bgCornerRadius        : 5.0,
@@ -4686,6 +4690,24 @@ var DefaultTextAreaStyle = TextAreaStyle(
   selectionColor      : rgba(200, 130, 0, 100)
 )
 
+with DefaultTextAreaStyle:
+  scrollBarStyleNormal = getDefaultScrollBarStyle()
+  with scrollBarStyleNormal:
+    trackCornerRadius   = 3.0
+    trackFillColor      = gray(0, 0)
+    trackFillColorHover = gray(0, 0)
+    trackFillColorDown  = gray(0, 0)
+    thumbCornerRadius   = 3.0
+    thumbFillColor      = gray(0, 0.4)
+    thumbFillColorHover = gray(0, 0.43)
+    thumbFillColorDown  = gray(0, 0.35)
+
+  scrollBarStyleEdit = scrollBarStyleNormal.deepCopy
+  with scrollBarStyleEdit:
+    thumbFillColor      = gray(1.0, 0.4)
+    thumbFillColorHover = gray(1.0, 0.43)
+    thumbFillColorDown  = gray(1.0, 0.35)
+
 proc getDefaultTextAreaStyle*(): TextAreaStyle =
   DefaultTextAreaStyle.deepCopy
 
@@ -4695,21 +4717,6 @@ proc setDefaultTextAreaStyle*(style: TextAreaStyle) =
 type
   TextAreaConstraint* = object
     maxLen*: Option[Natural]
-
-var DefaultTextAreaScrollBarStyle = getDefaultScrollBarStyle()
-
-with DefaultTextAreaScrollBarStyle:
-  trackCornerRadius   = 3.0
-  trackFillColor      = gray(0, 0)
-  trackFillColorHover = gray(0, 0)
-  trackFillColorDown  = gray(0, 0)
-  thumbCornerRadius   = 3.0
-  thumbFillColor      = gray(0, 0.4)
-  thumbFillColorHover = gray(0, 0.43)
-  thumbFillColorDown  = gray(0, 0.35)
-
-var DefaultTextAreaScrollBarStyle_EditMode = DefaultTextAreaScrollBarStyle.deepCopy()
-
 
 # {{{ textAreaExitEditMode*()
 proc textAreaExitEditMode*(id: ItemId, ta: var TextAreaStateVars) =
@@ -5259,8 +5266,7 @@ proc textArea(
   # Scrollbar
   let sbId = hashId(lastIdString() & ":scrollBar")
 
-  let sbStyle = if editing: DefaultTextAreaScrollBarStyle_EditMode
-                else:       DefaultTextAreaScrollBarStyle
+  let sbStyle = if editing: s.scrollBarStyleEdit else: s.scrollBarStyleNormal
 
   let thumbSize = maxDisplayRows.float *
                   ((rows.len.float - maxDisplayRows) / rows.len)
@@ -5299,8 +5305,33 @@ template textArea*(
   let i = instantiationInfo(fullPaths=true)
   let id = generateId(i.filename, i.line, "")
 
-  textArea(id, x, y, w, h, text, tooltip, disabled, activate, drawWidget = true,
+  textArea(id, x, y, w, h, text, tooltip, disabled, activate, drawWidget=true,
            constraint, style)
+
+
+template textArea*(
+  text:       var string,
+  tooltip:    string = "",
+  disabled:   bool = false,
+  activate:   bool = false,
+  constraint: Option[TextAreaConstraint] = TextAreaConstraint.none,
+  style:      TextAreaStyle = DefaultTextAreaStyle
+) =
+
+  let i = instantiationInfo(fullPaths=true)
+  let id = generateId(i.filename, i.line, "")
+
+  autoLayoutPre()
+
+  textArea(id,
+            g_uiState.autoLayoutState.x,
+            autoLayoutCalcY(),
+            g_uiState.autoLayoutState.nextItemWidth,
+            g_uiState.autoLayoutState.nextItemHeight,
+            text,
+            tooltip, disabled, activate, drawWidget=true, constraint, style)
+
+  autoLayoutPost()
 
 # }}}
 
