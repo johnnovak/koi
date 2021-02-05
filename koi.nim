@@ -438,7 +438,6 @@ type
 
   TabActivationStateVars = object
     prevItem:          ItemId
-    lastActiveItem:    ItemId
     itemToActivate:    ItemId
     activateNext:      bool
     activatePrev:      bool
@@ -3987,13 +3986,11 @@ proc handleCommonTextEditingShortcuts(
 proc handleTabActivation(id: ItemId): bool =
   alias(tab, g_uiState.tabActivationState)
 
-  if tab.activateNext and tab.lastActiveItem == tab.prevItem and
-     id != tab.prevItem:  # exit editing textfield/textarea if there's just one
+  if tab.activateNext:
     tab.activateNext = false
     result = true
 
-  elif tab.activatePrev and id == tab.itemToActivate and
-       id != tab.prevItem:  # exit editing textfield/textarea if there's just one
+  elif tab.activatePrev and id == tab.itemToActivate:
     tab.activatePrev = false
     result = true
 
@@ -4110,7 +4107,6 @@ proc textFieldExitEditMode*(id: ItemId = 0, startX: float = 0) =
   tf.displayStartPos = 0
   tf.displayStartX = startX
   tf.originalText = ""
-  tab.lastActiveItem = id
 
   ui.focusCaptured = false
   setCursorShape(csArrow)
@@ -4732,7 +4728,6 @@ proc textAreaExitEditMode*(id: ItemId, ta: var TextAreaStateVars) =
   ta.displayStartRow = 0
   ta.selection = NoSelection
   ta.originalText = ""
-  tab.lastActiveItem = id
 
   ui.focusCaptured = false
   setCursorShape(csArrow)
