@@ -2158,6 +2158,44 @@ proc label*(labelText: string,
   autoLayoutPost()
 
 # }}}
+# {{{ Image
+
+# {{{ drawImage()
+proc drawImage(vg: NVGContext; x, y, w, h: float; paint: Paint) =
+  vg.save()
+
+  let (x, y, w, h) = snapToGrid(x, y, w, h, strokeWidth=0)
+
+  vg.beginPath()
+  vg.rect(x, y, w, h)
+  vg.fillPaint(paint)
+  vg.fill()
+
+  vg.restore()
+
+# }}}
+# {{{ image()
+proc image*(x, y, w, h: float, paint: Paint) =
+  alias(ui, g_uiState)
+
+  let (x, y) = addDrawOffset(x, y)
+
+  addDrawLayer(ui.currentLayer, vg):
+    vg.drawImage(x, y, w, h, paint)
+
+# }}}
+
+proc image*(paint: Paint) =
+  alias(ui, g_uiState)
+  alias(a, ui.autoLayoutState)
+
+  autoLayoutPre()
+
+  image(a.x, a.y, a.nextItemWidth, a.nextItemHeight, paint)
+
+  autoLayoutPost()
+
+# }}}
 # {{{ Button
 
 type ButtonStyle* = ref object
@@ -4202,7 +4240,7 @@ proc textField(
 
   proc getCursorPosAtXPos(x: float): Natural =
     for p in tf.displayStartPos..max(text.runeLen-1, 0):
-      let midX = glyphs[p].minX + (glyphs[p].maxX - glyphs[p].minX) / 2
+      let midX = glyphs[p].minX + (glyphs[p].maxX - glyphs[p].minX) * 0.5
       if x < tf.displayStartX + midX - glyphs[tf.displayStartPos].x:
         return p
 
@@ -6771,6 +6809,7 @@ proc endScrollView*() =
 type DialogStyle* = ref object
   cornerRadius*:       float
   backgroundColor*:    Color
+  drawTitleBar*:       bool
   titleBarBgColor*:    Color
   titleBarTextColor*:  Color
   outerBorderColor*:   Color
@@ -6782,6 +6821,7 @@ type DialogStyle* = ref object
 var DefaultDialogStyle = DialogStyle(
   cornerRadius      : 7.0,
   backgroundColor   : gray(0.2),
+  drawTitleBar      : true,
   titleBarBgColor   : gray(0.05),
   titleBarTextColor : gray(0.85),
   outerBorderColor  : black(),
@@ -6819,8 +6859,8 @@ proc beginDialog*(w, h: float, title: string,
   ui.dialogOpen = true
   ui.focusCaptured = ds.widgetInsidePopupCapturedFocus
 
-  let x = if x.isSome: x.get else: floor((ui.winWidth - w) / 2)
-  let y = if y.isSome: y.get else: floor((ui.winHeight - h) / 2)
+  let x = if x.isSome: x.get else: floor((ui.winWidth - w) * 0.5)
+  let y = if y.isSome: y.get else: floor((ui.winHeight - h) * 0.5)
 
   ui.currentLayer = layerDialog
 
@@ -6858,18 +6898,19 @@ proc beginDialog*(w, h: float, title: string,
     vg.fill()
 
     # Title bar
-    vg.beginPath()
-    vg.fillColor(s.titleBarBgColor)
-    vg.roundedRect(x, y, w, TitleBarHeight,
-                   s.cornerRadius, s.cornerRadius, 0, 0)
-    vg.fill()
+    if s.drawTitleBar:
+      vg.beginPath()
+      vg.fillColor(s.titleBarBgColor)
+      vg.roundedRect(x, y, w, TitleBarHeight,
+                     s.cornerRadius, s.cornerRadius, 0, 0)
+      vg.fill()
 
-    # TODO use label
-    vg.fontFace("sans-bold")
-    vg.fontSize(15.0)
-    vg.textAlign(haLeft, vaMiddle)
-    vg.fillColor(s.titleBarTextColor)
-    discard vg.text(x+10.0, y + TitleBarHeight * TextVertAlignFactor, title)
+      # TODO use label
+      vg.fontFace("sans-bold")
+      vg.fontSize(15.0)
+      vg.textAlign(haLeft, vaMiddle)
+      vg.fillColor(s.titleBarTextColor)
+      discard vg.text(x+10.0, y + TitleBarHeight * TextVertAlignFactor, title)
 
   pushDrawOffset(
     DrawOffset(ox: x, oy: y)
