@@ -1,5 +1,10 @@
 import options
 
+# TODO
+# - use groupStart/groupEnd undo state markers instead of groupWithPrev flag
+# - store group name in groupStart
+# - unit tests
+
 type
   UndoManager*[S, R] = ref object
     states:        seq[UndoState[S, R]]
