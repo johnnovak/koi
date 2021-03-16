@@ -173,13 +173,12 @@ type
 type
   TextAreaState = enum
     tasDefault
-    tasEditEntered,
+    tasEditLMBPressed,
     tasEdit
-    # TODO
-#    tasDragStart,
-#    tasDragDelay,
-#    tasDragScroll,
-#    tasDoubleClicked
+    tasDragStart,
+    tasDragDelay,
+    tasDragScroll,
+    tasDoubleClicked
 
   TextAreaStateVars = ref object of RootObj
     state:           TextAreaState
@@ -713,6 +712,7 @@ const TextBreakRunes = @[
 # TODO support for start & end pos
 proc textBreakLines*(text: string, maxWidth: float,
                      maxRows: int = -1): seq[TextRow] =
+
   var glyphs: array[1024, GlyphPosition]
   result = newSeq[TextRow]()
 
@@ -3762,7 +3762,7 @@ template vertScrollBar*(x, y, w, h: float,
 
 # }}}
 
-# {{{ Text functions
+# {{{ Common text functions
 
 type TextEditResult = object
   text:      string
@@ -4234,7 +4234,7 @@ proc textField(
           result = originalText
 
 
-  proc getCursorPosAtXPos(x: float): Natural =
+  proc getCursorPosAt(x: float): Natural =
     for p in tf.displayStartPos..max(text.runeLen-1, 0):
       let midX = glyphs[p].minX + (glyphs[p].maxX - glyphs[p].minX) * 0.5
       if x < tf.displayStartX + midX - glyphs[tf.displayStartPos].x:
@@ -4258,6 +4258,8 @@ proc textField(
 
   const ScrollRightOffset = 10
 
+  # {{{ Event handling
+ 
   # We 'fall through' to the edit state to avoid a 1-frame delay when going
   # into edit mode
   if tf.activeItem == id and tf.state >= tfsEditLMBPressed:
@@ -4280,7 +4282,7 @@ proc textField(
           ui.t0 = getTime()
           tf.state = tfsDragDelay
         else:
-          let mouseCursorPos = getCursorPosAtXPos(ui.mx)
+          let mouseCursorPos = getCursorPosAt(ui.mx)
           tf.selection = updateSelection(tf.selection, tf.cursorPos,
                                          newCursorPos = mouseCursorPos)
           tf.cursorPos = mouseCursorPos
@@ -4328,7 +4330,7 @@ proc textField(
       if ui.mbLeftDown:
         if mouseInside(x, y, w, h):
           tf.selection = NoSelection
-          tf.cursorPos = getCursorPosAtXPos(ui.mx)
+          tf.cursorPos = getCursorPosAt(ui.mx)
 
           if isDoubleClick():
             tf.selection.startPos = findPrevWordStart(text, tf.cursorPos)
@@ -4502,6 +4504,8 @@ proc textField(
         elif glyphs[p].minX < glyphs[tf.displayStartPos].minX + startOffsetX:
           tf.displayStartX = textBoxX
           tf.displayStartPos = min(tf.displayStartPos, p)
+
+  # }}}
 
 
   text_out = text
@@ -4820,9 +4824,15 @@ proc textArea(
   var (_, _, lineHeight) = vg.textMetrics()
   lineHeight = floor(lineHeight * s.textLineHeight)
 
+  # TODO make these config params?
+  let textStartY = floor(textBoxY + lineHeight * 1.1)
+
   var maxDisplayRows = (textBoxH / lineHeight).int
 
   var glyphs: array[MaxTextRuneLen, GlyphPosition]
+
+  # TODO suboptimal to do this on every frame?
+  var rows = textBreakLines(text, textBoxW)
 
 
   proc enterEditMode(id: ItemId, text: string, startX: float) =
@@ -4852,34 +4862,78 @@ proc textArea(
       if not disabled and
          ((ui.mbLeftDown and hasNoActiveItem()) or activate or tabActivate):
         enterEditMode(id, text, textBoxX)
-        ta.state = tasEditEntered
+        ta.state = tasEditLMBPressed
+
+
+  proc calcGlypPosForRow(x, y: float, row: TextRow): Natural =
+    setFont()
+    return vg.textGlyphPositions(x, y, text, row.startBytePos, row.endBytePos,
+                                 glyphs)
+
+  proc getCursorPosAt(x, y: float): Natural =
+    let row = clamp(
+      (floor((y - textStartY) / lineHeight) + ta.displayStartRow + 1).int,
+      0, rows.high.int
+    )
+    let numGlyphs = calcGlypPosForRow(textBoxX, 0, rows[row])
+
+    for p in 0..numGlyphs:
+      let midX = glyphs[p].minX + (glyphs[p].maxX - glyphs[p].minX) * 0.5
+      if x < midX:
+        return rows[row].startPos + p
+
+    result = rows[row].endPos
 
 
   proc exitEditMode() = textAreaExitEditMode(id, ta)
 
-  proc calcGlypPosForRow(x, y: float, row: TextRow): Natural =
-    setFont()
-    return vg.textGlyphPositions(x, y, text,
-                                 row.startBytePos, row.endBytePos, glyphs)
-
-  # TODO suboptimal to do this on every frame?
-  var rows = textBreakLines(text, textBoxW)
 
   # {{{ Event handling
 
   # We 'fall through' to the edit state to avoid a 1-frame delay when going
   # into edit mode
-  if ta.activeItem == id and ta.state >= tasEditEntered:
+  if ta.activeItem == id and ta.state >= tasEditLMBPressed:
     setHot(id)
     setActive(id)
     setCursorShape(csIBeam)
 
-    if ta.state == tasEditEntered:
+    if ta.state == tasEditLMBPressed:
       if not ui.mbLeftDown:
         ta.state = tasEdit
+
+    elif ta.state == tasDragStart:
+      ta.state = tasEdit
+
+    elif ta.state == tasDragDelay:
+      discard # TODO
+
+    elif ta.state == tasDragScroll:
+      discard # TODO
+
+    # This state is needed to prevent going into drag-select mode after
+    # selecting a word by double-clicking
+    elif ta.state == tasDoubleClicked:
+      if not ui.mbLeftDown:
+        ta.state = tasEdit
+
     else:
-      if ui.mbLeftDown and not mouseInside(x, y, w, h):
-        exitEditMode()
+      if ui.mbLeftDown:
+        if mouseInside(x, y, w, h):
+          ta.selection = NoSelection
+          ta.cursorPos = getCursorPosAt(ui.mx, ui.my)
+
+          if isDoubleClick():
+            ta.selection.startPos = findPrevWordStart(text, ta.cursorPos)
+            ta.selection.endPos = findNextWordEnd(text, ta.cursorPos)
+            ta.cursorPos = ta.selection.endPos
+            ta.state = tasDoubleClicked
+          else:
+            ui.x0 = ui.mx
+            ta.state = tasDragStart
+
+        # LMB pressed outside the text field exits edit mode
+        else:
+          exitEditMode()
 
     # Handle text field shortcuts
     # (If we exited edit mode above key handler, this will result in a noop as
@@ -4936,6 +4990,7 @@ proc textArea(
               currRowIdx = i
               break
 
+        # TODO refactor to use parts of getCursorPosAt?
         proc findClosestCursorPos(row: TextRow, cx: float): Natural =
           result = if row.nextRowPos == -1: row.endPos+1 else: row.endPos
           for pos in 0..(row.endPos - row.startPos):
@@ -5200,8 +5255,7 @@ proc textArea(
 
     var
       textX = textBoxX
-      # TODO make these config params?
-      textY = floor(textBoxY + lineHeight * 1.1)
+      textY = textStartY
       cursorYAdjust = floor(lineHeight*0.77)
       numGlyphs: Natural
 
