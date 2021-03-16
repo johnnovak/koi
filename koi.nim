@@ -4259,7 +4259,7 @@ proc textField(
   const ScrollRightOffset = 10
 
   # {{{ Event handling
- 
+
   # We 'fall through' to the edit state to avoid a 1-frame delay when going
   # into edit mode
   if tf.activeItem == id and tf.state >= tfsEditLMBPressed:
@@ -4284,7 +4284,7 @@ proc textField(
         else:
           let mouseCursorPos = getCursorPosAt(ui.mx)
           tf.selection = updateSelection(tf.selection, tf.cursorPos,
-                                         newCursorPos = mouseCursorPos)
+                                         newCursorPos=mouseCursorPos)
           tf.cursorPos = mouseCursorPos
       else:
         tf.state = tfsEdit
@@ -4877,12 +4877,18 @@ proc textArea(
     )
     let numGlyphs = calcGlypPosForRow(textBoxX, 0, rows[row])
 
-    for p in 0..numGlyphs:
+    for p in 0..<numGlyphs:
       let midX = glyphs[p].minX + (glyphs[p].maxX - glyphs[p].minX) * 0.5
       if x < midX:
         return rows[row].startPos + p
 
+    if row == rows.high and x > glyphs[numGlyphs-1].maxX:
+      return rows[row].endPos + 1
+
     result = rows[row].endPos
+
+
+#  proc getCursorPos(): (float, float) =
 
 
   proc exitEditMode() = textAreaExitEditMode(id, ta)
@@ -4902,7 +4908,13 @@ proc textArea(
         ta.state = tasEdit
 
     elif ta.state == tasDragStart:
-      ta.state = tasEdit
+      if ui.mbLeftDown:
+        let dragCursorPos = getCursorPosAt(ui.mx, ui.my)
+        ta.selection = updateSelection(ta.selection, ta.cursorPos,
+                                       newCursorPos=dragCursorPos)
+        ta.cursorPos = dragCursorPos
+      else:
+        ta.state = tasEdit
 
     elif ta.state == tasDragDelay:
       discard # TODO
