@@ -4882,7 +4882,7 @@ proc textArea(
       if x < midX:
         return rows[row].startPos + p
 
-    if row == rows.high and x > glyphs[numGlyphs-1].maxX:
+    if row == rows.high and numGlyphs > 0 and x > glyphs[numGlyphs-1].maxX:
       return rows[row].endPos + 1
 
     result = rows[row].endPos
