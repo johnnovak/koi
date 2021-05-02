@@ -3175,7 +3175,7 @@ template dropDown*[E: enum](
 
   # TODO common. extract
   var itemsSeq = newSeq[string]()
-  for e in selectedItem.low..selectedItem.high:
+  for e in E.low..E.high:
     itemsSeq.add($e)
 
   var selItem = ord(selectedItem)
@@ -3196,7 +3196,7 @@ template dropDown*[E: enum](
 
   # TODO common. extract
   var itemsSeq = newSeq[string]()
-  for e in selectedItem.low..selectedItem.high:
+  for e in E.low..E.high:
     itemsSeq.add($e)
 
   var selItem = ord(selectedItem)
@@ -4142,7 +4142,6 @@ proc textFieldEnterEditMode(id: ItemId, text: string, startX: float) =
 proc textFieldExitEditMode*(id: ItemId = 0, startX: float = 0) =
   alias(ui, g_uiState)
   alias(tf, ui.textFieldState)
-  alias(tab, ui.tabActivationState)
 
   clearEventBuf()
   clearCharBuf()
@@ -4531,7 +4530,7 @@ proc textField(
                 elif editing: wsActive
                 else: wsNormal
 
-    let (fillColor, strokeColor) = case state
+    let (fillColor, _) = case state
       of wsNormal:   (s.bgFillColor,         s.bgStrokeColor)
       of wsHover:    (s.bgFillColorHover,    s.bgStrokeColorHover)
       of wsActive,
@@ -4768,7 +4767,6 @@ type
 # {{{ textAreaExitEditMode*()
 proc textAreaExitEditMode*(id: ItemId, ta: var TextAreaStateVars) =
   alias(ui, g_uiState)
-  alias(tab, ui.tabActivationState)
 
   clearEventBuf()
   clearCharBuf()
@@ -5238,7 +5236,7 @@ proc textArea(
                 elif editing: wsActive
                 else: wsNormal
 
-    let (fillColor, strokeColor) = case state
+    let (fillColor, _) = case state
       of wsNormal:   (s.bgFillColor,         s.bgStrokeColor)
       of wsHover:    (s.bgFillColorHover,    s.bgStrokeColorHover)
       of wsActive,
@@ -6491,7 +6489,8 @@ template color*(col: var Color) =
 # {{{ View
 
 # {{{ beginView()
-proc beginView(id: ItemId, x, y, w, h: float) =
+# TODO unused, remove?
+proc beginView*(id: ItemId, x, y, w, h: float) =
   alias(ui, g_uiState)
 
   let (x, y) = addDrawOffset(x, y)
