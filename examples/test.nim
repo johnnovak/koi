@@ -208,7 +208,6 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
   y += pad * 2
   koi.dropDown(
     x, y, w, h,
-    Fruits,
     dropDownVal1,
     tooltip = "Select a fruit")
 

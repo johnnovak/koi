@@ -511,14 +511,25 @@ proc hashId*(id: string): ItemId =
 proc mkIdString*(filename: string, line: int, id: string): string =
   result = filename & ":" & $line & ":" & id
 
+var g_nextIdString: string
 var g_lastIdString: string
 
-proc generateId*(filename: string, line: int, id: string): ItemId =
+proc generateId*(filename: string, line: int, id: string = ""): ItemId =
   let idString = mkIdString(filename, line, id)
   g_lastIdString = idString
   hashId(idString)
 
+proc getNextId(filename: string, line: int, id: string = ""): ItemId =
+  if g_nextIdString == "":
+    result = generateId(filename, line, id)
+  else:
+    result = hashId(g_nextIdString)
+    g_nextIdString = ""
+
 proc lastIdString*(): string = g_lastIdString
+
+proc setNextId*(id: string) =
+  g_nextIdString = id
 
 proc setFramesLeft*(n: Natural = 5) =
   alias(ui, g_uiState)
@@ -2308,7 +2319,7 @@ template button*(x, y, w, h: float,
                  style:      ButtonStyle = DefaultButtonStyle): bool =
 
   let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
+  let id = getNextId(i.filename, i.line)
 
   button(id, x, y, w, h, label, tooltip, disabled, style)
 
@@ -2454,7 +2465,7 @@ template checkBox*(x, y, w:  float,
                    style:    CheckBoxStyle = DefaultCheckBoxStyle) =
 
   let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
+  let id = getNextId(i.filename, i.line)
 
   checkbox(id, x, y, w, active, tooltip, disabled, drawProc, style)
 
@@ -2466,7 +2477,7 @@ template checkBox*(active:   var bool,
                    style:    CheckBoxStyle = DefaultCheckBoxStyle) =
 
   let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
+  let id = getNextId(i.filename, i.line)
 
   autoLayoutPre()
 
@@ -2825,7 +2836,7 @@ template radioButtons*[T](
 ) =
 
   let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
+  let id = getNextId(i.filename, i.line)
 
   radioButtons(id, x, y, w, h, labels, activeButton, tooltips,
                layout, drawProc, style)
@@ -2841,7 +2852,7 @@ template radioButtons*[T](
 ) =
 
   let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
+  let id = getNextId(i.filename, i.line)
 
   autoLayoutPre()
 
@@ -3121,7 +3132,7 @@ template dropDown*(
 ) =
 
   let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
+  let id = getNextId(i.filename, i.line)
 
   dropDown(id, x, y, w, h, items, selectedItem, tooltip, disabled, style)
 
@@ -3135,7 +3146,7 @@ template dropDown*(
 ) =
 
   let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
+  let id = getNextId(i.filename, i.line)
 
   autoLayoutPre()
 
@@ -3153,7 +3164,6 @@ template dropDown*(
 # {{{ dropDown templates - enum
 template dropDown*[E: enum](
   x, y, w, h:   float,
-  items:        typedesc[E],
   selectedItem: E,
   tooltip:      string = "",
   disabled:     bool = false,
@@ -3161,21 +3171,20 @@ template dropDown*[E: enum](
 ) =
 
   let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
+  let id = getNextId(i.filename, i.line)
 
   # TODO common. extract
   var itemsSeq = newSeq[string]()
-  for e in items.low..items.high:
+  for e in selectedItem.low..selectedItem.high:
     itemsSeq.add($e)
 
   var selItem = ord(selectedItem)
 
   dropDown(id, x, y, w, h, itemsSeq, selItem, tooltip, disabled, style)
-  selectedItem = items(selItem)
+  selectedItem = E(selItem)
 
 
 template dropDown*[E: enum](
-  items:        typedesc[E],
   selectedItem: E,
   tooltip:      string = "",
   disabled:     bool = false,
@@ -3183,11 +3192,11 @@ template dropDown*[E: enum](
 ) =
 
   let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
+  let id = getNextId(i.filename, i.line)
 
   # TODO common. extract
   var itemsSeq = newSeq[string]()
-  for e in items.low..items.high:
+  for e in selectedItem.low..selectedItem.high:
     itemsSeq.add($e)
 
   var selItem = ord(selectedItem)
@@ -3201,7 +3210,7 @@ template dropDown*[E: enum](
            g_uiState.autoLayoutState.nextItemHeight,
            itemsSeq,
            selItem, tooltip, disabled, style)
-  selectedItem = items(selItem)
+  selectedItem = E(selItem)
 
   autoLayoutPost()
 
@@ -3739,7 +3748,7 @@ template horizScrollBar*(x, y, w, h: float,
                          style:     ScrollBarStyle = DefaultScrollBarStyle) =
 
   let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
+  let id = getNextId(i.filename, i.line)
 
   horizScrollBar(id, x, y, w, h, startVal, endVal, value, tooltip, thumbSize,
                  clickStep, style)
@@ -3755,7 +3764,7 @@ template vertScrollBar*(x, y, w, h: float,
                         style:      ScrollBarStyle = DefaultScrollBarStyle) =
 
   let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
+  let id = getNextId(i.filename, i.line)
 
   vertScrollBar(id, x, y, w, h, startVal, endVal, value, tooltip, thumbSize,
                 clickStep, style)
@@ -4619,7 +4628,7 @@ template rawTextField*(
 ) =
 
   let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
+  let id = getNextId(i.filename, i.line)
 
   textField(id, x, y, w, h, text, tooltip, disabled, activate,
             drawWidget = false, constraint, style)
@@ -4636,7 +4645,7 @@ template textField*(
 ) =
 
   let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
+  let id = getNextId(i.filename, i.line)
 
   textField(id, x, y, w, h, text, tooltip, disabled, activate,
             drawWidget = true, constraint, style)
@@ -4652,7 +4661,7 @@ template textField*(
 ) =
 
   let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
+  let id = getNextId(i.filename, i.line)
 
   autoLayoutPre()
 
@@ -5402,7 +5411,7 @@ template textArea*(
 ) =
 
   let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
+  let id = getNextId(i.filename, i.line)
 
   textArea(id, x, y, w, h, text, tooltip, disabled, activate, drawWidget=true,
            constraint, style)
@@ -5418,7 +5427,7 @@ template textArea*(
 ) =
 
   let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
+  let id = getNextId(i.filename, i.line)
 
   autoLayoutPre()
 
@@ -5709,7 +5718,7 @@ template horizSlider*(x, y, w, h: float,
                       grouping:   WidgetGrouping = wgNone) =
 
   let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
+  let id = getNextId(i.filename, i.line)
 
   horizSlider(id, x, y, w, h, startVal, endVal, value, tooltip, label,
               style, grouping)
@@ -5724,7 +5733,7 @@ template horizSlider*(startVal:   float = 0.0,
                       grouping:   WidgetGrouping = wgNone) =
 
   let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
+  let id = getNextId(i.filename, i.line)
 
   autoLayoutPre()
 
@@ -5879,7 +5888,7 @@ template vertSlider*(x, y, w, h: float,
                      style:      SliderStyle = DefaultSliderStyle) =
 
   let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
+  let id = getNextId(i.filename, i.line)
 
   vertSlider(id, x, y, w, h, startVal, endVal, value, tooltip, style)
 
@@ -6455,14 +6464,14 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
 
 template color*(x, y, w, h: float, color: var Color) =
   let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
+  let id = getNextId(i.filename, i.line)
 
   color(id, x, y, w, h, color)
 
 
 template color*(col: var Color) =
   let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
+  let id = getNextId(i.filename, i.line)
 
   autoLayoutPre()
 
@@ -6481,8 +6490,8 @@ template color*(col: var Color) =
 
 # {{{ View
 
-# {{{ beginView*()
-proc beginView*(id: ItemId, x, y, w, h: float) =
+# {{{ beginView()
+proc beginView(id: ItemId, x, y, w, h: float) =
   alias(ui, g_uiState)
 
   let (x, y) = addDrawOffset(x, y)
@@ -6502,7 +6511,7 @@ proc beginView*(id: ItemId, x, y, w, h: float) =
 template beginView*(x, y, w, h: float) =
 
   let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
+  let id = getNextId(i.filename, i.line)
 
   beginScrollView(id, x, y, w, h)
 
@@ -6673,7 +6682,7 @@ template sectionHeader*(
 ): bool =
 
   let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, label)
+  let id = getNextId(i.filename, i.line, label)
 
   autoLayoutPre(section=true)
 
@@ -6697,7 +6706,7 @@ template subSectionHeader*(
 ): bool =
 
   let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, label)
+  let id = getNextId(i.filename, i.line, label)
 
   autoLayoutPre(section=true)
 
@@ -6797,7 +6806,7 @@ template beginScrollView*(x, y, w, h: float,
                           style: ScrollViewStyle = DefaultScrollViewStyle) =
 
   let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
+  let id = getNextId(i.filename, i.line, "")
 
   beginScrollView(id, x, y, w, h, style)
 
@@ -7070,7 +7079,7 @@ proc menuBar(id:         ItemId,
 template menuBar*(x, y, w, h: float, names: seq[string]): string =
 
   let i = instantiationInfo(fullPaths=true)
-  let id = generateId(i.filename, i.line, "")
+  let id = getNextId(i.filename, i.line, "")
 
   menuBar(id, x, y, w, h, names)
 

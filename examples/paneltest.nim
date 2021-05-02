@@ -248,7 +248,7 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
         koi.color(currTheme.level.lightDrawColor)
 
         koi.label("Line Width")
-        koi.dropDown(LineWidth, currTheme.level.lineWidth)
+        koi.dropDown(currTheme.level.lineWidth)
 
       group:
         koi.label("Coordinates")
@@ -265,13 +265,13 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
 
       group:
         koi.label("Grid Style Background")
-        koi.dropDown(GridStyle, currTheme.level.gridStyleBackground)
+        koi.dropDown(currTheme.level.gridStyleBackground)
 
         koi.label("Grid Background")
         koi.color(currTheme.level.gridColorBackground)
 
         koi.label("Grid Style Floor")
-        koi.dropDown(GridStyle, currTheme.level.gridStyleFloor)
+        koi.dropDown(currTheme.level.gridStyleFloor)
 
         koi.label("Grid Floor")
         koi.color(currTheme.level.gridColorFloor)
@@ -304,10 +304,10 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
 
     if koi.subSectionHeader("Outline", sectionOutline):
       koi.label("Outline Style")
-      koi.dropDown(OutlineStyle, currTheme.level.outlineStyle)
+      koi.dropDown(currTheme.level.outlineStyle)
 
       koi.label("Outline Fill Style")
-      koi.dropDown(OutlineFillStyle, currTheme.level.outlineFillStyle)
+      koi.dropDown(currTheme.level.outlineFillStyle)
 
       koi.label("Outline Overscan")
       koi.checkBox(currTheme.level.outlineOverscan)
