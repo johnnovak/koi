@@ -1168,7 +1168,7 @@ type KeyShortcut* = object
   key*:    Key
   mods*:   set[ModifierKey]
 
-proc mkKeyShortcut*(k: Key, m: set[ModifierKey]): KeyShortcut {.inline.} =
+proc mkKeyShortcut*(k: Key, m: set[ModifierKey] = {}): KeyShortcut {.inline.} =
   # always ignore caps lock state
   var m = m - {mkCapsLock}
 

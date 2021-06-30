@@ -40,7 +40,6 @@ proc storeUndoState*[S, R](m: var UndoManager[S, R],
   # Discard later states if we're not at the last one
   elif m.currState < m.states.high:
     m.states.setLen(m.currState+1)
-    m.lastSaveState = -1
 
   m.states[m.currState].action = action
   m.states.add(UndoState[S, R](action: nil, undoAction: undoAction,
