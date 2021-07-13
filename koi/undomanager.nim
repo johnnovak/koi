@@ -28,24 +28,24 @@ proc newUndoManager*[S, R](): UndoManager[S, R] =
   result = new UndoManager[S, R]
   initUndoManager(result)
 
+proc truncateUndoState*[S, R](m: var UndoManager[S, R]) =
+  if m.currState < m.states.high:
+    m.states.setLen(m.currState+1)
 
 proc storeUndoState*[S, R](m: var UndoManager[S, R],
                            action, undoAction: ActionProc[S, R],
                            groupWithPrev: bool = false) =
-
   if m.states.len == 0:
     m.states.add(UndoState[S, R]())
     m.currState = 0
-
-  # Discard later states if we're not at the last one
-  elif m.currState < m.states.high:
-    m.states.setLen(m.currState+1)
+  else:
+    # Discard later states if we're not at the last one
+    m.truncateUndoState()
 
   m.states[m.currState].action = action
   m.states.add(UndoState[S, R](action: nil, undoAction: undoAction,
                                groupWithPrev: groupWithPrev))
   inc(m.currState)
-
 
 proc canUndo*[S, R](m: UndoManager[S, R]): bool =
   m.currState > 0

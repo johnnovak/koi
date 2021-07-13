@@ -1234,7 +1234,7 @@ type TextEditShortcuts = enum
 let g_textFieldEditShortcuts_WinLinux = {
 
   # Cursor movement
-  tesCursorOneCharLeft:       @[mkKeyShortcut(keyLeft,    {}),
+  tesCursorOneCharLeft:       @[mkKeyShortcut(keyLeft),
                                 mkKeyShortcut(keyKp4,     {})],
 
   tesCursorOneCharRight:      @[mkKeyShortcut(keyRight,   {}),
