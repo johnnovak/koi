@@ -1718,6 +1718,13 @@ template group*(body: untyped) =
 
 # }}}
 
+# {{{ nextLayoutColumn*()
+proc nextLayoutColumn*() =
+  autoLayoutPre()
+  autoLayoutPost()
+
+# }}}
+
 # }}}
 
 # {{{ Widgets
@@ -2322,6 +2329,27 @@ template button*(x, y, w, h: float,
   let id = getNextId(i.filename, i.line)
 
   button(id, x, y, w, h, label, tooltip, disabled, style)
+
+
+template button*(label:      string,
+                 tooltip:    string = "",
+                 disabled:   bool = false,
+                 style:      ButtonStyle = DefaultButtonStyle): bool =
+
+  let i = instantiationInfo(fullPaths=true)
+  let id = getNextId(i.filename, i.line)
+
+  autoLayoutPre()
+
+  let res = button(id,
+                   g_uiState.autoLayoutState.x,
+                   autoLayoutCalcY(),
+                   g_uiState.autoLayoutState.nextItemWidth,
+                   g_uiState.autoLayoutState.nextItemHeight,
+                   label, tooltip, disabled, style)
+
+  autoLayoutPost()
+  res
 
 # }}}
 # {{{ CheckBox
