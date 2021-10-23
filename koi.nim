@@ -77,8 +77,11 @@ type
   DropDownStateVars = object
     state:      DropDownState
 
-    # Drop-down in open mode, 0 if no drop-down is open currently.
+    # Drop-down in open mode, 0 if no drop-down is open currently
     activeItem: ItemId
+
+    # The item list is displayed starting from the item with this index
+    displayStartItem: float
 
 # }}}
 # {{{ PopupState
@@ -164,7 +167,7 @@ type
 type
   TextSelection = object
     # Rune position of the start of the selection (inclusive),
-    # -1 if nothing is selected.
+    # -1 if nothing is selected
     startPos: int
 
     # Rune position of the end of the selection (exclusive)
@@ -194,11 +197,11 @@ type
     # Text area item in edit mode, 0 if no text area is being edited
     activeItem:      ItemId
 
-    # The text is displayed starting from the row of this index
+    # The text is displayed starting from the row with this index
     displayStartRow: float
 
     # The original text is stored when going into edit mode so it can be
-    # restored if the editing is cancelled.
+    # restored if the editing is cancelled
     originalText:    string
 
     # Used by the move cursor to next/previous line actions
@@ -227,10 +230,10 @@ type
     # Current text selection
     selection:       TextSelection
 
-    # Text field item in edit mode, 0 if no text field is being edited.
+    # Text field item in edit mode, 0 if no text field is being edited
     activeItem:      ItemId
 
-    # The text is displayed starting from the Rune of this index.
+    # The text is displayed starting from the Rune with this index
     displayStartPos: Natural
 
     # The text will be drawn at thix X coordinate (can be smaller than the
@@ -238,7 +241,7 @@ type
     displayStartX:   float
 
     # The original text is stored when going into edit mode so it can be
-    # restored if the editing is cancelled.
+    # restored if the editing is cancelled
     originalText:    string
 
 # }}}
@@ -252,7 +255,7 @@ type
     state:       TooltipState
     lastState:   TooltipState
 
-    # Used for the various tooltip delays & timeouts.
+    # Used for the various tooltip delays & timeouts
     t0:          float
     text:        string
 
@@ -314,7 +317,7 @@ type
     winWidth, winHeight: float
 
     # Set if a widget has captured the focus (e.g. a textfield in edit mode) so
-    # all other UI interactions (hovers, tooltips, etc.) should be disabled.
+    # all other UI interactions (hovers, tooltips, etc.) should be disabled
     focusCaptured:   bool
 
     tooltipState:    TooltipStateVars
@@ -340,7 +343,7 @@ type
     widgetMouseDrag: bool
     dx, dy:    float
 
-    # Mouse cursor position from the last frame.
+    # Mouse cursor position from the last frame
     lastmx, lastmy:  float
 
     mbLeftDown:      bool
@@ -2908,6 +2911,7 @@ type DropDownStyle* = ref object
   buttonFillColorHover*:      Color
   buttonFillColorDown*:       Color
   buttonFillColorDisabled*:   Color
+
   label*:                     LabelStyle
   itemListAlign*:             HorizontalAlign
   itemListPadHoriz*:          float
@@ -2918,7 +2922,11 @@ type DropDownStyle* = ref object
   itemListFillColor*:         Color
   item*:                      LabelStyle
   itemBackgroundColorHover*:  Color
+
   shadow*:                    ShadowStyle
+
+  scrollBarStyle*:            ScrollBarStyle
+
 
 var DefaultDropDownStyle = DropDownStyle(
   buttonCornerRadius        : 5.0,
@@ -2931,7 +2939,9 @@ var DefaultDropDownStyle = DropDownStyle(
   buttonFillColorHover      : GRAY_HI,
   buttonFillColorDown       : GRAY_MID,
   buttonFillColorDisabled   : GRAY_LO,
+
   label                     : getDefaultLabelStyle(),
+
   itemListAlign             : haCenter,
   itemListPadHoriz          : 7.0,
   itemListPadVert           : 7.0,
@@ -2941,8 +2951,22 @@ var DefaultDropDownStyle = DropDownStyle(
   itemListFillColor         : GRAY_LO,
   item                      : getDefaultLabelStyle(),
   itemBackgroundColorHover  : HILITE,
+
   shadow                    : getDefaultShadowStyle()
 )
+
+with DefaultDropDownStyle:
+  scrollBarStyle = getDefaultScrollBarStyle()
+  with scrollBarStyle:
+    trackCornerRadius   = 3.0
+    trackFillColor      = gray(0, 0)
+    trackFillColorHover = gray(0, 0)
+    trackFillColorDown  = gray(0, 0)
+    thumbCornerRadius   = 3.0
+    thumbFillColor      = gray(1.0, 0.4)
+    thumbFillColorHover = gray(1.0, 0.43)
+    thumbFillColorDown  = gray(1.0, 0.35)
+
 
 with DefaultDropDownStyle:
   label.padHoriz    = 8.0
@@ -2982,10 +3006,14 @@ proc dropDown[T](id:               ItemId,
   alias(ds, ui.dropDownState)
   alias(s, style)
 
+  let ScrollBarWidth = 12.0
+
   let (x, y) = addDrawOffset(x, y)
 
   var
     itemListX, itemListY, itemListW, itemListH: float
+    maxDisplayItems = items.len
+    scrollBarVisible = false
     hoverItem = -1
 
   let
@@ -3030,11 +3058,50 @@ proc dropDown[T](id:               ItemId,
       maxItemWidth = max(tw, maxItemWidth)
 
     itemListW = max(maxItemWidth + s.itemListPadHoriz*2, w)
-    itemListH = float(items.len) * itemHeight + s.itemListPadVert*2
+    let fullItemListH = float(items.len) * itemHeight + s.itemListPadVert*2
 
-    (itemListX, itemListY) = fitRectWithinWindow(itemListW, itemListH,
+    # Only calculate X
+    (itemListX, itemListY) = fitRectWithinWindow(itemListW, fullItemListH,
                                                  x, y, w, h,
                                                  s.itemListAlign)
+
+    # Crop item list to the window
+
+    if y+h + fullItemListH + WindowEdgePad <= ui.winHeight:
+      # whole list fits downward
+      itemListY = y+h
+      itemListH = fullItemListH
+
+    elif y - fullItemListH - WindowEdgePad>= 0:
+      # whole list fits upward
+      itemListY = y - fullItemListH
+      itemListH = fullItemListH
+
+    else:
+      func calcMaxDisplayItems(spaceY: float): Natural =
+        max(
+          floor((spaceY - WindowEdgePad - s.itemListPadVert*2) / itemHeight),
+          0
+        ).Natural
+
+      func calcItemListH(numItems: Natural): float =
+        numItems * itemHeight + s.itemListPadVert*2
+
+      let downwardSpace = ui.winHeight - (y+h)
+      let upwardSpace = y
+
+      if downwardSpace > upwardSpace:
+        maxDisplayItems = calcMaxDisplayItems(downwardSpace)
+        itemListH = calcItemListH(maxDisplayItems)
+        itemListY = y+h
+      else:
+        maxDisplayItems = calcMaxDisplayItems(upwardSpace)
+        itemListH = calcItemListH(maxDisplayItems)
+        itemListY = y - itemListH
+
+    scrollBarVisible = maxDisplayItems < items.len
+    if scrollBarVisible:
+      itemListW += ScrollBarWidth
 
     let (itemListX, itemListY, itemListW, itemListH) = snapToGrid(
       itemListX, itemListY, itemListW, itemListH, s.itemListStrokeWidth
@@ -3052,17 +3119,19 @@ proc dropDown[T](id:               ItemId,
       closeDropDown()
 
     if insideItemList:
-      hoverItem = min(
-        ((ui.my - itemListY - s.itemListPadVert) / itemHeight).int,
-        numItems-1
-      )
+      if not scrollBarVisible or
+        (scrollBarVisible and ui.mx < itemListX + itemListW - ScrollBarWidth):
+        hoverItem = min(
+          ((ui.my - itemListY - s.itemListPadVert) / itemHeight).int,
+          numItems-1
+        ) + ds.displayStartItem.Natural
 
     # LMB released inside the box selects the item under the cursor and closes
     # the dropDown
     if ds.state == dsOpenLMBPressed:
+      let dt = getTime() - ui.t0  # protection against fast click & drag
       if not ui.mbLeftDown:
-        let dt = getTime() - ui.t0  # protection against fast click & drag
-        if hoverItem >= 0 and dt > 0.1:
+        if hoverItem >= 0 and dt > 0.3:
           selectedItem = T(hoverItem)
           closeDropDown()
         else:
@@ -3132,7 +3201,9 @@ proc dropDown[T](id:               ItemId,
         ix = itemListX + s.itemListPadHoriz
         iy = itemListY + s.itemListPadVert
 
-      for i, item in items.pairs:
+      let start = ds.displayStartItem.Natural
+
+      for i in start..<(start + maxDisplayItems):
         var state = wsNormal
         if i == hoverItem:
           vg.beginPath()
@@ -3141,9 +3212,37 @@ proc dropDown[T](id:               ItemId,
           vg.fill()
           state = wsHover
 
-        vg.drawLabel(ix, iy, itemListW, h, item, state, s.item)
+        vg.drawLabel(ix, iy, itemListW, h, items[i], state, s.item)
 
         iy += itemHeight
+
+
+  # Scrollbar
+  if isActive(id) and scrollBarVisible:
+    let sbId = hashId(lastIdString() & ":scrollBar")
+
+    let endVal = max(items.len.float - maxDisplayItems, 0)
+    let thumbSize = maxDisplayItems.float *
+                    ((items.len.float - maxDisplayItems) / items.len)
+
+    let currLayer = ui.currentLayer
+    ui.currentLayer = layerWidgetOverlay
+    ui.focusCaptured = false
+    ui.activeItem = 0
+
+    vertScrollBar(
+      sbId,
+      x=(itemListX + itemListW - ScrollBarWidth), y = itemListY,
+      w=ScrollBarWidth, h=itemListH,
+      startVal=0, endVal=endVal,
+      ds.displayStartItem,
+      thumbSize=thumbSize, clickStep=2,
+      style=s.scrollBarStyle
+    )
+
+    ui.currentLayer = currLayer
+    ui.focusCaptured = true
+    ui.activeItem = id
 
   if isHot(id):
     handleTooltip(id, tooltip)
@@ -3533,7 +3632,7 @@ proc vertScrollBar(id:         ItemId,
                    tooltip:    string = "",
                    thumbSize:  float = -1.0,
                    clickStep:  float = -1.0,
-                   style:      ScrollBarStyle) =
+                   style:      ScrollBarStyle = DefaultScrollBarStyle) =
 
   alias(ui, g_uiState)
   alias(sb, ui.scrollBarState)
@@ -4463,13 +4562,13 @@ proc textField(
           text = enforceConstraint(text, tf.originalText)
           exitEditMode()
           # Note we won't process any remaining characters in the buffer
-          # because exitEditMode() clears the key buffer.
+          # because exitEditMode() clears the key buffer
 
         elif sc in shortcuts[tesCancel]:
           text = tf.originalText
           exitEditMode()
           # Note we won't process any remaining characters in the buffer
-          # because exitEditMode() clears the key buffer.
+          # because exitEditMode() clears the key buffer
 
         else:
           ui.eventHandled = false
@@ -5030,7 +5129,7 @@ proc textArea(
           currRow = rows[^1]
           currRowIdx = rows.high
         else:
-          for i, row in rows.pairs:
+          for i, row in rows:
             if ta.cursorPos >= row.startPos and
                ta.cursorPos <= row.endPos:
               currRow = row
@@ -5190,13 +5289,13 @@ proc textArea(
         elif sc in shortcuts[tesAccept]:
           exitEditMode()
           # Note we won't process any remaining characters in the buffer
-          # because exitEditMode() clears the key buffer.
+          # because exitEditMode() clears the key buffer
 
         elif sc in shortcuts[tesCancel]:
           text = ta.originalText
           exitEditMode()
           # Note we won't process any remaining characters in the buffer
-          # because exitEditMode() clears the key buffer.
+          # because exitEditMode() clears the key buffer
 
         else:
           ui.eventHandled = false
@@ -5233,7 +5332,7 @@ proc textArea(
   maxDisplayRows = (textBoxH / lineHeight).int
 
   var currRow = rows.high
-  for rowIdx, row in rows.pairs():
+  for rowIdx, row in rows:
     if ta.cursorPos >= row.startPos and
        ta.cursorPos <= row.endPos:
       currRow = rowIdx
@@ -6175,7 +6274,7 @@ proc colorWheel(x, y, w, h: float; hue, sat, val: var float) =
         my = y1
 
       # Convert screen-coordinates into "local" coordinates (triangle within
-      # the unit-circle), so we can rotate them.
+      # the unit-circle), so we can rotate them
       mx -= cx
       my -= cy
 
@@ -6892,7 +6991,7 @@ proc endScrollView*() =
 
   # If cascade opening sub-headers was activated on the last subheader of the
   # scrollview, there's no further header elements that would reset the flag,
-  # so we must do it here.
+  # so we must do it here
   ui.sectionHeaderState.openSubHeaders = false
 
   resetHitClip()
@@ -7309,7 +7408,7 @@ proc endFrame*() =
     if ui.activeItem == 0 and ui.hotItem == 0:
       # LMB was pressed outside of any widget. We need to mark this as
       # a separate state so we can't just "drag into" a widget while the LMB
-      # is being depressed and activate it.
+      # is being depressed and activate it
       ui.activeItem = -1
   else:
     if ui.activeItem != 0:
