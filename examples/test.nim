@@ -67,8 +67,8 @@ var
 proc createWindow(): Window =
   var cfg = DefaultOpenglWindowConfig
   # TODO
-#  cfg.size = (w: 1000, h: 800)
-  cfg.size = (w: 300, h: 300)
+  cfg.size = (w: 1000, h: 800)
+#  cfg.size = (w: 300, h: 300)
   cfg.title = "Koi Test"
   cfg.resizable = true
   cfg.visible = true
@@ -206,7 +206,6 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
 
   koi.label(380, 590, w, h, fmt"{sliderVal4:.3f}", style = labelStyle)
 
-#[
   # dropDowns
   y += pad * 2
   koi.dropDown(
@@ -238,7 +237,7 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
     items = @["Red", "Green", "Blue", "Yellow", "Purple (with little yellow dots)"],
     dropDownBottomRight,
     tooltip = textAreaVal1)
-]#
+
   koi.dropDown(
     10, winHeight.float - 40, w, h,
     items = @[

@@ -74,7 +74,7 @@ type
   DropDownState = enum
     dsClosed, dsOpenLMBPressed, dsOpen
 
-  DropDownStateVars = object
+  DropDownStateVars = ref object of RootObj
     state:      DropDownState
 
     # Drop-down in open mode, 0 if no drop-down is open currently
@@ -391,7 +391,6 @@ type
     # Global widget states (per widget type)
     colorPickerState:   ColorPickerStateVars
     dialogState:        DialogStateVars
-    dropDownState:      DropDownStateVars
     popupState:         PopupStateVars
     radioButtonState:   RadioButtonStateVars
     scrollBarState:     ScrollBarStateVars
@@ -3556,7 +3555,6 @@ proc dropDown[T](id:               ItemId,
   assert selectedItem.ord <= items.high
 
   alias(ui, g_uiState)
-  alias(ds, ui.dropDownState)
   alias(s, style)
 
   let ScrollBarWidth = 12.0
@@ -3568,6 +3566,9 @@ proc dropDown[T](id:               ItemId,
     maxDisplayItems = items.len
     scrollBarVisible = false
     hoverItem = -1
+
+  discard ui.itemState.hasKeyOrPut(id, DropDownStateVars())
+  var ds = cast[DropDownStateVars](ui.itemState[id])
 
   let
     numItems = items.len
@@ -3778,27 +3779,34 @@ proc dropDown[T](id:               ItemId,
     let thumbSize = maxDisplayItems.float *
                     ((items.len.float - maxDisplayItems) / items.len)
 
-    let currLayer = ui.currentLayer
-    ui.currentLayer = layerWidgetOverlay
-    ui.focusCaptured = false
+    let oldHotItem = ui.hotItem
+    let oldActiveItem = ui.activeItem
+    let oldFocusCaptured = ui.focusCaptured
+    let oldCurrentLayer = ui.currentLayer
+
     ui.activeItem = 0
+    ui.focusCaptured = false
+    ui.currentLayer = layerWidgetOverlay
 
     vertScrollBar(
       sbId,
-      x=(itemListX + itemListW - ScrollBarWidth), y = itemListY,
-      w=ScrollBarWidth, h=itemListH,
-      startVal=0, endVal=endVal,
+      x = (itemListX + itemListW - ScrollBarWidth), y = itemListY,
+      w = ScrollBarWidth, h = itemListH,
+      startVal = 0, endVal = endVal,
       ds.displayStartItem,
-      thumbSize=thumbSize, clickStep=2,
-      style=s.scrollBarStyle
+      thumbSize = thumbSize, clickStep = 2,
+      style = s.scrollBarStyle
     )
 
-    ui.currentLayer = currLayer
-    ui.focusCaptured = true
-    ui.activeItem = id
+    ui.hotItem = oldHotItem
+    ui.activeItem = oldActiveItem
+    ui.focusCaptured = oldFocusCaptured
+    ui.currentLayer = oldCurrentLayer
 
   if isHot(id):
     handleTooltip(id, tooltip)
+
+  ui.itemState[id] = ds
 
 # }}}
 # {{{ dropDown templates - seq[string]
@@ -5494,7 +5502,6 @@ proc textArea(
 
     ui.eventHandled = true
 
-
   # Scrollbar
   let sbId = hashId(lastIdString() & ":scrollBar")
 
@@ -5505,11 +5512,11 @@ proc textArea(
 
   vertScrollBar(
     sbId,
-    x=(ox+w - ScrollBarWidth), y = oy, w=ScrollBarWidth, h=h,
-    startVal=0, endVal=scrollBarEndVal,
+    x = (ox+w - ScrollBarWidth), y = oy, w=ScrollBarWidth, h = h,
+    startVal = 0, endVal = scrollBarEndVal,
     ta.displayStartRow,
-    thumbSize=thumbSize, clickStep=2, style=sbStyle)
-
+    thumbSize = thumbSize, clickStep = 2, style = sbStyle
+  )
 
   if isHot(id):
     handleTooltip(id, tooltip)
@@ -6973,12 +6980,13 @@ proc endScrollView*() =
 
     vertScrollBar(
       sbId,
-      x=(ss.x + ss.w - ss.style.vertScrollBarWidth), y=ss.y,
-      w=ss.style.vertScrollBarWidth, h=visibleHeight,
-      startVal=0, endVal=endVal,
+      x = (ss.x + ss.w - ss.style.vertScrollBarWidth), y = ss.y,
+      w = ss.style.vertScrollBarWidth, h = visibleHeight,
+      startVal = 0, endVal = endVal,
       viewStartY,
-      thumbSize=thumbSize, clickStep=20,
-      style=ss.style.scrollBarStyle)
+      thumbSize = thumbSize, clickStep = 20,
+      style = ss.style.scrollBarStyle
+    )
 
   else:
     viewStartY = 0
