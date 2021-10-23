@@ -504,14 +504,14 @@ const
 
 # {{{ Event helpers
 
-proc hashId*(id: string): ItemId =
+func hashId*(id: string): ItemId =
   let hash32 = hash(id).uint32
   # Make sure the IDs are always positive integers
   let h = int64(hash32) - int32.low + 1
   assert h > 0
   h
 
-proc mkIdString*(filename: string, line: int, id: string): string =
+func mkIdString*(filename: string, line: int, id: string): string =
   result = filename & ":" & $line & ":" & id
 
 var g_nextIdString: string
@@ -938,7 +938,7 @@ proc addDrawOffset*(x, y: float): (float, float) =
 # }}}
 
 # {{{ toHSV*()
-proc toHSV*(c: Color): (float, float, float) =
+func toHSV*(c: Color): (float, float, float) =
   let
     r = c.r
     g = c.g
@@ -959,7 +959,7 @@ proc toHSV*(c: Color): (float, float, float) =
 
 # }}}
 # {{{ hsva*()
-proc hsva(h, s, v, a: float): Color =
+func hsva(h, s, v, a: float): Color =
   var r, g, b: float
   if s == 0.0:
     r = v
@@ -986,14 +986,14 @@ proc hsva(h, s, v, a: float): Color =
 
 # }}}
 # {{{ toHex*()
-proc toHex*(c: Color): string =
+func toHex*(c: Color): string =
   (c.r * 255).int.toHex(2) &
   (c.g * 255).int.toHex(2) &
   (c.b * 255).int.toHex(2)
 
 # }}}
 # {{{ colorFromHex*()
-proc colorFromHexStr*(s: string): Color =
+func colorFromHexStr*(s: string): Color =
   try:
     let r = parseHexInt(s.substr(0, 1)) / 255
     let g = parseHexInt(s.substr(2, 3)) / 255
@@ -1141,11 +1141,11 @@ type
 var
   g_drawLayers: DrawLayers
 
-proc init(dl: var DrawLayers) =
+func init(dl: var DrawLayers) =
   for i in 0..dl.layers.high:
     dl.layers[i] = @[]
 
-proc add(dl: var DrawLayers, layer: Natural, p: DrawProc) =
+func add(dl: var DrawLayers, layer: Natural, p: DrawProc) =
   dl.layers[layer].add(p)
   dl.lastUsedLayer = layer
 
@@ -1171,7 +1171,7 @@ type KeyShortcut* = object
   key*:    Key
   mods*:   set[ModifierKey]
 
-proc mkKeyShortcut*(k: Key, m: set[ModifierKey] = {}): KeyShortcut {.inline.} =
+func mkKeyShortcut*(k: Key, m: set[ModifierKey] = {}): KeyShortcut {.inline.} =
   # always ignore caps lock state
   var m = m - {mkCapsLock}
 
@@ -2898,6 +2898,559 @@ template radioButtons*[T](
   autoLayoutPost()
 
 # }}}
+# {{{ ScrollBar
+
+type ScrollBarStyle* = ref object
+  trackCornerRadius*:      float
+  trackStrokeWidth*:       float
+  trackStrokeColor*:       Color
+  trackStrokeColorHover*:  Color
+  trackStrokeColorDown*:   Color
+  trackFillColor*:         Color
+  trackFillColorHover*:    Color
+  trackFillColorDown*:     Color
+  thumbCornerRadius*:      float
+  thumbPad*:               float
+  thumbMinSize*:           float
+  thumbStrokeWidth*:       float
+  thumbStrokeColor*:       Color
+  thumbStrokeColorHover*:  Color
+  thumbStrokeColorDown*:   Color
+  thumbFillColor*:         Color
+  thumbFillColorHover*:    Color
+  thumbFillColorDown*:     Color
+  autoFade*:               bool
+  autoFadeStartAlpha*:     float
+  autoFadeEndAlpha*:       float
+  autoFadeDistance*:       float
+
+var DefaultScrollBarStyle = ScrollBarStyle(
+  trackCornerRadius      : 5.0,
+  trackStrokeWidth       : 0.0,
+  trackStrokeColor       : black(),
+  trackStrokeColorHover  : black(),
+  trackStrokeColorDown   : black(),
+  trackFillColor         : GRAY_MID,
+  trackFillColorHover    : GRAY_HI,
+  trackFillColorDown     : GRAY_MID,
+  thumbCornerRadius      : 5.0,
+  thumbPad               : 3.0,
+  thumbMinSize           : 10.0,
+  thumbStrokeWidth       : 0.0,
+  thumbStrokeColor       : black(),
+  thumbStrokeColorHover  : black(),
+  thumbStrokeColorDown   : black(),
+  thumbFillColor         : GRAY_LO,
+  thumbFillColorHover    : GRAY_LOHI,
+  thumbFillColorDown     : HILITE,
+  autoFade               : false,
+  autoFadeStartAlpha     : 0.5,
+  autoFadeEndAlpha       : 1.0,
+  autoFadeDistance       : 60.0
+)
+
+proc getDefaultScrollBarStyle*(): ScrollBarStyle =
+  DefaultScrollBarStyle.deepCopy
+
+proc setDefaultScrollBarStyle*(style: ScrollBarStyle) =
+  DefaultScrollBarStyle = style.deepCopy
+
+# {{{ horizScrollBar
+
+# Must be kept in sync with vertScrollBar!
+proc horizScrollBar(id:         ItemId,
+                    x, y, w, h: float,
+                    startVal:   float,
+                    endVal:     float,
+                    value_out:  var float,
+                    tooltip:    string = "",
+                    thumbSize:  float = -1.0,
+                    clickStep:  float = -1.0,
+                    style:      ScrollBarStyle) =
+
+  alias(ui, g_uiState)
+  alias(sb, ui.scrollBarState)
+  alias(s, style)
+
+  var value = value_out.clampToRange(startVal, endVal)
+
+  var thumbSize = if thumbSize > abs(startVal - endVal): -1.0 else: thumbSize
+  let clickStep = if clickStep > abs(startVal - endVal): -1.0 else: clickStep
+
+  let (x, y) = addDrawOffset(x, y)
+
+  # Calculate current thumb position
+  if thumbSize < 0: thumbSize = 0.000001
+
+  let
+    thumbW = max((w - s.thumbPad*2) / (abs(startVal - endVal) / thumbSize),
+                 s.thumbMinSize)
+
+    thumbH = h - s.thumbPad*2
+    thumbMinX = x + s.thumbPad
+    thumbMaxX = x + w - s.thumbPad - thumbW
+
+  func calcThumbX(val: float): float =
+    let t = invLerp(startVal, endVal, val)
+    lerp(thumbMinX, thumbMaxX, t)
+
+  let thumbX = calcThumbX(value)
+
+  # Hit testing
+  if isHit(x, y, w, h):
+    setHot(id)
+    if ui.mbLeftDown and hasNoActiveItem():
+      setActive(id)
+
+  let insideThumb = mouseInside(thumbX, y, thumbW, h)
+
+  # New thumb position & value calculation
+  var
+    newThumbX = thumbX
+    newValue = value
+
+  func calcNewValue(newThumbX: float): float =
+    let t = invLerp(thumbMinX, thumbMaxX, newThumbX)
+    lerp(startVal, endVal, t)
+
+  proc calcNewValueTrackClick(newValue: float): float =
+    let clickStep = if clickStep < 0: abs(startVal - endVal) * 0.1
+                    else: clickStep
+
+    let (s, e) = if startVal < endVal: (startVal, endVal)
+                 else: (endVal, startVal)
+    # TODO newValue is captured, isn't this a bug?
+    clamp(newValue + sb.clickDir * clickStep, s, e)
+
+  if isActive(id):
+    case sb.state
+    of sbsDefault:
+      if insideThumb:
+        ui.x0 = ui.mx
+        if shiftDown():
+          disableCursor()
+          sb.state = sbsDragHidden
+        else:
+          sb.state = sbsDragNormal
+        ui.widgetMouseDrag = true
+      else:
+        let s = sgn(endVal - startVal).float
+        if ui.mx < thumbX: sb.clickDir = -1 * s
+        else:               sb.clickDir =  1 * s
+        sb.state = sbsTrackClickFirst
+        ui.t0 = getTime()
+
+    of sbsDragNormal:
+      if shiftDown():
+        disableCursor()
+        sb.state = sbsDragHidden
+      else:
+        let dx = ui.dx - ui.x0
+
+        newThumbX = clamp(thumbX + dx, thumbMinX, thumbMaxX)
+        newValue = calcNewValue(newThumbX)
+
+        ui.x0 = clamp(ui.dx, thumbMinX, thumbMaxX + thumbW)
+
+    of sbsDragHidden:
+      # TODO not needed with widgetMouseDrag
+      # Technically, the cursor can move outside the widget when it's disabled
+      # in "drag hidden" mode, and then it will cease to be "hot". But in
+      # order to not break the tooltip processing logic, we're making here
+      # sure the widget is always hot in "drag hidden" mode.
+#      setHot(id)
+
+      if shiftDown():
+        let d = if altDown(): ScrollBarUltraFineDragDivisor
+                else:         ScrollBarFineDragDivisor
+        let dx = (ui.dx - ui.x0) / d
+
+        newThumbX = clamp(thumbX + dx, thumbMinX, thumbMaxX)
+        newValue = calcNewValue(newThumbX)
+
+        ui.x0 = ui.dx
+        ui.dragX = newThumbX + thumbW*0.5
+        ui.dragY = -1.0
+      else:
+        sb.state = sbsDragNormal
+        showCursor()
+        setCursorPosX(ui.dragX)
+        ui.dx = ui.dragX
+        ui.x0 = ui.dragX
+
+    of sbsTrackClickFirst:
+      newValue = calcNewValueTrackClick(newValue)
+      newThumbX = calcThumbX(newValue)
+
+      sb.state = sbsTrackClickDelay
+      ui.t0 = getTime()
+      setFramesLeft()
+
+    of sbsTrackClickDelay:
+      if getTime() - ui.t0 > ScrollBarTrackClickRepeatDelay:
+        sb.state = sbsTrackClickRepeat
+      setFramesLeft()
+
+    of sbsTrackClickRepeat:
+      if isHot(id):
+        if getTime() - ui.t0 > ScrollBarTrackClickRepeatTimeout:
+          newValue = calcNewValueTrackClick(newValue)
+          newThumbX = calcThumbX(newValue)
+
+          if sb.clickDir * sgn(endVal - startVal).float > 0:
+            if newThumbX + thumbW > ui.mx:
+              newThumbX = thumbX
+              newValue = value
+          else:
+            if newThumbX < ui.mx:
+              newThumbX = thumbX
+              newValue = value
+
+          ui.t0 = getTime()
+      else:
+        ui.t0 = getTime()
+      setFramesLeft()
+
+  value_out = newValue
+
+  # Draw scrollbar
+  addDrawLayer(ui.currentLayer, vg):
+    let dy = abs(y - ui.my)
+
+    if not s.autoFade or (s.autoFade and dy < s.autoFadeDistance):
+      let state = if   isHot(id) and hasNoActiveItem(): wsHover
+                  elif isActive(id): wsDown
+                  else: wsNormal
+
+      var sw = s.trackStrokeWidth
+      var (x, y, w, h) = snapToGrid(x, y, w, h, sw)
+
+      let (trackFillColor, trackStrokeColor,
+           thumbFillColor, thumbStrokeColor) =
+        case state
+        of wsHover:
+          (s.trackFillColorHover, s.trackStrokeColorHover,
+           s.thumbFillColorHover, s.thumbStrokeColorHover)
+        of wsDown:
+          (s.trackFillColorDown, s.trackStrokeColorDown,
+           s.thumbFillColorDown, s.thumbStrokeColorDown)
+        else:
+          (s.trackFillColor, s.trackStrokeColor,
+           s.thumbFillColor, s.thumbStrokeColor)
+
+      let ga = if s.autoFade:
+                 lerp(s.autoFadeEndAlpha, s.autoFadeStartAlpha,
+                      min(dy, s.autoFadeDistance) / s.autoFadeDistance)
+               else: 1.0
+
+      vg.globalAlpha(ga)
+
+      # Draw track
+      vg.fillColor(trackFillColor)
+      vg.strokeColor(trackStrokeColor)
+      vg.strokeWidth(sw)
+
+      vg.beginPath()
+      vg.roundedRect(x, y, w, h, s.trackCornerRadius)
+      vg.fill()
+      vg.stroke()
+
+      # Draw thumb
+      sw = s.thumbStrokeWidth
+      (x, y, w, h) = snapToGrid(x, y, w, h, sw)
+
+      vg.fillColor(thumbFillColor)
+      vg.strokeColor(thumbStrokeColor)
+      vg.strokeWidth(sw)
+
+      vg.beginPath()
+      vg.roundedRect(newThumbX, y + s.thumbPad, thumbW, thumbH,
+                     s.thumbCornerRadius)
+      vg.fill()
+      vg.stroke()
+
+      vg.globalAlpha(1.0)
+
+  if isHot(id):
+    handleTooltip(id, tooltip)
+
+# }}}
+# {{{ vertScrollBar
+
+# Must be kept in sync with horizScrollBar!
+proc vertScrollBar(id:         ItemId,
+                   x, y, w, h: float,
+                   startVal:   float,
+                   endVal:     float,
+                   value_out:  var float,
+                   tooltip:    string = "",
+                   thumbSize:  float = -1.0,
+                   clickStep:  float = -1.0,
+                   style:      ScrollBarStyle = DefaultScrollBarStyle) =
+
+  alias(ui, g_uiState)
+  alias(sb, ui.scrollBarState)
+  alias(s, style)
+
+  var value = value_out.clampToRange(startVal, endVal)
+
+  var thumbSize = if thumbSize > abs(startVal - endVal): -1.0 else: thumbSize
+  let clickStep = if clickStep > abs(startVal - endVal): -1.0 else: clickStep
+
+  let (x, y) = addDrawOffset(x, y)
+
+  # Calculate current thumb position
+  if thumbSize < 0: thumbSize = 0.000001
+
+  let
+    thumbW = w - s.thumbPad*2
+
+    thumbH = max((h - s.thumbPad*2) / (abs(startVal - endVal) / thumbSize),
+                 s.thumbMinSize)
+
+    thumbMinY = y + s.thumbPad
+    thumbMaxY = y + h - s.thumbPad - thumbH
+
+  func calcThumbY(value: float): float =
+    let t = invLerp(startVal, endVal, value)
+    lerp(thumbMinY, thumbMaxY, t)
+
+  let thumbY = calcThumbY(value)
+
+  # Hit testing
+  if isHit(x, y, w, h):
+    setHot(id)
+    if ui.mbLeftDown and hasNoActiveItem():
+      setActive(id)
+
+  let insideThumb = mouseInside(x, thumbY, w, thumbH)
+
+  # New thumb position & value calculation
+  var
+    newThumbY = thumbY
+    newValue = value
+
+  func calcNewValue(newThumbY: float): float =
+    let t = invLerp(thumbMinY, thumbMaxY, newThumbY)
+    lerp(startVal, endVal, t)
+
+  proc calcNewValueTrackClick(): float =
+    let clickStep = if clickStep < 0: abs(startVal - endVal) * 0.1
+                    else: clickStep
+
+    let (s, e) = if startVal < endVal: (startVal, endVal)
+                 else: (endVal, startVal)
+    clamp(newValue + sb.clickDir * clickStep, s, e)
+
+  if isActive(id):
+    case sb.state
+    of sbsDefault:
+      if insideThumb:
+        ui.y0 = ui.my
+        if shiftDown():
+          disableCursor()
+          sb.state = sbsDragHidden
+        else:
+          sb.state = sbsDragNormal
+        ui.widgetMouseDrag = true
+      else:
+        let s = sgn(endVal - startVal).float
+        if ui.my < thumbY: sb.clickDir = -1 * s
+        else:               sb.clickDir =  1 * s
+        sb.state = sbsTrackClickFirst
+        ui.t0 = getTime()
+
+    of sbsDragNormal:
+      if shiftDown():
+        disableCursor()
+        sb.state = sbsDragHidden
+      else:
+        let dy = ui.dy - ui.y0
+
+        newThumbY = clamp(thumbY + dy, thumbMinY, thumbMaxY)
+        newValue = calcNewValue(newThumbY)
+
+        ui.y0 = clamp(ui.dy, thumbMinY, thumbMaxY + thumbH)
+
+    of sbsDragHidden:
+      # Technically, the cursor can move outside the widget when it's disabled
+      # in "drag hidden" mode, and then it will cease to be "hot". But in
+      # order to not break the tooltip processing logic, we're making here
+      # sure the widget is always hot in "drag hidden" mode.
+      setHot(id)
+
+      if shiftDown():
+        let d = if altDown(): ScrollBarUltraFineDragDivisor
+                else:         ScrollBarFineDragDivisor
+        let dy = (ui.dy - ui.y0) / d
+
+        newThumbY = clamp(thumbY + dy, thumbMinY, thumbMaxY)
+        newValue = calcNewValue(newThumbY)
+
+        ui.y0 = ui.dy
+        ui.dragX = -1.0
+        ui.dragY = newThumbY + thumbH*0.5
+      else:
+        sb.state = sbsDragNormal
+        showCursor()
+        setCursorPosY(ui.dragY)
+        ui.dy = ui.dragY
+        ui.y0 = ui.dragY
+
+    of sbsTrackClickFirst:
+      newValue = calcNewValueTrackClick()
+      newThumbY = calcThumbY(newValue)
+
+      sb.state = sbsTrackClickDelay
+      ui.t0 = getTime()
+      setFramesLeft()
+
+    of sbsTrackClickDelay:
+      if getTime() - ui.t0 > ScrollBarTrackClickRepeatDelay:
+        sb.state = sbsTrackClickRepeat
+      setFramesLeft()
+
+    of sbsTrackClickRepeat:
+      if isHot(id):
+        if getTime() - ui.t0 > ScrollBarTrackClickRepeatTimeout:
+          newValue = calcNewValueTrackClick()
+          newThumbY = calcThumbY(newValue)
+
+          if sb.clickDir * sgn(endVal - startVal).float > 0:
+            if newThumbY + thumbH > ui.my:
+              newThumbY = thumbY
+              newValue = value
+          else:
+            if newThumbY < ui.my:
+              newThumbY = thumbY
+              newValue = value
+
+          ui.t0 = getTime()
+      else:
+        ui.t0 = getTime()
+      setFramesLeft()
+
+  value_out = newValue
+
+  # Draw scrollbar
+  addDrawLayer(ui.currentLayer, vg):
+    let dx = abs(x - ui.mx)
+
+    if not s.autoFade or (s.autoFade and dx < s.autoFadeDistance and
+                          not ui.focusCaptured):
+      let state = if   isHot(id) and hasNoActiveItem(): wsHover
+                  elif isActive(id): wsDown
+                  else: wsNormal
+
+      let ga = if s.autoFade:
+                 lerp(s.autoFadeEndAlpha, s.autoFadeStartAlpha,
+                      min(dx, s.autoFadeDistance) / s.autoFadeDistance)
+               else: 1.0
+
+      vg.globalAlpha(ga)
+
+      # Draw track
+      var sw = s.trackStrokeWidth
+      var (x, y, w, h) = snapToGrid(x, y, w, h, sw)
+
+      let (trackFillColor, trackStrokeColor,
+           thumbFillColor, thumbStrokeColor) =
+        case state
+        of wsHover:
+          (s.trackFillColorHover, s.trackStrokeColorHover,
+           s.thumbFillColorHover, s.thumbStrokeColorHover)
+        of wsDown:
+          (s.trackFillColorDown, s.trackStrokeColorDown,
+           s.thumbFillColorDown, s.thumbStrokeColorDown)
+        else:
+          (s.trackFillColor, s.trackStrokeColor,
+           s.thumbFillColor, s.thumbStrokeColor)
+
+      vg.fillColor(trackFillColor)
+      vg.strokeColor(trackStrokeColor)
+      vg.strokeWidth(sw)
+
+      vg.beginPath()
+      vg.roundedRect(x, y, w, h, s.trackCornerRadius)
+      vg.fill()
+      vg.stroke()
+
+      # Draw thumb
+      sw = s.thumbStrokeWidth
+      (x, y, w, h) = snapToGrid(x, y, w, h, sw)
+
+      vg.fillColor(thumbFillColor)
+      vg.strokeColor(thumbStrokeColor)
+      vg.strokeWidth(sw)
+
+      vg.beginPath()
+      vg.roundedRect(x + s.thumbPad, newThumbY, thumbW, thumbH,
+                     s.thumbCornerRadius)
+      vg.fill()
+      vg.stroke()
+
+      vg.globalAlpha(1.0)
+
+  if isHot(id):
+    handleTooltip(id, tooltip)
+
+# }}}
+# {{{ scrollBarPost
+
+proc scrollBarPost() =
+  alias(ui, g_uiState)
+  alias(sb, ui.scrollBarState)
+
+  # Handle release active scrollbar outside of the widget
+  if not ui.mbLeftDown and hasActiveItem():
+    case sb.state:
+    of sbsDragHidden:
+      sb.state = sbsDefault
+      showCursor()
+      if ui.dragX > -1.0:
+        setCursorPosX(ui.dragX)
+      else:
+        setCursorPosY(ui.dragY)
+
+    else:
+      sb.state = sbsDefault
+
+    ui.widgetMouseDrag = false
+
+# }}}
+
+template horizScrollBar*(x, y, w, h: float,
+                         startVal:  float,
+                         endVal:    float,
+                         value:     var float,
+                         tooltip:   string = "",
+                         thumbSize: float = -1.0,
+                         clickStep: float = -1.0,
+                         style:     ScrollBarStyle = DefaultScrollBarStyle) =
+
+  let i = instantiationInfo(fullPaths=true)
+  let id = getNextId(i.filename, i.line)
+
+  horizScrollBar(id, x, y, w, h, startVal, endVal, value, tooltip, thumbSize,
+                 clickStep, style)
+
+
+template vertScrollBar*(x, y, w, h: float,
+                        startVal:   float,
+                        endVal:     float,
+                        value:      var float,
+                        tooltip:    string = "",
+                        thumbSize:  float = -1.0,
+                        clickStep:  float = -1.0,
+                        style:      ScrollBarStyle = DefaultScrollBarStyle) =
+
+  let i = instantiationInfo(fullPaths=true)
+  let id = getNextId(i.filename, i.line)
+
+  vertScrollBar(id, x, y, w, h, startVal, endVal, value, tooltip, thumbSize,
+                clickStep, style)
+
+# }}}
 # {{{ DropDown
 
 type DropDownStyle* = ref object
@@ -3344,559 +3897,6 @@ template dropDown*[E: enum](
 # }}}
 
 # }}}
-# {{{ ScrollBar
-
-type ScrollBarStyle* = ref object
-  trackCornerRadius*:      float
-  trackStrokeWidth*:       float
-  trackStrokeColor*:       Color
-  trackStrokeColorHover*:  Color
-  trackStrokeColorDown*:   Color
-  trackFillColor*:         Color
-  trackFillColorHover*:    Color
-  trackFillColorDown*:     Color
-  thumbCornerRadius*:      float
-  thumbPad*:               float
-  thumbMinSize*:           float
-  thumbStrokeWidth*:       float
-  thumbStrokeColor*:       Color
-  thumbStrokeColorHover*:  Color
-  thumbStrokeColorDown*:   Color
-  thumbFillColor*:         Color
-  thumbFillColorHover*:    Color
-  thumbFillColorDown*:     Color
-  autoFade*:               bool
-  autoFadeStartAlpha*:     float
-  autoFadeEndAlpha*:       float
-  autoFadeDistance*:       float
-
-var DefaultScrollBarStyle = ScrollBarStyle(
-  trackCornerRadius      : 5.0,
-  trackStrokeWidth       : 0.0,
-  trackStrokeColor       : black(),
-  trackStrokeColorHover  : black(),
-  trackStrokeColorDown   : black(),
-  trackFillColor         : GRAY_MID,
-  trackFillColorHover    : GRAY_HI,
-  trackFillColorDown     : GRAY_MID,
-  thumbCornerRadius      : 5.0,
-  thumbPad               : 3.0,
-  thumbMinSize           : 10.0,
-  thumbStrokeWidth       : 0.0,
-  thumbStrokeColor       : black(),
-  thumbStrokeColorHover  : black(),
-  thumbStrokeColorDown   : black(),
-  thumbFillColor         : GRAY_LO,
-  thumbFillColorHover    : GRAY_LOHI,
-  thumbFillColorDown     : HILITE,
-  autoFade               : false,
-  autoFadeStartAlpha     : 0.5,
-  autoFadeEndAlpha       : 1.0,
-  autoFadeDistance       : 60.0
-)
-
-proc getDefaultScrollBarStyle*(): ScrollBarStyle =
-  DefaultScrollBarStyle.deepCopy
-
-proc setDefaultScrollBarStyle*(style: ScrollBarStyle) =
-  DefaultScrollBarStyle = style.deepCopy
-
-# {{{ horizScrollBar
-
-# Must be kept in sync with vertScrollBar!
-proc horizScrollBar(id:         ItemId,
-                    x, y, w, h: float,
-                    startVal:   float,
-                    endVal:     float,
-                    value_out:  var float,
-                    tooltip:    string = "",
-                    thumbSize:  float = -1.0,
-                    clickStep:  float = -1.0,
-                    style:      ScrollBarStyle) =
-
-  alias(ui, g_uiState)
-  alias(sb, ui.scrollBarState)
-  alias(s, style)
-
-  var value = value_out.clampToRange(startVal, endVal)
-
-  var thumbSize = if thumbSize > abs(startVal - endVal): -1.0 else: thumbSize
-  let clickStep = if clickStep > abs(startVal - endVal): -1.0 else: clickStep
-
-  let (x, y) = addDrawOffset(x, y)
-
-  # Calculate current thumb position
-  if thumbSize < 0: thumbSize = 0.000001
-
-  let
-    thumbW = max((w - s.thumbPad*2) / (abs(startVal - endVal) / thumbSize),
-                 s.thumbMinSize)
-
-    thumbH = h - s.thumbPad*2
-    thumbMinX = x + s.thumbPad
-    thumbMaxX = x + w - s.thumbPad - thumbW
-
-  proc calcThumbX(val: float): float =
-    let t = invLerp(startVal, endVal, val)
-    lerp(thumbMinX, thumbMaxX, t)
-
-  let thumbX = calcThumbX(value)
-
-  # Hit testing
-  if isHit(x, y, w, h):
-    setHot(id)
-    if ui.mbLeftDown and hasNoActiveItem():
-      setActive(id)
-
-  let insideThumb = mouseInside(thumbX, y, thumbW, h)
-
-  # New thumb position & value calculation
-  var
-    newThumbX = thumbX
-    newValue = value
-
-  proc calcNewValue(newThumbX: float): float =
-    let t = invLerp(thumbMinX, thumbMaxX, newThumbX)
-    lerp(startVal, endVal, t)
-
-  proc calcNewValueTrackClick(newValue: float): float =
-    let clickStep = if clickStep < 0: abs(startVal - endVal) * 0.1
-                    else: clickStep
-
-    let (s, e) = if startVal < endVal: (startVal, endVal)
-                 else: (endVal, startVal)
-    # TODO newValue is captured, isn't this a bug?
-    clamp(newValue + sb.clickDir * clickStep, s, e)
-
-  if isActive(id):
-    case sb.state
-    of sbsDefault:
-      if insideThumb:
-        ui.x0 = ui.mx
-        if shiftDown():
-          disableCursor()
-          sb.state = sbsDragHidden
-        else:
-          sb.state = sbsDragNormal
-        ui.widgetMouseDrag = true
-      else:
-        let s = sgn(endVal - startVal).float
-        if ui.mx < thumbX: sb.clickDir = -1 * s
-        else:               sb.clickDir =  1 * s
-        sb.state = sbsTrackClickFirst
-        ui.t0 = getTime()
-
-    of sbsDragNormal:
-      if shiftDown():
-        disableCursor()
-        sb.state = sbsDragHidden
-      else:
-        let dx = ui.dx - ui.x0
-
-        newThumbX = clamp(thumbX + dx, thumbMinX, thumbMaxX)
-        newValue = calcNewValue(newThumbX)
-
-        ui.x0 = clamp(ui.dx, thumbMinX, thumbMaxX + thumbW)
-
-    of sbsDragHidden:
-      # TODO not needed with widgetMouseDrag
-      # Technically, the cursor can move outside the widget when it's disabled
-      # in "drag hidden" mode, and then it will cease to be "hot". But in
-      # order to not break the tooltip processing logic, we're making here
-      # sure the widget is always hot in "drag hidden" mode.
-#      setHot(id)
-
-      if shiftDown():
-        let d = if altDown(): ScrollBarUltraFineDragDivisor
-                else:         ScrollBarFineDragDivisor
-        let dx = (ui.dx - ui.x0) / d
-
-        newThumbX = clamp(thumbX + dx, thumbMinX, thumbMaxX)
-        newValue = calcNewValue(newThumbX)
-
-        ui.x0 = ui.dx
-        ui.dragX = newThumbX + thumbW*0.5
-        ui.dragY = -1.0
-      else:
-        sb.state = sbsDragNormal
-        showCursor()
-        setCursorPosX(ui.dragX)
-        ui.dx = ui.dragX
-        ui.x0 = ui.dragX
-
-    of sbsTrackClickFirst:
-      newValue = calcNewValueTrackClick(newValue)
-      newThumbX = calcThumbX(newValue)
-
-      sb.state = sbsTrackClickDelay
-      ui.t0 = getTime()
-      setFramesLeft()
-
-    of sbsTrackClickDelay:
-      if getTime() - ui.t0 > ScrollBarTrackClickRepeatDelay:
-        sb.state = sbsTrackClickRepeat
-      setFramesLeft()
-
-    of sbsTrackClickRepeat:
-      if isHot(id):
-        if getTime() - ui.t0 > ScrollBarTrackClickRepeatTimeout:
-          newValue = calcNewValueTrackClick(newValue)
-          newThumbX = calcThumbX(newValue)
-
-          if sb.clickDir * sgn(endVal - startVal).float > 0:
-            if newThumbX + thumbW > ui.mx:
-              newThumbX = thumbX
-              newValue = value
-          else:
-            if newThumbX < ui.mx:
-              newThumbX = thumbX
-              newValue = value
-
-          ui.t0 = getTime()
-      else:
-        ui.t0 = getTime()
-      setFramesLeft()
-
-  value_out = newValue
-
-  # Draw scrollbar
-  addDrawLayer(ui.currentLayer, vg):
-    let dy = abs(y - ui.my)
-
-    if not s.autoFade or (s.autoFade and dy < s.autoFadeDistance):
-      let state = if   isHot(id) and hasNoActiveItem(): wsHover
-                  elif isActive(id): wsDown
-                  else: wsNormal
-
-      var sw = s.trackStrokeWidth
-      var (x, y, w, h) = snapToGrid(x, y, w, h, sw)
-
-      let (trackFillColor, trackStrokeColor,
-           thumbFillColor, thumbStrokeColor) =
-        case state
-        of wsHover:
-          (s.trackFillColorHover, s.trackStrokeColorHover,
-           s.thumbFillColorHover, s.thumbStrokeColorHover)
-        of wsDown:
-          (s.trackFillColorDown, s.trackStrokeColorDown,
-           s.thumbFillColorDown, s.thumbStrokeColorDown)
-        else:
-          (s.trackFillColor, s.trackStrokeColor,
-           s.thumbFillColor, s.thumbStrokeColor)
-
-      let ga = if s.autoFade:
-                 lerp(s.autoFadeEndAlpha, s.autoFadeStartAlpha,
-                      min(dy, s.autoFadeDistance) / s.autoFadeDistance)
-               else: 1.0
-
-      vg.globalAlpha(ga)
-
-      # Draw track
-      vg.fillColor(trackFillColor)
-      vg.strokeColor(trackStrokeColor)
-      vg.strokeWidth(sw)
-
-      vg.beginPath()
-      vg.roundedRect(x, y, w, h, s.trackCornerRadius)
-      vg.fill()
-      vg.stroke()
-
-      # Draw thumb
-      sw = s.thumbStrokeWidth
-      (x, y, w, h) = snapToGrid(x, y, w, h, sw)
-
-      vg.fillColor(thumbFillColor)
-      vg.strokeColor(thumbStrokeColor)
-      vg.strokeWidth(sw)
-
-      vg.beginPath()
-      vg.roundedRect(newThumbX, y + s.thumbPad, thumbW, thumbH,
-                     s.thumbCornerRadius)
-      vg.fill()
-      vg.stroke()
-
-      vg.globalAlpha(1.0)
-
-  if isHot(id):
-    handleTooltip(id, tooltip)
-
-# }}}
-# {{{ vertScrollBar
-
-# Must be kept in sync with horizScrollBar!
-proc vertScrollBar(id:         ItemId,
-                   x, y, w, h: float,
-                   startVal:   float,
-                   endVal:     float,
-                   value_out:  var float,
-                   tooltip:    string = "",
-                   thumbSize:  float = -1.0,
-                   clickStep:  float = -1.0,
-                   style:      ScrollBarStyle = DefaultScrollBarStyle) =
-
-  alias(ui, g_uiState)
-  alias(sb, ui.scrollBarState)
-  alias(s, style)
-
-  var value = value_out.clampToRange(startVal, endVal)
-
-  var thumbSize = if thumbSize > abs(startVal - endVal): -1.0 else: thumbSize
-  let clickStep = if clickStep > abs(startVal - endVal): -1.0 else: clickStep
-
-  let (x, y) = addDrawOffset(x, y)
-
-  # Calculate current thumb position
-  if thumbSize < 0: thumbSize = 0.000001
-
-  let
-    thumbW = w - s.thumbPad*2
-
-    thumbH = max((h - s.thumbPad*2) / (abs(startVal - endVal) / thumbSize),
-                 s.thumbMinSize)
-
-    thumbMinY = y + s.thumbPad
-    thumbMaxY = y + h - s.thumbPad - thumbH
-
-  proc calcThumbY(value: float): float =
-    let t = invLerp(startVal, endVal, value)
-    lerp(thumbMinY, thumbMaxY, t)
-
-  let thumbY = calcThumbY(value)
-
-  # Hit testing
-  if isHit(x, y, w, h):
-    setHot(id)
-    if ui.mbLeftDown and hasNoActiveItem():
-      setActive(id)
-
-  let insideThumb = mouseInside(x, thumbY, w, thumbH)
-
-  # New thumb position & value calculation
-  var
-    newThumbY = thumbY
-    newValue = value
-
-  proc calcNewValue(newThumbY: float): float =
-    let t = invLerp(thumbMinY, thumbMaxY, newThumbY)
-    lerp(startVal, endVal, t)
-
-  proc calcNewValueTrackClick(): float =
-    let clickStep = if clickStep < 0: abs(startVal - endVal) * 0.1
-                    else: clickStep
-
-    let (s, e) = if startVal < endVal: (startVal, endVal)
-                 else: (endVal, startVal)
-    clamp(newValue + sb.clickDir * clickStep, s, e)
-
-  if isActive(id):
-    case sb.state
-    of sbsDefault:
-      if insideThumb:
-        ui.y0 = ui.my
-        if shiftDown():
-          disableCursor()
-          sb.state = sbsDragHidden
-        else:
-          sb.state = sbsDragNormal
-        ui.widgetMouseDrag = true
-      else:
-        let s = sgn(endVal - startVal).float
-        if ui.my < thumbY: sb.clickDir = -1 * s
-        else:               sb.clickDir =  1 * s
-        sb.state = sbsTrackClickFirst
-        ui.t0 = getTime()
-
-    of sbsDragNormal:
-      if shiftDown():
-        disableCursor()
-        sb.state = sbsDragHidden
-      else:
-        let dy = ui.dy - ui.y0
-
-        newThumbY = clamp(thumbY + dy, thumbMinY, thumbMaxY)
-        newValue = calcNewValue(newThumbY)
-
-        ui.y0 = clamp(ui.dy, thumbMinY, thumbMaxY + thumbH)
-
-    of sbsDragHidden:
-      # Technically, the cursor can move outside the widget when it's disabled
-      # in "drag hidden" mode, and then it will cease to be "hot". But in
-      # order to not break the tooltip processing logic, we're making here
-      # sure the widget is always hot in "drag hidden" mode.
-      setHot(id)
-
-      if shiftDown():
-        let d = if altDown(): ScrollBarUltraFineDragDivisor
-                else:         ScrollBarFineDragDivisor
-        let dy = (ui.dy - ui.y0) / d
-
-        newThumbY = clamp(thumbY + dy, thumbMinY, thumbMaxY)
-        newValue = calcNewValue(newThumbY)
-
-        ui.y0 = ui.dy
-        ui.dragX = -1.0
-        ui.dragY = newThumbY + thumbH*0.5
-      else:
-        sb.state = sbsDragNormal
-        showCursor()
-        setCursorPosY(ui.dragY)
-        ui.dy = ui.dragY
-        ui.y0 = ui.dragY
-
-    of sbsTrackClickFirst:
-      newValue = calcNewValueTrackClick()
-      newThumbY = calcThumbY(newValue)
-
-      sb.state = sbsTrackClickDelay
-      ui.t0 = getTime()
-      setFramesLeft()
-
-    of sbsTrackClickDelay:
-      if getTime() - ui.t0 > ScrollBarTrackClickRepeatDelay:
-        sb.state = sbsTrackClickRepeat
-      setFramesLeft()
-
-    of sbsTrackClickRepeat:
-      if isHot(id):
-        if getTime() - ui.t0 > ScrollBarTrackClickRepeatTimeout:
-          newValue = calcNewValueTrackClick()
-          newThumbY = calcThumbY(newValue)
-
-          if sb.clickDir * sgn(endVal - startVal).float > 0:
-            if newThumbY + thumbH > ui.my:
-              newThumbY = thumbY
-              newValue = value
-          else:
-            if newThumbY < ui.my:
-              newThumbY = thumbY
-              newValue = value
-
-          ui.t0 = getTime()
-      else:
-        ui.t0 = getTime()
-      setFramesLeft()
-
-  value_out = newValue
-
-  # Draw scrollbar
-  addDrawLayer(ui.currentLayer, vg):
-    let dx = abs(x - ui.mx)
-
-    if not s.autoFade or (s.autoFade and dx < s.autoFadeDistance and
-                          not ui.focusCaptured):
-      let state = if   isHot(id) and hasNoActiveItem(): wsHover
-                  elif isActive(id): wsDown
-                  else: wsNormal
-
-      let ga = if s.autoFade:
-                 lerp(s.autoFadeEndAlpha, s.autoFadeStartAlpha,
-                      min(dx, s.autoFadeDistance) / s.autoFadeDistance)
-               else: 1.0
-
-      vg.globalAlpha(ga)
-
-      # Draw track
-      var sw = s.trackStrokeWidth
-      var (x, y, w, h) = snapToGrid(x, y, w, h, sw)
-
-      let (trackFillColor, trackStrokeColor,
-           thumbFillColor, thumbStrokeColor) =
-        case state
-        of wsHover:
-          (s.trackFillColorHover, s.trackStrokeColorHover,
-           s.thumbFillColorHover, s.thumbStrokeColorHover)
-        of wsDown:
-          (s.trackFillColorDown, s.trackStrokeColorDown,
-           s.thumbFillColorDown, s.thumbStrokeColorDown)
-        else:
-          (s.trackFillColor, s.trackStrokeColor,
-           s.thumbFillColor, s.thumbStrokeColor)
-
-      vg.fillColor(trackFillColor)
-      vg.strokeColor(trackStrokeColor)
-      vg.strokeWidth(sw)
-
-      vg.beginPath()
-      vg.roundedRect(x, y, w, h, s.trackCornerRadius)
-      vg.fill()
-      vg.stroke()
-
-      # Draw thumb
-      sw = s.thumbStrokeWidth
-      (x, y, w, h) = snapToGrid(x, y, w, h, sw)
-
-      vg.fillColor(thumbFillColor)
-      vg.strokeColor(thumbStrokeColor)
-      vg.strokeWidth(sw)
-
-      vg.beginPath()
-      vg.roundedRect(x + s.thumbPad, newThumbY, thumbW, thumbH,
-                     s.thumbCornerRadius)
-      vg.fill()
-      vg.stroke()
-
-      vg.globalAlpha(1.0)
-
-  if isHot(id):
-    handleTooltip(id, tooltip)
-
-# }}}
-# {{{ scrollBarPost
-
-proc scrollBarPost() =
-  alias(ui, g_uiState)
-  alias(sb, ui.scrollBarState)
-
-  # Handle release active scrollbar outside of the widget
-  if not ui.mbLeftDown and hasActiveItem():
-    case sb.state:
-    of sbsDragHidden:
-      sb.state = sbsDefault
-      showCursor()
-      if ui.dragX > -1.0:
-        setCursorPosX(ui.dragX)
-      else:
-        setCursorPosY(ui.dragY)
-
-    else:
-      sb.state = sbsDefault
-
-    ui.widgetMouseDrag = false
-
-# }}}
-
-template horizScrollBar*(x, y, w, h: float,
-                         startVal:  float,
-                         endVal:    float,
-                         value:     var float,
-                         tooltip:   string = "",
-                         thumbSize: float = -1.0,
-                         clickStep: float = -1.0,
-                         style:     ScrollBarStyle = DefaultScrollBarStyle) =
-
-  let i = instantiationInfo(fullPaths=true)
-  let id = getNextId(i.filename, i.line)
-
-  horizScrollBar(id, x, y, w, h, startVal, endVal, value, tooltip, thumbSize,
-                 clickStep, style)
-
-
-template vertScrollBar*(x, y, w, h: float,
-                        startVal:   float,
-                        endVal:     float,
-                        value:      var float,
-                        tooltip:    string = "",
-                        thumbSize:  float = -1.0,
-                        clickStep:  float = -1.0,
-                        style:      ScrollBarStyle = DefaultScrollBarStyle) =
-
-  let i = instantiationInfo(fullPaths=true)
-  let id = getNextId(i.filename, i.line)
-
-  vertScrollBar(id, x, y, w, h, startVal, endVal, value, tooltip, thumbSize,
-                clickStep, style)
-
-# }}}
 
 # {{{ Common text functions
 
@@ -3908,12 +3908,12 @@ type TextEditResult = object
 const NoSelection = TextSelection(startPos: -1, endPos: 0)
 
 # {{{ hasSelection()
-proc hasSelection(sel: TextSelection): bool =
+func hasSelection(sel: TextSelection): bool =
   sel.startPos > -1 and sel.startPos != sel.endPos
 
 # }}}
 # {{{ normaliseSelection()
-proc normaliseSelection(sel: TextSelection): TextSelection =
+func normaliseSelection(sel: TextSelection): TextSelection =
   if (sel.startPos < sel.endPos):
     TextSelection(
       startPos: sel.startPos,
@@ -3927,7 +3927,7 @@ proc normaliseSelection(sel: TextSelection): TextSelection =
 
 # }}}
 # {{{ updateSelection()
-proc updateSelection(sel: TextSelection,
+func updateSelection(sel: TextSelection,
                      cursorPos, newCursorPos: Natural): TextSelection =
   var sel = sel
   if sel.startPos == -1:
@@ -3938,14 +3938,14 @@ proc updateSelection(sel: TextSelection,
 
 # }}}
 # {{{ isAlphanumeric()
-proc isAlphanumeric(r: Rune): bool =
+func isAlphanumeric(r: Rune): bool =
   if r.isAlpha: return true
   let s = $r
   if s[0] == '_' or s[0].isDigit: return true
 
 # }}}
 # {{{ findNextWordEnd()
-proc findNextWordEnd(text: string, cursorPos: Natural): Natural =
+func findNextWordEnd(text: string, cursorPos: Natural): Natural =
   var p = cursorPos
   while p < text.runeLen and     text.runeAtPos(p).isAlphanumeric: inc(p)
   while p < text.runeLen and not text.runeAtPos(p).isAlphanumeric: inc(p)
@@ -3953,7 +3953,7 @@ proc findNextWordEnd(text: string, cursorPos: Natural): Natural =
 
 # }}}
 # {{{ findPrevWordStart()
-proc findPrevWordStart(text: string, cursorPos: Natural): Natural =
+func findPrevWordStart(text: string, cursorPos: Natural): Natural =
   var p = cursorPos
   while p > 0 and not text.runeAtPos(p-1).isAlphanumeric: dec(p)
   while p > 0 and     text.runeAtPos(p-1).isAlphanumeric: dec(p)
@@ -3971,7 +3971,7 @@ proc drawCursor(vg: NVGContext, x, y1, y2: float, color: Color, width: float) =
 
 # }}}
 # {{{ insertString()
-proc insertString(
+func insertString(
   text: string, cursorPos: Natural, selection: TextSelection, toInsert: string,
   maxLen: Option[Natural]
 ): TextEditResult =
@@ -4004,7 +4004,7 @@ proc insertString(
 
 # }}}
 # {{{ deleteSelection()
-proc deleteSelection(text: string, selection: TextSelection,
+func deleteSelection(text: string, selection: TextSelection,
                      cursorPos: Natural): TextEditResult =
   let ns = normaliseSelection(selection)
   result.text = text.runeSubStr(0, ns.startPos) & text.runeSubStr(ns.endPos)
@@ -4347,7 +4347,7 @@ proc textField(
     discard g_nvgContext.textGlyphPositions(0, 0, text, glyphs)
 
 
-  proc enforceConstraint(text, originalText: string): string =
+  func enforceConstraint(text, originalText: string): string =
     # TODO stripping should be optional
     var text = unicode.strip(text)
     result = text
@@ -4374,7 +4374,6 @@ proc textField(
       let midX = glyphs[p].minX + (glyphs[p].maxX - glyphs[p].minX) * 0.5
       if x < tf.displayStartX + midX - glyphs[tf.displayStartPos].x:
         return p
-
     result = text.runeLen
 
 
@@ -5653,7 +5652,7 @@ proc horizSlider(id:         ItemId,
     posMaxX = x + w - s.trackPad
 
   # Calculate current slider position
-  proc calcPosX(val: float): float =
+  func calcPosX(val: float): float =
     let t = invLerp(startVal, endVal, val)
     lerp(posMinX, posMaxX, t)
 
@@ -5896,7 +5895,7 @@ proc vertSlider(id:         ItemId,
     posMaxY = y + s.trackPad
 
   # Calculate current slider position
-  proc calcPosY(val: float): float =
+  func calcPosY(val: float): float =
     let t = invLerp(startVal, endVal, val)
     lerp(posMinY, posMaxY, t)
 
@@ -6194,7 +6193,7 @@ proc colorWheel(x, y, w, h: float; hue, sat, val: var float) =
     let dy = ui.my - cy
     result = arctan2(dy, dx)
 
-  proc hueFromWheelAngle(a: float): float =
+  func hueFromWheelAngle(a: float): float =
     let aa = if a > 0: a else: 2*PI + a
     result = (aa / (2*PI) + 0.5) mod 1.0
 
