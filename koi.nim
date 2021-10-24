@@ -179,8 +179,6 @@ type
     tasEditLMBPressed,
     tasEdit
     tasDragStart,
-    tasDragDelay,
-    tasDragScroll,
     tasDoubleClicked
 
   TextAreaStateVars = ref object of RootObj
@@ -4907,8 +4905,8 @@ proc textAreaExitEditMode*(id: ItemId, ta: var TextAreaStateVars) =
 
   ta.state = tasDefault
   ta.activeItem = 0
-  ta.cursorPos = 0
-  ta.displayStartRow = 0
+#  ta.cursorPos = 0
+#  ta.displayStartRow = 0
   ta.selection = NoSelection
   ta.originalText = ""
 
@@ -4936,7 +4934,6 @@ proc textArea(
 
   const MaxTextRuneLen = 4096
 
-  assert text_out.runeLen <= MaxTextRuneLen
   var text = if text_out.runeLen > MaxTextRuneLen:
                text_out.runeSubStr(0, MaxTextRuneLen)
              else: text_out
@@ -4964,7 +4961,7 @@ proc textArea(
   var (_, _, lineHeight) = vg.textMetrics()
   lineHeight = floor(lineHeight * s.textLineHeight)
 
-  # TODO make these config params?
+  # TODO make these style params?
   let textStartY = floor(textBoxY + lineHeight * 1.1)
 
   var maxDisplayRows = (textBoxH / lineHeight).int
@@ -4975,7 +4972,7 @@ proc textArea(
   var rows = textBreakLines(text, textBoxW)
 
 
-  proc enterEditMode(id: ItemId, text: string, startX: float) =
+  proc enterEditMode(id: ItemId, text: string, cursorPos: Natural) =
     setActive(id)
     # TODO clear at the end of each frame?
     clearCharBuf()
@@ -4983,7 +4980,7 @@ proc textArea(
 
     ta.state = tasEdit
     ta.activeItem = id
-    ta.cursorPos = text.runeLen
+    ta.cursorPos = cursorPos
     ta.originalText = text
     ta.selection.startPos = -1
     ta.selection.endPos = 0
@@ -4991,24 +4988,13 @@ proc textArea(
     ui.focusCaptured = true
 
 
-  var tabActivate = false
-
-  if not ui.focusCaptured and ta.state == tasDefault:
-    tabActivate = handleTabActivation(id)
-
-    # Hit testing
-    if isHit(x, y, w - s.scrollBarWidth, h) or activate or tabActivate:
-      setHot(id)
-      if not disabled and
-         ((ui.mbLeftDown and hasNoActiveItem()) or activate or tabActivate):
-        enterEditMode(id, text, textBoxX)
-        ta.state = tasEditLMBPressed
-
+  proc exitEditMode() = textAreaExitEditMode(id, ta)
 
   proc calcGlypPosForRow(x, y: float, row: TextRow): Natural =
     setFont()
     return vg.textGlyphPositions(x, y, text, row.startBytePos, row.endBytePos,
                                  glyphs)
+
 
   proc getCursorPosAt(x, y: float): Natural =
     let row = clamp(
@@ -5028,10 +5014,19 @@ proc textArea(
     result = rows[row].endPos
 
 
-#  proc getCursorPos(): (float, float) =
+  var tabActivate = false
 
+  if not ui.focusCaptured and ta.state == tasDefault:
+    tabActivate = handleTabActivation(id)
 
-  proc exitEditMode() = textAreaExitEditMode(id, ta)
+    # Hit testing
+    if isHit(x, y, w - s.scrollBarWidth, h) or activate or tabActivate:
+      setHot(id)
+      if not disabled and
+         ((ui.mbLeftDown and hasNoActiveItem()) or activate or tabActivate):
+        let cursorPos = getCursorPosAt(ui.mx, ui.my)
+        enterEditMode(id, text, cursorPos)
+        ta.state = tasEditLMBPressed
 
 
   # {{{ Event handling
@@ -5055,12 +5050,6 @@ proc textArea(
         ta.cursorPos = dragCursorPos
       else:
         ta.state = tasEdit
-
-    elif ta.state == tasDragDelay:
-      discard # TODO
-
-    elif ta.state == tasDragScroll:
-      discard # TODO
 
     # This state is needed to prevent going into drag-select mode after
     # selecting a word by double-clicking
