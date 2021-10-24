@@ -309,8 +309,8 @@ type
     framesLeft:      Natural
 
     # This is the draw layer all widgets will draw on
-    # TODO bit hacky, it needed only for drawing the CSD decoration on top of
-    # everything
+    # TODO bit hacky, it's needed only for drawing the CSD decoration on top
+    # of everything
     currentLayer:    DrawLayer
 
     # Window dimensions (in virtual pixels)
@@ -462,14 +462,9 @@ var
   g_cursorResizeNESW:  Cursor
   g_cursorResizeAll:   Cursor
 
-  # TODO remove these once theming is implemented
-#  HILITE     = rgb(1.0, 0.4, 0.4)
-  HILITE     = rgb(1.0, 0.65, 0.0)
-  HILITE_LO  = rgb(0.9, 0.55, 0.0)
-  GRAY_MID   = gray(0.6)
-  GRAY_HI    = gray(0.7)
-  GRAY_LO    = gray(0.25)
-  GRAY_LOHI  = gray(0.35)
+let
+  HighlightColor     = rgb(1.0, 0.65, 0.0)
+  HighlightLowColor  = rgb(0.9, 0.55, 0.0)
 
 # }}}
 # {{{ Configuration
@@ -2091,8 +2086,8 @@ var DefaultLabelStyle = LabelStyle(
   color            : gray(0.7),
   colorHover       : gray(0.7),
   colorDown        : gray(0.7),
-  colorActive      : gray(1.0),
-  colorActiveHover : gray(1.0),
+  colorActive      : white(),
+  colorActiveHover : white(),
   colorDisabled    : gray(0.7, 0.5)
 )
 
@@ -2239,9 +2234,9 @@ var DefaultButtonStyle = ButtonStyle(
   strokeColorDown     : black(),
   strokeColorDisabled : black(),
   fillColor           : gray(0.6),
-  fillColorHover      : GRAY_HI,
-  fillColorDown       : HILITE,
-  fillColorDisabled   : gray(0.6, 0.5),
+  fillColorHover      : gray(0.7),
+  fillColorDown       : HighlightColor,
+  fillColorDisabled   : gray(0.6).withAlpha(0.5),
   labelOnly           : false,
   label               : getDefaultLabelStyle()
 )
@@ -2249,10 +2244,10 @@ var DefaultButtonStyle = ButtonStyle(
 with DefaultButtonStyle.label:
   align         = haCenter
   padHoriz      = 8.0
-  color         = GRAY_LO
-  colorHover    = GRAY_LO
-  colorDown     = GRAY_LO
-  colorDisabled = GRAY_LO.withAlpha(0.7)
+  color         = gray(0.25)
+  colorHover    = gray(0.25)
+  colorDown     = gray(0.25)
+  colorDisabled = gray(0.25).withAlpha(0.7)
 
 
 proc getDefaultButtonStyle*(): ButtonStyle =
@@ -2381,11 +2376,11 @@ var DefaultCheckBoxStyle = CheckBoxStyle(
   strokeColorDown     : black(),
   strokeColorActive   : black(),
   strokeColorDisabled : black(),
-  fillColor           : GRAY_MID,
-  fillColorHover      : GRAY_HI,
-  fillColorDown       : GRAY_LOHI,
-  fillColorActive     : GRAY_LO,
-  fillColorDisabled   : gray(0.6, 0.5),
+  fillColor           : gray(0.6),
+  fillColorHover      : gray(0.7),
+  fillColorDown       : gray(0.35),
+  fillColorActive     : gray(0.25),
+  fillColorDisabled   : gray(0.6).withAlpha(0.5),
   icon                : getDefaultLabelStyle(),
   iconActive          : "",
   iconInactive        : ""
@@ -2393,10 +2388,10 @@ var DefaultCheckBoxStyle = CheckBoxStyle(
 
 with DefaultCheckBoxStyle.icon:
   align         = haCenter
-  color         = GRAY_LO
-  colorHover    = GRAY_LO
-  colorDown     = GRAY_HI
-  colorDisabled = GRAY_LO
+  color         = gray(0.25)
+  colorHover    = gray(0.25)
+  colorDown     = gray(0.7)
+  colorDisabled = gray(0.25)
 
 proc getDefaultCheckBoxStyle*(): CheckBoxStyle =
   DefaultCheckBoxStyle.deepCopy
@@ -2550,23 +2545,23 @@ var DefaultRadioButtonsStyle = RadioButtonsStyle(
   buttonStrokeColorDown        : black(),
   buttonStrokeColorActive      : black(),
   buttonStrokeColorActiveHover : black(),
-  buttonFillColor              : GRAY_MID,
-  buttonFillColorHover         : GRAY_HI,
-  buttonFillColorDown          : HILITE_LO,
-  buttonFillColorActive        : HILITE,
-  buttonFillColorActiveHover   : HILITE,
+  buttonFillColor              : gray(0.6),
+  buttonFillColorHover         : gray(0.7),
+  buttonFillColorDown          : HighlightLowColor,
+  buttonFillColorActive        : HighlightColor,
+  buttonFillColorActiveHover   : HighlightColor,
   label                        : getDefaultLabelStyle(),
 )
 
 with DefaultRadioButtonsStyle.label:
   align            = haCenter
   padHoriz         = 8.0
-  color            = GRAY_LO
-  colorHover       = GRAY_LO
-  colorDown        = GRAY_LO
-  colorActive      = GRAY_LO
-  colorActiveHover = GRAY_LO
-  colorDisabled    = GRAY_HI
+  color            = gray(0.25)
+  colorHover       = gray(0.25)
+  colorDown        = gray(0.25)
+  colorActive      = gray(0.25)
+  colorActiveHover = gray(0.25)
+  colorDisabled    = gray(0.7)
 
 proc getDefaultRadioButtonsStyle*(): RadioButtonsStyle =
   DefaultRadioButtonsStyle.deepCopy
@@ -2924,9 +2919,9 @@ var DefaultScrollBarStyle = ScrollBarStyle(
   trackStrokeColor       : black(),
   trackStrokeColorHover  : black(),
   trackStrokeColorDown   : black(),
-  trackFillColor         : GRAY_MID,
-  trackFillColorHover    : GRAY_HI,
-  trackFillColorDown     : GRAY_MID,
+  trackFillColor         : gray(0.6),
+  trackFillColorHover    : gray(0.7),
+  trackFillColorDown     : gray(0.6),
   thumbCornerRadius      : 5.0,
   thumbPad               : 3.0,
   thumbMinSize           : 10.0,
@@ -2934,9 +2929,9 @@ var DefaultScrollBarStyle = ScrollBarStyle(
   thumbStrokeColor       : black(),
   thumbStrokeColorHover  : black(),
   thumbStrokeColorDown   : black(),
-  thumbFillColor         : GRAY_LO,
-  thumbFillColorHover    : GRAY_LOHI,
-  thumbFillColorDown     : HILITE,
+  thumbFillColor         : gray(0.25),
+  thumbFillColorHover    : gray(0.35),
+  thumbFillColorDown     : HighlightColor,
   autoFade               : false,
   autoFadeStartAlpha     : 0.5,
   autoFadeEndAlpha       : 1.0,
@@ -3483,10 +3478,10 @@ var DefaultDropDownStyle = DropDownStyle(
   buttonStrokeColorHover    : black(),
   buttonStrokeColorDown     : black(),
   buttonStrokeColorDisabled : black(),
-  buttonFillColor           : GRAY_MID,
-  buttonFillColorHover      : GRAY_HI,
-  buttonFillColorDown       : GRAY_MID,
-  buttonFillColorDisabled   : GRAY_LO,
+  buttonFillColor           : gray(0.6),
+  buttonFillColorHover      : gray(0.7),
+  buttonFillColorDown       : gray(0.6),
+  buttonFillColorDisabled   : gray(0.25),
 
   label                     : getDefaultLabelStyle(),
 
@@ -3496,9 +3491,9 @@ var DefaultDropDownStyle = DropDownStyle(
   itemListCornerRadius      : 5.0,
   itemListStrokeWidth       : 0.0,
   itemListStrokeColor       : black(),
-  itemListFillColor         : GRAY_LO,
+  itemListFillColor         : gray(0.25),
   item                      : getDefaultLabelStyle(),
-  itemBackgroundColorHover  : HILITE,
+  itemBackgroundColorHover  : HighlightColor,
 
   shadow                    : getDefaultShadowStyle(),
 
@@ -3509,24 +3504,24 @@ with DefaultDropDownStyle:
   scrollBarStyle = getDefaultScrollBarStyle()
   with scrollBarStyle:
     trackCornerRadius   = 3.0
-    trackFillColor      = gray(0, 0)
-    trackFillColorHover = gray(0, 0)
-    trackFillColorDown  = gray(0, 0)
+    trackFillColor      = black().withAlpha(0)
+    trackFillColorHover = black().withAlpha(0)
+    trackFillColorDown  = black().withAlpha(0)
     thumbCornerRadius   = 3.0
-    thumbFillColor      = gray(1.0, 0.4)
-    thumbFillColorHover = gray(1.0, 0.43)
-    thumbFillColorDown  = gray(1.0, 0.35)
+    thumbFillColor      = white().withAlpha(0.4)
+    thumbFillColorHover = white().withAlpha(0.43)
+    thumbFillColorDown  = white().withAlpha(0.35)
 
 
 with DefaultDropDownStyle:
   label.padHoriz    = 8.0
-  label.color       = GRAY_LO
-  label.colorHover  = GRAY_LO
-  label.colorDown   = GRAY_LO # TODO
+  label.color       = gray(0.25)
+  label.colorHover  = gray(0.25)
+  label.colorDown   = gray(0.25) # TODO
 
   item.padHoriz     = 0.0
-  item.color        = GRAY_HI
-  item.colorHover   = GRAY_LO
+  item.color        = gray(0.7)
+  item.colorHover   = gray(0.25)
 
 proc getDefaultDropDownStyle*(): DropDownStyle =
   DefaultDropDownStyle.deepCopy
@@ -4203,20 +4198,20 @@ var DefaultTextFieldStyle = TextFieldStyle(
   bgStrokeColorHover    : black(),
   bgStrokeColorActive   : black(),
   bgStrokeColorDisabled : black(),
-  bgFillColor           : GRAY_MID,
-  bgFillColorHover      : GRAY_HI,
-  bgFillColorActive     : GRAY_LO,
-  bgFillColorDisabled   : GRAY_LO,
+  bgFillColor           : gray(0.6),
+  bgFillColorHover      : gray(0.7),
+  bgFillColorActive     : gray(0.25),
+  bgFillColorDisabled   : gray(0.25),
 
   # TODO use labelstyle?
   textPadHoriz          : 8.0,
   textPadVert           : 2.0,
   textFontSize          : 14.0,
   textFontFace          : "sans-bold",
-  textColor             : GRAY_LO,
-  textColorHover        : GRAY_LO, # TODO
-  textColorActive       : GRAY_HI,
-  textColorDisabled     : GRAY_HI,
+  textColor             : gray(0.25),
+  textColorHover        : gray(0.25), # TODO
+  textColorActive       : gray(0.7),
+  textColorDisabled     : gray(0.7),
 
   cursorColor           : rgb(255, 190, 0),
   cursorWidth           : 1.0,
@@ -4841,10 +4836,10 @@ var DefaultTextAreaStyle = TextAreaStyle(
   bgStrokeColorHover    : black(),
   bgStrokeColorActive   : black(),
   bgStrokeColorDisabled : black(),
-  bgFillColor           : GRAY_MID,
-  bgFillColorHover      : GRAY_HI,
-  bgFillColorActive     : GRAY_LO,
-  bgFillColorDisabled   : GRAY_LO,
+  bgFillColor           : gray(0.6),
+  bgFillColorHover      : gray(0.7),
+  bgFillColorActive     : gray(0.25),
+  bgFillColorDisabled   : gray(0.25),
 
   # TODO use labelStyle?
   textPadHoriz        : 8.0,
@@ -4852,10 +4847,10 @@ var DefaultTextAreaStyle = TextAreaStyle(
   textFontSize        : 14.0,
   textFontFace        : "sans-bold",
   textLineHeight      : 1.4,
-  textColor           : GRAY_LO,
-  textColorHover      : GRAY_LO,
-  textColorActive     : GRAY_HI,
-  textColorDisabled   : GRAY_MID,
+  textColor           : gray(0.25),
+  textColorHover      : gray(0.25),
+  textColorActive     : gray(0.7),
+  textColorDisabled   : gray(0.6),
 
   cursorColor         : rgb(255, 190, 0),
   cursorWidth         : 1.0,
@@ -4878,9 +4873,9 @@ with DefaultTextAreaStyle:
 
   scrollBarStyleEdit = scrollBarStyleNormal.deepCopy
   with scrollBarStyleEdit:
-    thumbFillColor      = gray(1.0, 0.4)
-    thumbFillColorHover = gray(1.0, 0.43)
-    thumbFillColorDown  = gray(1.0, 0.35)
+    thumbFillColor      = white().withAlpha(0.4)
+    thumbFillColorHover = white().withAlpha(0.43)
+    thumbFillColorDown  = white().withAlpha(0.35)
 
 proc getDefaultTextAreaStyle*(): TextAreaStyle =
   DefaultTextAreaStyle.deepCopy
@@ -5595,14 +5590,14 @@ var DefaultSliderStyle = SliderStyle(
   trackStrokeColor      : black(),
   trackStrokeColorHover : black(),
   trackStrokeColorDown  : black(),
-  trackFillColor        : GRAY_MID,
-  trackFillColorHover   : GRAY_HI,
-  trackFillColorDown    : GRAY_MID,
+  trackFillColor        : gray(0.6),
+  trackFillColorHover   : gray(0.7),
+  trackFillColorDown    : gray(0.6),
   valuePrecision        : 3,
   valueCornerRadius     : 8.0,
-  sliderColor           : GRAY_LO,
-  sliderColorHover      : GRAY_LO,
-  sliderColorDown       : GRAY_LO,
+  sliderColor           : gray(0.25),
+  sliderColorHover      : gray(0.25),
+  sliderColorDown       : gray(0.25),
   label                 : getDefaultLabelStyle(),
   value                 : getDefaultLabelStyle(),
   cursorFollowsValue    : true
@@ -6066,8 +6061,8 @@ with ColorPickerRadioButtonStyle.label:
   color            = gray(0.6)
   colorHover       = gray(0.6)
   colorDown        = gray(0.8)
-  colorActive      = gray(1.0)
-  colorActiveHover = gray(1.0)
+  colorActive      = white()
+  colorActiveHover = white()
 
 
 var ColorPickerSliderStyle = SliderStyle(
@@ -6702,7 +6697,7 @@ var DefaultSubSectionHeaderStyle = SectionHeaderStyle(
   separatorColor  : gray(0.3),
   triangleSize    : 3.0,
   triangleLeftPad : 21.0,
-  triangleColor   : gray(1.0)
+  triangleColor   : white()
 )
 
 with DefaultSubSectionHeaderStyle.label:
@@ -7178,9 +7173,9 @@ proc menuBar(id:         ItemId,
     else: wsNormal
 
   let fillColor = case state
-    of wsHover:  GRAY_HI
-    of wsActive: HILITE
-    else:        GRAY_MID
+    of wsHover:  gray(0.7)
+    of wsActive: HighlightColor
+    else:        gray(0.6)
 
   addDrawLayer(ui.currentLayer, vg):
     vg.save()
@@ -7194,7 +7189,7 @@ proc menuBar(id:         ItemId,
     vg.intersectScissor(x, y, w, h)
 
     vg.setFont(14.0)
-    vg.fillColor(GRAY_LO)
+    vg.fillColor(gray(0.25))
 
     for i in 0..names.high:
       discard vg.text(menuPosX[i], y + h*TextVertAlignFactor, names[i])
