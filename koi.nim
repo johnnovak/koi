@@ -3573,7 +3573,6 @@ proc dropDown[T](id:               ItemId,
         ds.state = dsOpenLMBPressed
         ds.activeItem = id
         ui.focusCaptured = true
-        ui.t0 = getTime()
 
   # We 'fall through' to the open state to avoid a 1-frame delay when clicking
   # the button
@@ -3647,6 +3646,15 @@ proc dropDown[T](id:               ItemId,
       itemListX, itemListY, itemListW, itemListH, s.itemListStrokeWidth
     )
 
+    # Handle scrollwheel
+    if scrollBarVisible:
+      let scrollBarEndVal = max(items.len.float - maxDisplayItems, 0)
+
+      if ui.hasEvent and ui.currEvent.kind == ekScroll:
+        ds.displayStartItem = (ds.displayStartItem - ui.currEvent.oy)
+                                .clamp(0, scrollBarEndVal)
+        ui.eventHandled = true
+
     # Hit testing
     let
       insideButton = mouseInside(x, y, w, h)
@@ -3669,9 +3677,8 @@ proc dropDown[T](id:               ItemId,
     # LMB released inside the box selects the item under the cursor and closes
     # the dropDown
     if ds.state == dsOpenLMBPressed:
-      let dt = getTime() - ui.t0  # protection against fast click & drag
       if not ui.mbLeftDown:
-        if hoverItem >= 0 and dt > 0.3:
+        if hoverItem >= 0:
           selectedItem = T(hoverItem)
           closeDropDown()
         else:
@@ -3759,6 +3766,8 @@ proc dropDown[T](id:               ItemId,
 
   # Scrollbar
   if isActive(id) and scrollBarVisible:
+
+    # Display scroll bar
     let sbId = hashId(lastIdString() & ":scrollBar")
 
     let endVal = max(items.len.float - maxDisplayItems, 0)
@@ -5487,7 +5496,6 @@ proc textArea(
   if isHot(id) and hasEvent() and ui.currEvent.kind == ekScroll:
     ta.displayStartRow = (ta.displayStartRow - ui.currEvent.oy)
                            .clamp(0, scrollBarEndVal)
-
     ui.eventHandled = true
 
   # Scrollbar
@@ -6952,6 +6960,7 @@ proc endScrollView*() =
   let contentHeight = a.y
 
   if contentHeight > visibleHeight:
+    # Handle scrollwheel
     let thumbSize = visibleHeight *
                     ((contentHeight - visibleHeight) / contentHeight)
 
@@ -6964,6 +6973,7 @@ proc endScrollView*() =
 
     viewStartY = viewStartY.clamp(0, endVal)
 
+    # Display scroll bar
     let sbId = hashId(lastIdString() & ":scrollBar")
 
     vertScrollBar(
