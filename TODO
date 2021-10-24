@@ -18,6 +18,8 @@ BUGS
 TODO
 ====
 
+- global expandable arrays
+
 - OS X specific shortcuts (e.g. Ctrl-A = Select All on Win)
 - value stepper widget
 - proper tooltip sizing/formatting (requires multi-line wrapping...)

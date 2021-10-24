@@ -3652,7 +3652,7 @@ proc dropDown[T](id:               ItemId,
       if ui.hasEvent and ui.currEvent.kind == ekScroll:
         ds.displayStartItem = (ds.displayStartItem - ui.currEvent.oy)
                                 .clamp(0, scrollBarEndVal)
-        ui.eventHandled = true
+        setEventHandled()
     else:
       ds.displayStartItem = 0
 
@@ -4575,9 +4575,6 @@ proc textField(
           # Note we won't process any remaining characters in the buffer
           # because exitEditMode() clears the key buffer
 
-        else:
-          ui.eventHandled = false
-
     # Splice newly entered characters into the string.
     # (If we exited edit mode in the above key handler, this will result in
     # a noop as exitEditMode() clears the char buffer.)
@@ -5019,6 +5016,38 @@ proc textArea(
     result = rows[row].endPos
 
 
+  proc getCurrRow(): (Natural, TextRow) =
+    if ta.cursorPos == text.runeLen:
+      return (rows.high.Natural, rows[^1])
+    else:
+      for i, row in rows:
+        if ta.cursorPos >= row.startPos and
+           ta.cursorPos <= row.endPos:
+          return (i.Natural, row)
+
+  proc findClosestCursorPos(row: TextRow, cx: float): Natural =
+    result = if row.nextRowPos == -1: row.endPos+1 else: row.endPos
+    for pos in 0..(row.endPos - row.startPos):
+      if glyphs[pos].x > cx:
+        let prevPos = max(pos-1, 0)
+        if (glyphs[pos].x - cx) < (cx - glyphs[prevPos].x):
+          return row.startPos + pos
+        else:
+          return row.startPos + prevPos
+
+  proc setLastCursorXPos(currRow: TextRow) =
+    if ta.lastCursorXPos.isNone:
+      let numGlyphs = calcGlypPosForRow(textBoxX, 0, currRow)
+      if ta.cursorPos >= text.runeLen:
+        ta.lastCursorXPos = glyphs[numGlyphs-1].maxX.float.some
+      else:
+        let pos = ta.cursorPos - currRow.startPos
+        ta.lastCursorXPos = glyphs[pos].x.float.some
+
+  func displayEndRow(): Natural =
+    min(ta.displayStartRow.int + maxDisplayRows-1, rows.high).Natural
+
+
   var tabActivate = false
 
   if not ui.focusCaptured and ta.state == tasDefault:
@@ -5036,14 +5065,27 @@ proc textArea(
 
   # {{{ Event handling
 
-  # We 'fall through' to the edit state to avoid a 1-frame delay when going
-  # into edit mode
+  # Handle scrollwheel
+  var hasScrollWheelEvent = false
   if ta.activeItem == id and ta.state >= tasEditLMBPressed:
     setHot(id)
     setActive(id)
+
+  let scrollBarEndVal = max(rows.len.float - maxDisplayRows, 0)
+
+  if isHot(id) and ui.hasEvent and ui.currEvent.kind == ekScroll:
+    ta.displayStartRow = (ta.displayStartRow - ui.currEvent.oy)
+                           .clamp(0, scrollBarEndVal)
+    hasScrollWheelEvent = true
+    setEventHandled()
+
+  # We 'fall through' to the edit state to avoid a 1-frame delay when going
+  # into edit mode
+  if ta.activeItem == id and ta.state >= tasEditLMBPressed:
     setCursorShape(csIBeam)
 
     if ta.state == tasEditLMBPressed:
+      # TODO scrollwheel
       if not ui.mbLeftDown:
         ta.state = tasEdit
 
@@ -5063,6 +5105,20 @@ proc textArea(
         ta.state = tasEdit
 
     else:
+      if hasScrollWheelEvent:
+        let (currRowIdx, currRow) = getCurrRow()
+        setLastCursorXPos(currRow)
+
+        if currRowIdx < ta.displayStartRow or currRowIdx > displayEndRow():
+          let targetRow = if currRowIdx < ta.displayStartRow:
+                            rows[ta.displayStartRow.Natural]
+                          else:
+                            rows[displayEndRow()]
+
+          discard calcGlypPosForRow(textBoxX, 0, targetRow)
+          ta.cursorPos = findClosestCursorPos(targetRow,
+                                              ta.lastCursorXPos.get)
+
       if ui.mbLeftDown:
         if mouseInside(x, y, w, h):
           ta.selection = NoSelection
@@ -5115,46 +5171,13 @@ proc textArea(
 
       let res = handleCommonTextEditingShortcuts(sc, text, ta.cursorPos,
                                                  ta.selection, maxLen)
-
       if res.isSome:
         text = res.get.text
         ta.cursorPos = res.get.cursorPos
         ta.selection = res.get.selection
 
       else:
-        var currRow: TextRow
-        var currRowIdx: Natural
-
-        if ta.cursorPos == text.runeLen:
-          currRow = rows[^1]
-          currRowIdx = rows.high
-        else:
-          for i, row in rows:
-            if ta.cursorPos >= row.startPos and
-               ta.cursorPos <= row.endPos:
-              currRow = row
-              currRowIdx = i
-              break
-
-        # TODO refactor to use parts of getCursorPosAt?
-        proc findClosestCursorPos(row: TextRow, cx: float): Natural =
-          result = if row.nextRowPos == -1: row.endPos+1 else: row.endPos
-          for pos in 0..(row.endPos - row.startPos):
-            if glyphs[pos].x > cx:
-              let prevPos = max(pos-1, 0)
-              if (glyphs[pos].x - cx) < (cx - glyphs[prevPos].x):
-                return row.startPos + pos
-              else:
-                return row.startPos + prevPos
-
-        proc setLastCursorXPos() =
-          if ta.lastCursorXPos.isNone:
-            let numGlyphs = calcGlypPosForRow(textBoxX, 0, currRow)
-            if ta.cursorPos >= text.runeLen:
-              ta.lastCursorXPos = glyphs[numGlyphs-1].maxX.float.some
-            else:
-              let pos = ta.cursorPos - currRow.startPos
-              ta.lastCursorXPos = glyphs[pos].x.float.some
+        let (currRowIdx, currRow) = getCurrRow()
 
         # Editing
         if sc in shortcuts[tesInsertNewline]:
@@ -5194,7 +5217,7 @@ proc textArea(
              sc in shortcuts[tesSelectionPageUp]:
 
           if currRowIdx > 0:
-            setLastCursorXPos()
+            setLastCursorXPos(currRow)
 
             let targetRowIdx = if sc in shortcuts[tesCursorPageUp] or
                                   sc in shortcuts[tesSelectionPageUp]:
@@ -5222,7 +5245,7 @@ proc textArea(
              sc in shortcuts[tesSelectionPageDown]:
 
           if currRowIdx < rows.high:
-            setLastCursorXPos()
+            setLastCursorXPos(currRow)
 
             let targetRowIdx = if sc in shortcuts[tesCursorPageDown] or
                                   sc in shortcuts[tesSelectionPageDown]:
@@ -5297,9 +5320,6 @@ proc textArea(
           # Note we won't process any remaining characters in the buffer
           # because exitEditMode() clears the key buffer
 
-        else:
-          ui.eventHandled = false
-
     # Splice newly entered characters into the string.
     # (If we exited edit mode in the above key handler, this will result in
     # a noop as exitEditMode() clears the char buffer.)
@@ -5342,9 +5362,7 @@ proc textArea(
     if currRow < ta.displayStartRow:
       ta.displayStartRow = currRow.float
     else:
-      let displayEndRow = min(ta.displayStartRow.int + maxDisplayRows-1,
-                              rows.high)
-      if currRow > displayEndRow:
+      if currRow > displayEndRow():
         ta.displayStartRow = max(currRow - (maxDisplayRows-1), 0).float
 
     let maxDisplayStartRow = max(rows.len.int - maxDisplayRows, 0)
@@ -5405,8 +5423,7 @@ proc textArea(
       cursorYAdjust = floor(lineHeight*0.77)
       numGlyphs: Natural
 
-    let displayEndRow = min(ta.displayStartRow.int + maxDisplayRows-1,
-                            rows.high)
+    let displayEndRow = displayEndRow()
 
     for rowIdx in ta.displayStartRow.int..displayEndRow:
       let row = rows[rowIdx]
@@ -5485,14 +5502,6 @@ proc textArea(
     vg.restore()
 
   # }}}
-
-  # Handle scrollwheel
-  let scrollBarEndVal = max(rows.len.float - maxDisplayRows, 0)
-
-  if isHot(id) and hasEvent() and ui.currEvent.kind == ekScroll:
-    ta.displayStartRow = (ta.displayStartRow - ui.currEvent.oy)
-                           .clamp(0, scrollBarEndVal)
-    ui.eventHandled = true
 
   # Scrollbar
   let sbId = hashId(lastIdString() & ":scrollBar")
@@ -6965,7 +6974,7 @@ proc endScrollView*() =
     if isHit(ss.x, ss.y, ss.w, ss.h):
       if hasEvent() and ui.currEvent.kind == ekScroll:
         viewStartY -= ui.currEvent.oy * ss.style.scrollWheelSensitivity
-        ui.eventHandled = true
+        setEventHandled()
 
     viewStartY = viewStartY.clamp(0, endVal)
 
