@@ -5035,14 +5035,13 @@ proc textArea(
         else:
           return row.startPos + prevPos
 
-  proc setLastCursorXPos(currRow: TextRow) =
-    if ta.lastCursorXPos.isNone:
-      let numGlyphs = calcGlypPosForRow(textBoxX, 0, currRow)
-      if ta.cursorPos >= text.runeLen:
-        ta.lastCursorXPos = glyphs[numGlyphs-1].maxX.float.some
-      else:
-        let pos = ta.cursorPos - currRow.startPos
-        ta.lastCursorXPos = glyphs[pos].x.float.some
+  proc getCursorXPos(currRow: TextRow): float =
+    let numGlyphs = calcGlypPosForRow(textBoxX, 0, currRow)
+    if ta.cursorPos >= text.runeLen:
+      result = glyphs[numGlyphs-1].maxX.float
+    else:
+      let pos = ta.cursorPos - currRow.startPos
+      result = glyphs[pos].x.float
 
   func displayEndRow(): Natural =
     min(ta.displayStartRow.int + maxDisplayRows-1, rows.high).Natural
@@ -5085,7 +5084,6 @@ proc textArea(
     setCursorShape(csIBeam)
 
     if ta.state == tasEditLMBPressed:
-      # TODO scrollwheel
       if not ui.mbLeftDown:
         ta.state = tasEdit
 
@@ -5107,7 +5105,9 @@ proc textArea(
     else:
       if hasScrollWheelEvent:
         let (currRowIdx, currRow) = getCurrRow()
-        setLastCursorXPos(currRow)
+
+        if ta.lastCursorXPos.isNone:
+          ta.lastCursorXPos = getCursorXPos(currRow).some
 
         if currRowIdx < ta.displayStartRow or currRowIdx > displayEndRow():
           let targetRow = if currRowIdx < ta.displayStartRow:
@@ -5123,6 +5123,7 @@ proc textArea(
         if mouseInside(x, y, w, h):
           ta.selection = NoSelection
           ta.cursorPos = getCursorPosAt(ui.mx, ui.my)
+          ta.lastCursorXPos = float.none
 
           if isDoubleClick():
             ta.selection.startPos = findPrevWordStart(text, ta.cursorPos)
@@ -5217,7 +5218,8 @@ proc textArea(
              sc in shortcuts[tesSelectionPageUp]:
 
           if currRowIdx > 0:
-            setLastCursorXPos(currRow)
+            if ta.lastCursorXPos.isNone:
+              ta.lastCursorXPos = getCursorXPos(currRow).some
 
             let targetRowIdx = if sc in shortcuts[tesCursorPageUp] or
                                   sc in shortcuts[tesSelectionPageUp]:
@@ -5245,7 +5247,8 @@ proc textArea(
              sc in shortcuts[tesSelectionPageDown]:
 
           if currRowIdx < rows.high:
-            setLastCursorXPos(currRow)
+            if ta.lastCursorXPos.isNone:
+              ta.lastCursorXPos = getCursorXPos(currRow).some
 
             let targetRowIdx = if sc in shortcuts[tesCursorPageDown] or
                                   sc in shortcuts[tesSelectionPageDown]:
