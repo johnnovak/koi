@@ -3654,6 +3654,8 @@ proc dropDown[T](id:               ItemId,
         ds.displayStartItem = (ds.displayStartItem - ui.currEvent.oy)
                                 .clamp(0, scrollBarEndVal)
         ui.eventHandled = true
+    else:
+      ds.displayStartItem = 0
 
     # Hit testing
     let
