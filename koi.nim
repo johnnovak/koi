@@ -2692,13 +2692,8 @@ proc radioButtons[T](
   style:            RadioButtonsStyle = DefaultRadioButtonsStyle
 ) =
 
-  var activeButton = activeButton_out
-
-  # TODO clamp instead?
-  assert activeButton.ord >= 0 and activeButton.ord <= labels.high
-
-  # TODO clamp instead?
-  assert tooltips.len == 0 or tooltips.len == labels.len
+  assert activeButton_out.ord >= 0 and activeButton_out.ord <= labels.high
+  var activeButton = activeButton_out.clamp(T(0), T(labels.high))
 
   alias(ui, g_uiState)
   alias(rs, ui.radioButtonState)
@@ -3546,13 +3541,8 @@ proc dropDown[T](id:               ItemId,
                  disabled:         bool,
                  style:            DropDownStyle) =
 
-  var selectedItem = selectedItem_out
-
-  # TODO allow?
-  assert items.len > 0
-
-  # TODO clamp instead?
-  assert selectedItem.ord <= items.high
+  assert selectedItem_out.ord <= items.high
+  var selectedItem = selectedItem_out.clamp(0, items.high)
 
   alias(ui, g_uiState)
   alias(s, style)
@@ -4308,10 +4298,10 @@ proc textField(
 
   const MaxTextRuneLen = 1024
 
-  var text = text_out
-
-  # TODO clamp?
-  assert text.runeLen <= MaxTextRuneLen
+  assert text_out.runeLen <= MaxTextRuneLen
+  var text = if text_out.runeLen > MaxTextRuneLen:
+               text_out.runeSubStr(0, MaxTextRuneLen)
+             else: text_out
 
   alias(ui, g_uiState)
   alias(tf, ui.textFieldState)
@@ -4934,11 +4924,13 @@ proc textArea(
   alias(tab, ui.tabActivationState)
   alias(s, style)
 
-  var text = text_out
-
   const MaxTextRuneLen = 4096
-  # TODO clamp?
-  assert text.runeLen <= MaxTextRuneLen
+
+  assert text_out.runeLen <= MaxTextRuneLen
+  var text = if text_out.runeLen > MaxTextRuneLen:
+               text_out.runeSubStr(0, MaxTextRuneLen)
+             else: text_out
+
 
   discard ui.itemState.hasKeyOrPut(id, TextAreaStateVars())
   var ta = cast[TextAreaStateVars](ui.itemState[id])

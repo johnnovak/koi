@@ -11,7 +11,7 @@ BUGS
 * textfield:
 
   - move cursor past the right edge when text doesn't fit into the the
-    textfield - the cursor should be after the last character, not after the 
+    textfield - the cursor should be after the last character, not after the
     one before the last
 
 
@@ -20,12 +20,11 @@ TODO
 
 - OS X specific shortcuts (e.g. Ctrl-A = Select All on Win)
 - value stepper widget
-- display tooltip based on screen position
 - proper tooltip sizing/formatting (requires multi-line wrapping...)
 - scroll wheel support (where it makes sense)
-- scrollbar for dropdowns
 
 - re-use code between widgets
+
 - "normalise" widgets:
     Button
     ToggleButton
@@ -58,7 +57,7 @@ TODO
 - keyboard support for dropdowns
 - complete theming support
 - menus
-- "soft asserts" (check) that print errors to stderr instead of aborting
+
 - set theme parameters globally? (e.g. font, corner roundness, colours)
 - SweepCheckBox?
 
