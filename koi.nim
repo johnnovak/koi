@@ -3472,6 +3472,7 @@ type DropDownStyle* = ref object
 
   shadow*:                    ShadowStyle
 
+  scrollBarWidth*:            float
   scrollBarStyle*:            ScrollBarStyle
 
 
@@ -3499,7 +3500,9 @@ var DefaultDropDownStyle = DropDownStyle(
   item                      : getDefaultLabelStyle(),
   itemBackgroundColorHover  : HILITE,
 
-  shadow                    : getDefaultShadowStyle()
+  shadow                    : getDefaultShadowStyle(),
+
+  scrollBarWidth            : 12.0
 )
 
 with DefaultDropDownStyle:
@@ -3546,8 +3549,6 @@ proc dropDown[T](id:               ItemId,
 
   alias(ui, g_uiState)
   alias(s, style)
-
-  let ScrollBarWidth = 12.0
 
   let (x, y) = addDrawOffset(x, y)
 
@@ -3645,7 +3646,7 @@ proc dropDown[T](id:               ItemId,
 
     scrollBarVisible = maxDisplayItems < items.len
     if scrollBarVisible:
-      itemListW += ScrollBarWidth
+      itemListW += s.scrollBarWidth
 
     let (itemListX, itemListY, itemListW, itemListH) = snapToGrid(
       itemListX, itemListY, itemListW, itemListH, s.itemListStrokeWidth
@@ -3664,7 +3665,7 @@ proc dropDown[T](id:               ItemId,
 
     if insideItemList:
       if not scrollBarVisible or
-        (scrollBarVisible and ui.mx < itemListX + itemListW - ScrollBarWidth):
+        (scrollBarVisible and ui.mx < itemListX + itemListW - s.scrollBarWidth):
         hoverItem = min(
           ((ui.my - itemListY - s.itemListPadVert) / itemHeight).int,
           numItems-1
@@ -3780,8 +3781,8 @@ proc dropDown[T](id:               ItemId,
 
     vertScrollBar(
       sbId,
-      x = (itemListX + itemListW - ScrollBarWidth), y = itemListY,
-      w = ScrollBarWidth, h = itemListH,
+      x = (itemListX + itemListW - s.scrollBarWidth), y = itemListY,
+      w = s.scrollBarWidth, h = itemListH,
       startVal = 0, endVal = endVal,
       ds.displayStartItem,
       thumbSize = thumbSize, clickStep = 2,
@@ -4828,6 +4829,7 @@ type TextAreaStyle* = object
   cursorColor*:           Color
   selectionColor*:        Color
 
+  scrollBarWidth*:        float
   scrollBarStyleNormal*:  ScrollBarStyle
   scrollBarStyleEdit*:    ScrollBarStyle
 
@@ -4857,7 +4859,9 @@ var DefaultTextAreaStyle = TextAreaStyle(
 
   cursorColor         : rgb(255, 190, 0),
   cursorWidth         : 1.0,
-  selectionColor      : rgba(200, 130, 0, 100)
+  selectionColor      : rgba(200, 130, 0, 100),
+
+  scrollBarWidth      : 12.0
 )
 
 with DefaultTextAreaStyle:
@@ -4937,16 +4941,13 @@ proc textArea(
 
   let TextRightPad = s.textFontSize
 
-  # TODO style param
-  let ScrollBarWidth = 12.0
-
   let (ox, oy) = (x, y)
   let (x, y) = addDrawOffset(x, y)
 
   # The text is displayed within this rectangle (used for drawing later)
   let
     textBoxX = x + s.textPadHoriz
-    textBoxW = w - s.textPadHoriz - ScrollBarWidth
+    textBoxW = w - s.textPadHoriz - s.scrollBarWidth
     textBoxY = y + s.textPadVert
     textBoxH = h - s.textPadVert*2
 
@@ -4990,7 +4991,7 @@ proc textArea(
     tabActivate = handleTabActivation(id)
 
     # Hit testing
-    if isHit(x, y, w - ScrollBarWidth, h) or activate or tabActivate:
+    if isHit(x, y, w - s.scrollBarWidth, h) or activate or tabActivate:
       setHot(id)
       if not disabled and
          ((ui.mbLeftDown and hasNoActiveItem()) or activate or tabActivate):
@@ -5504,7 +5505,7 @@ proc textArea(
 
   vertScrollBar(
     sbId,
-    x = (ox+w - ScrollBarWidth), y = oy, w=ScrollBarWidth, h = h,
+    x = (ox+w - s.scrollBarWidth), y = oy, w = s.scrollBarWidth, h = h,
     startVal = 0, endVal = scrollBarEndVal,
     ta.displayStartRow,
     thumbSize = thumbSize, clickStep = 2, style = sbStyle
