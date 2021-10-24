@@ -719,18 +719,19 @@ const TextBreakRunes = @[
 proc textBreakLines*(text: string, maxWidth: float,
                      maxRows: int = -1): seq[TextRow] =
 
+  # TODO use global expandable array
   var glyphs: array[1024, GlyphPosition]
   result = newSeq[TextRow]()
 
   if text == "":
     return @[TextRow(
-      startPos:       0,
-      startBytePos:   0,
-      endPos:         0,
-      endBytePos:     0,
+      startPos:        0,
+      startBytePos:    0,
+      endPos:          0,
+      endBytePos:      0,
       nextRowPos:     -1,
       nextRowBytePos: -1,
-      width:          0
+      width:           0
     )]
 
   let textLen = text.runeLen
@@ -4301,6 +4302,7 @@ proc textField(
   style:      TextFieldStyle = DefaultTextFieldStyle
 ) =
 
+  # TODO use global expandable array
   const MaxTextRuneLen = 1024
 
   assert text_out.runeLen <= MaxTextRuneLen
@@ -4324,6 +4326,7 @@ proc textField(
     strokeWidth=0
   )
 
+  # TODO use global expandable array
   var glyphs: array[MaxTextRuneLen, GlyphPosition]
 
   var tabActivate = false
@@ -4932,6 +4935,7 @@ proc textArea(
   alias(tab, ui.tabActivationState)
   alias(s, style)
 
+  # TODO use global expandable array
   const MaxTextRuneLen = 4096
 
   var text = if text_out.runeLen > MaxTextRuneLen:
@@ -4966,6 +4970,7 @@ proc textArea(
 
   var maxDisplayRows = (textBoxH / lineHeight).int
 
+  # TODO use global expandable array
   var glyphs: array[MaxTextRuneLen, GlyphPosition]
 
   # TODO suboptimal to do this on every frame?
