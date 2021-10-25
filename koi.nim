@@ -3598,20 +3598,19 @@ proc dropDown[T](id:               ItemId,
     itemListW = max(maxItemWidth + s.itemListPadHoriz*2, w)
     let fullItemListH = float(items.len) * itemHeight + s.itemListPadVert*2
 
-    # Only calculate X
     (itemListX, itemListY) = fitRectWithinWindow(itemListW, fullItemListH,
                                                  x, y, w, h,
                                                  s.itemListAlign)
 
     # Crop item list to the window
+    let fullyFitsUpward = y+h + fullItemListH + WindowEdgePad <= ui.winHeight
+    let fullYfitsDownward = y - fullItemListH - WindowEdgePad >= 0
 
-    if y+h + fullItemListH + WindowEdgePad <= ui.winHeight:
-      # whole list fits downward
+    if fullyFitsUpward:
       itemListY = y+h
       itemListH = fullItemListH
 
-    elif y - fullItemListH - WindowEdgePad>= 0:
-      # whole list fits upward
+    elif fullyFitsDownward:
       itemListY = y - fullItemListH
       itemListH = fullItemListH
 
@@ -3625,21 +3624,25 @@ proc dropDown[T](id:               ItemId,
       func calcItemListH(numItems: Natural): float =
         numItems * itemHeight + s.itemListPadVert*2
 
-      let downwardSpace = ui.winHeight - (y+h)
-      let upwardSpace = y
+      let maxDownwardSpace = ui.winHeight - (y+h)
+      let maxUpwardSpace = y
 
-      if downwardSpace > upwardSpace:
-        maxDisplayItems = calcMaxDisplayItems(downwardSpace)
+      if maxDownwardSpace > maxUpwardSpace:
+        maxDisplayItems = calcMaxDisplayItems(maxDownwardSpace)
         itemListH = calcItemListH(maxDisplayItems)
         itemListY = y+h
       else:
-        maxDisplayItems = calcMaxDisplayItems(upwardSpace)
+        maxDisplayItems = calcMaxDisplayItems(maxUpwardSpace)
         itemListH = calcItemListH(maxDisplayItems)
         itemListY = y - itemListH
 
     scrollBarVisible = maxDisplayItems < items.len
     if scrollBarVisible:
       itemListW += s.scrollBarWidth
+      let (x, _) = fitRectWithinWindow(itemListW, fullItemListH,
+                                       x, y, w, h,
+                                       s.itemListAlign)
+      itemListX = x
 
     let (itemListX, itemListY, itemListW, itemListH) = snapToGrid(
       itemListX, itemListY, itemListW, itemListH, s.itemListStrokeWidth

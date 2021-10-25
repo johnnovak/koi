@@ -207,6 +207,7 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
   koi.label(380, 590, w, h, fmt"{sliderVal4:.3f}", style = labelStyle)
 
   # dropDowns
+
   y += pad * 2
   koi.dropDown(
     x, y, w, h,
