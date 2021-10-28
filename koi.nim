@@ -101,7 +101,7 @@ type
 
 type
   RadioButtonStateVars = object
-    activeItem: Natural
+    activeItem: ItemId
 
 # }}}
 # {{{ SectionHeaderState
@@ -136,7 +136,7 @@ type
 
 type
   ScrollViewStateVars = object
-    activeItem: Natural
+    activeItem: ItemId
 
 # }}}
 # {{{ SliderState
@@ -674,16 +674,16 @@ proc setFont*(vg: NVGContext, size: float, name: string = "sans-bold",
 # {{{ textBreakLines*()
 type
   TextRow* = object
-    startPos*: Natural
-    startBytePos*: Natural
+    startPos*:       Natural
+    startBytePos*:   Natural
 
-    endPos*: Natural
-    endBytePos*: Natural
+    endPos*:         Natural
+    endBytePos*:     Natural
 
-    nextRowPos*: int
+    nextRowPos*:     int
     nextRowBytePos*: int
 
-    width*: float
+    width*:          float
     # TODO
 #    minX*:  cfloat
 #    maxX*:  cfloat
