@@ -36,7 +36,7 @@ type
     layerWidgetOverlay,
     layerTooltip,
     layerGlobalOverlay,
-    layerWindowDecoration,
+    layerWindowDecoration
 
 # }}}
 
