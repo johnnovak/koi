@@ -626,13 +626,16 @@ proc getPxRatio*(): float =
 
 # }}}
 # {{{ snapToGrid*()
-func snapToGrid*(x, y, w, h, strokeWidth: float): (float, float, float, float) =
+func snapToGrid*(x, y, w, h: float,
+                 strokeWidth: float = 0.0): (float, float, float, float) =
+
   let s = (strokeWidth mod 2) * 0.5
   let
     x = round(x) - s
     y = round(y) - s
     w = round(w) + s*2
     h = round(h) + s*2
+
   result = (x, y, w, h)
 
 # }}}
@@ -1618,6 +1621,12 @@ proc nextItemHeight*(h: float) =
   ui.autoLayoutState.nextItemHeight = h
 
 # }}}
+# {{{ currAutoLayoutX*()
+proc currAutoLayoutX*(): float =
+  alias(ui, g_uiState)
+  ui.autoLayoutState.x
+
+# }}}
 # {{{ currAutoLayoutY*()
 proc currAutoLayoutY*(): float =
   alias(ui, g_uiState)
@@ -1760,7 +1769,7 @@ proc drawShadow*(vg: NVGContext, x, y, w, h: float,
   alias(s, style)
 
   if s.enabled:
-    let (x, y, w, h) = snapToGrid(x, y, w, h, strokeWidth=0)
+    let (x, y, w, h) = snapToGrid(x, y, w, h)
 
     let shadow = vg.boxGradient(x + s.xOffset,
                                 y + s.yOffset,
@@ -1842,7 +1851,7 @@ proc drawTooltip(x, y: float, text: string, alpha: float = 1.0) =
 
     var (x, y) = fitRectWithinWindow(w, h, x-8, y-8, 30, 30, haLeft)
 
-    (x, y, w, h) = snapToGrid(x, y, w, h, strokeWidth=0)
+    (x, y, w, h) = snapToGrid(x, y, w, h)
 
     vg.globalAlpha(alpha)
 
@@ -2103,7 +2112,7 @@ proc drawLabel(vg: NVGContext; x, y, w, h: float; label: string;
 
   alias(s, style)
 
-  let (x, y, w, h) = snapToGrid(x, y, w, h, strokeWidth=0)
+  let (x, y, w, h) = snapToGrid(x, y, w, h)
 
   let
     textBoxX = x + s.padHoriz
@@ -2177,7 +2186,7 @@ proc label*(labelText: string,
 proc drawImage(vg: NVGContext; x, y, w, h: float; paint: Paint) =
   vg.save()
 
-  let (x, y, w, h) = snapToGrid(x, y, w, h, strokeWidth=0)
+  let (x, y, w, h) = snapToGrid(x, y, w, h)
 
   vg.beginPath()
   vg.rect(x, y, w, h)
@@ -2592,8 +2601,6 @@ let DefaultRadioButtonDrawProc: RadioButtonsDrawProc =
 
     alias(s, style)
 
-    let (x, y, w, h) = snapToGrid(x, y, w, h, s.buttonStrokeWidth)
-
     let (fillColor, strokeColor) =
       case state
       of wsNormal, wsDisabled:
@@ -2693,7 +2700,8 @@ proc radioButtons[T](
   alias(rs, ui.radioButtonState)
   alias(s, style)
 
-  let (x, y) = addDrawOffset(x, y)
+  let (xo, yo) = addDrawOffset(x, y)
+  let (x, y, w, h) = snapToGrid(xo, yo, w, h, s.buttonStrokeWidth)
 
   let numButtons = labels.len
 
@@ -3897,6 +3905,7 @@ template dropDown*[E: enum](
            g_uiState.autoLayoutState.nextItemHeight,
            itemsSeq,
            selItem, tooltip, disabled, style)
+
   selectedItem = E(selItem)
 
   autoLayoutPost()
@@ -4325,8 +4334,7 @@ proc textField(
     x = x + s.textPadHoriz,
     y = y,
     w = w - s.textPadHoriz*2,
-    h = h,
-    strokeWidth=0
+    h = h
   )
 
   # TODO use global expandable array
@@ -6629,7 +6637,6 @@ template color*(col: var Color) =
 # {{{ View
 
 # {{{ beginView()
-# TODO unused, remove?
 proc beginView*(id: ItemId, x, y, w, h: float) =
   alias(ui, g_uiState)
 
@@ -6771,7 +6778,7 @@ proc sectionHeader(id:           ItemId,
   let expanded = expanded_out
 
   addDrawLayer(ui.currentLayer, vg):
-    var (x, y, w, h) = snapToGrid(x, y, w, h, strokeWidth=0)
+    var (x, y, w, h) = snapToGrid(x, y, w, h)
 
     # Draw background
     vg.fillColor(s.backgroundColor)
@@ -6951,7 +6958,7 @@ template beginScrollView*(x, y, w, h: float,
 
 # }}}
 # {{{ endScrollView*()
-proc endScrollView*() =
+proc endScrollView*(height: float = -1.0) =
   alias(ui, g_uiState)
   alias(a, ui.autoLayoutState)
 
@@ -6960,7 +6967,9 @@ proc endScrollView*() =
 
   popDrawOffset()
 
-  autoLayoutFinal()
+  let autoLayout = height < 0
+  if autoLayout:
+    autoLayoutFinal()
 
   let id = ui.scrollViewState.activeItem
   var ss = cast[ScrollViewState](ui.itemState[id])
@@ -6968,7 +6977,7 @@ proc endScrollView*() =
   var viewStartY = ss.viewStartY
 
   let visibleHeight = ss.h
-  let contentHeight = a.y
+  let contentHeight = if autoLayout: a.y else: height
 
   if contentHeight > visibleHeight:
     # Handle scrollwheel
@@ -7079,7 +7088,7 @@ proc beginDialog*(w, h: float, title: string,
   addDrawLayer(ui.currentLayer, vg):
     const TitleBarHeight = 30.0
 
-    var (x, y, w, h) = snapToGrid(x, y, w, h, strokeWidth=0)
+    var (x, y, w, h) = snapToGrid(x, y, w, h)
 
     drawShadow(vg, x, y, w, h, s.shadow)
 
