@@ -12,8 +12,8 @@ import unicode
 
 import glfw
 import nanovg
-import with
 
+import koi/deps/with
 import koi/glad/gl
 import koi/rect
 import koi/ringbuffer
@@ -1347,6 +1347,7 @@ let g_textFieldEditShortcuts_WinLinux = {
 # }}}
 # {{{ Shortcuts - Mac
 # TODO update
+#[
 let g_textFieldEditShortcuts_Mac = {
   tesPrevTextField:        @[mkKeyShortcut(keyTab,       {mkShift})],
   tesNextTextField:        @[mkKeyShortcut(keyTab,       {})],
@@ -1422,7 +1423,7 @@ let g_textFieldEditShortcuts_Mac = {
   tesCancel:               @[mkKeyShortcut(keyEscape,    {}),
                              mkKeyShortcut(keyLeftBracket, {mkCtrl})]
 }.toTable
-
+]#
 # }}}
 
 # TODO make this configurable
@@ -5427,7 +5428,6 @@ proc textArea(
 
     setFont()
     let rows = textBreakLines(text, textBoxW)
-    let maxDisplayRows = (textBoxH / lineHeight).int
 
     let sel = normaliseSelection(ta.selection)
 
