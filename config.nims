@@ -1,10 +1,10 @@
 proc setCommonCompileParams() =
-#  --gc:orc
-#  --deepcopy:on
+  --gc:orc
+  --deepcopy:on
+  --d:nimPreviewFloatRoundtrip
   --d:nvgGL3
   --d:glfwStaticLib
   --d:glStaticProcs
-  --d:nimPreviewFloatRoundtrip
 
 task test, "build test":
   --d:debug

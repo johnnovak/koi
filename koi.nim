@@ -2847,7 +2847,10 @@ proc radioButtons[T](
           y += h
 
   if isHot(id):
-    let tt = if hotButton <= tooltips.high: tooltips[hotButton] else: ""
+    let tt = if hotButton >= 0 and hotButton <= tooltips.high:
+      tooltips[hotButton]
+    else: ""
+
     handleTooltip(id, tt)
 
 # }}}
@@ -3032,7 +3035,7 @@ proc horizScrollBar(id:         ItemId,
       else:
         let s = sgn(endVal - startVal).float
         if ui.mx < thumbX: sb.clickDir = -1 * s
-        else:               sb.clickDir =  1 * s
+        else:              sb.clickDir =  1 * s
         sb.state = sbsTrackClickFirst
         ui.t0 = getTime()
 
@@ -3252,7 +3255,7 @@ proc vertScrollBar(id:         ItemId,
       else:
         let s = sgn(endVal - startVal).float
         if ui.my < thumbY: sb.clickDir = -1 * s
-        else:               sb.clickDir =  1 * s
+        else:              sb.clickDir =  1 * s
         sb.state = sbsTrackClickFirst
         ui.t0 = getTime()
 
@@ -3691,14 +3694,14 @@ proc dropDown[T](id:               ItemId,
     if ds.state == dsOpenLMBPressed:
       if not ui.mbLeftDown:
         if hoverItem >= 0:
-          selectedItem = T(hoverItem)
+          selectedItem = hoverItem
           closeDropDown()
         else:
           ds.state = dsOpen
     else:
       if ui.mbLeftDown:
         if hoverItem >= 0:
-          selectedItem = (hoverItem)
+          selectedItem = hoverItem
           closeDropDown()
         elif insideButton:
           closeDropDown()
