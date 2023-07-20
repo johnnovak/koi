@@ -10,3 +10,7 @@ func lerp*(a, b, t: SomeFloat): SomeFloat =
 func invLerp*(a, b, v: SomeFloat): SomeFloat =
   (v-a) / (b-a)
 
+func remap*(inMin, inMax, outMin, outMax, v: SomeFloat): SomeFloat =
+  let t = invLerp(inMin, inMax, v)
+  lerp(outMin, outMax, t)
+
