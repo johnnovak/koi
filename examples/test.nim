@@ -1,5 +1,5 @@
-import lenientops
-import strformat
+import std/lenientops
+import std/strformat
 
 import glad/gl
 import glfw

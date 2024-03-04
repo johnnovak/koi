@@ -1,14 +1,14 @@
-import hashes
-import json
-import lenientops
-import math
-import options
-import sequtils
-import sets
-import strformat
-import strutils
-import tables
-import unicode
+import std/hashes
+import std/json
+import std/lenientops
+import std/math
+import std/options
+import std/sequtils
+import std/sets
+import std/strformat
+import std/strutils
+import std/tables
+import std/unicode
 
 import glfw
 import nanovg
@@ -7073,7 +7073,8 @@ proc setDefaultDialogStyle*(style: DialogStyle) =
 
 # {{{ beginDialog()
 proc beginDialog*(w, h: float, title: string,
-                  x, y: Option[float] = float.none,
+                  x: Option[float] = float.none,
+                  y: Option[float] = float.none,
                   style: DialogStyle = DefaultDialogStyle) =
 
   alias(ui, g_uiState)
