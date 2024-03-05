@@ -314,8 +314,8 @@ type
     # Window dimensions (in virtual pixels)
     winWidth, winHeight: float
 
-    # Set if a widget has captured the focus (e.g. a textfield in edit mode) so
-    # all other UI interactions (hovers, tooltips, etc.) should be disabled
+    # Set if a widget has captured the focus (e.g., a textfield in edit mode)
+    # so all other UI interactions (hovers, tooltips, etc.) should be disabled
     focusCaptured:   bool
 
     tooltipState:    TooltipStateVars
@@ -326,7 +326,7 @@ type
     # Reset to empty seq at the start of the frame
     drawOffsetStack: seq[DrawOffset]
 
-    # Hit checking clip rectangle (e.g. when inside a scrollview)
+    # Hit checking clip rectangle (e.g., when inside a scrollview)
     # TODO should dialog and popup use this as well? or instead of
     # focuscaptured?
     hitClipRect:     Rect
@@ -397,7 +397,7 @@ type
     sliderState:        SliderStateVars
     textFieldState:     TextFieldStateVars
 
-    # Per-instance data storage for widgets that require it (e.g. ScrollView)
+    # Per-instance data storage for widgets that require it (e.g., ScrollView)
     itemState:          Table[ItemId, ref RootObj]
 
     # Auto-layout
