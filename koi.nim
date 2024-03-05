@@ -415,31 +415,34 @@ type
     ox, oy: float
 
   AutoLayoutParams* = object
-    itemsPerRow*:      Natural
-    rowWidth*:         float
-    labelWidth*:       float
-    sectionPad*:       float
-    leftPad*:          float
-    rightPad*:         float
-    rowPad*:           float
-    rowGroupPad*:      float
-    defaultRowHeight*: float
+    itemsPerRow*:       Natural
+    rowWidth*:          float
+    labelWidth*:        float
+    sectionPad*:        float
+    leftPad*:           float
+    rightPad*:          float
+    rowPad*:            float
+    rowGroupPad*:       float
+    defaultRowHeight*:  float
+    defaultItemHeight*: float
 
   AutoLayoutStateVars = object
-    rowWidth:          float
-    x, y:              float
-    currColIndex:      Natural
-    nextItemWidth:     float
-    nextItemHeight:    float
-    firstRow:          bool
-    prevSection:       bool
-    groupBegin:        bool
+    rowWidth:           float
+    rowHeight:          float
+    x, y:               float
+    currColIndex:       Natural
+    nextRowHeight:      float
+    nextItemWidth:      float
+    nextItemHeight:     float
+    firstRow:           bool
+    prevSection:        bool
+    groupBegin:         bool
 
   TabActivationStateVars = object
-    prevItem:          ItemId
-    itemToActivate:    ItemId
-    activateNext:      bool
-    activatePrev:      bool
+    prevItem:           ItemId
+    itemToActivate:     ItemId
+    activateNext:       bool
+    activatePrev:       bool
 
 # }}}
 
@@ -1585,15 +1588,16 @@ proc isDoubleClick*(): bool =
 # {{{ Layout handling
 
 const DefaultAutoLayoutParams* = AutoLayoutParams(
-  itemsPerRow:      2,
-  rowWidth:         320.0,
-  labelWidth:       175.0,
-  sectionPad:       12.0,
-  leftPad:          13.0,
-  rightPad:         4.0,
-  rowPad:           5.0,
-  rowGroupPad:      16.0,
-  defaultRowHeight: 21.0
+  itemsPerRow:       2,
+  rowWidth:          320.0,
+  labelWidth:        175.0,
+  sectionPad:        12.0,
+  leftPad:           13.0,
+  rightPad:          4.0,
+  rowPad:            5.0,
+  rowGroupPad:       16.0,
+  defaultRowHeight:  21.0,
+  defaultItemHeight: 21.0
 )
 
 # {{{ initAutoLayout*()
@@ -1605,9 +1609,16 @@ proc initAutoLayout*(params: AutoLayoutParams) =
 
   a = AutoLayoutStateVars.default
   a.rowWidth = params.rowWidth
+  a.nextRowHeight  = params.defaultRowHeight
   a.nextItemWidth  = params.labelWidth
-  a.nextItemHeight = params.defaultRowHeight
+  a.nextItemHeight = params.defaultItemHeight.clamp(0, a.nextRowHeight)
   a.firstRow = true
+
+# }}}
+# {{{ nextRowHeight*()
+proc nextRowHeight*(h: float) =
+  alias(ui, g_uiState)
+  ui.autoLayoutState.nextRowHeight = h
 
 # }}}
 # {{{ nextItemWidth*()
@@ -1619,7 +1630,7 @@ proc nextItemWidth*(w: float) =
 # {{{ nextItemHeight*()
 proc nextItemHeight*(h: float) =
   alias(ui, g_uiState)
-  ui.autoLayoutState.nextItemHeight = h
+  ui.autoLayoutState.nextItemHeight = h.clamp(0, ui.autoLayoutState.rowHeight)
 
 # }}}
 # {{{ currAutoLayoutX*()
@@ -1652,7 +1663,7 @@ proc autoLayoutPre(section: bool = false) =
 
 # }}}
 # {{{ autoLayoutPost()
-proc autoLayoutPost(height: Option[float] = float.none,
+proc autoLayoutPost(rowHeight: Option[float] = float.none,
                     section: bool = false) =
 
   alias(ui, g_uiState)
@@ -1661,15 +1672,15 @@ proc autoLayoutPost(height: Option[float] = float.none,
 
   inc(a.currColIndex)
 
-  let h = if height.isSome: height.get
-          else: ap.defaultRowHeight
+  a.rowHeight = if rowHeight.isSome: rowHeight.get
+                else: ap.defaultRowHeight
 
   if a.currColIndex == ap.itemsPerRow or section:
     a.currColIndex = 0
     a.nextItemWidth = ap.labelWidth
     a.x = ap.leftPad
 
-    a.y += h
+    a.y += a.rowHeight
     a.y += ap.sectionPad
 
     a.prevSection = section
@@ -1679,7 +1690,7 @@ proc autoLayoutPost(height: Option[float] = float.none,
   else:
     a.x += ap.labelWidth
     a.nextItemWidth = a.rowWidth - a.x - ap.rightPad
-    a.nextItemHeight = h
+    a.nextItemHeight = ap.defaultItemHeight
 
   a.groupBegin = false
 
@@ -2176,7 +2187,8 @@ proc label*(labelText: string,
 
   autoLayoutPre()
 
-  label(a.x, a.y, a.nextItemWidth, a.nextItemHeight, labelText, state, style)
+  # Labels are currenty always vertically centered to the auto-layout rows
+  label(a.x, a.y, a.nextItemWidth, a.nextRowHeight, labelText, state, style)
 
   autoLayoutPost()
 
@@ -6843,7 +6855,7 @@ template sectionHeader*(
     tooltip, style
   )
 
-  autoLayoutPost(height=style.height.some, section=true)
+  autoLayoutPost(rowHeight=style.height.some, section=true)
   result
 
 
@@ -6867,7 +6879,7 @@ template subSectionHeader*(
     tooltip, style
   )
 
-  autoLayoutPost(height=style.height.some, section=true)
+  autoLayoutPost(rowHeight=style.height.some, section=true)
   result
 
 # }}}

@@ -239,6 +239,8 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
   var ap = DefaultAutoLayoutParams
   ap.rowWidth = w
   ap.rightPad = 16
+  ap.defaultItemHeight = 21
+  ap.defaultRowHeight = 41
 
   initAutoLayout(ap)
 
@@ -282,12 +284,14 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
 
     if koi.subSectionHeader("Dialog", sectionDialog):
       koi.label("Title Bar Background")
+      koi.nextItemHeight(41)
       koi.color(currTheme.dialog.titleBarBgColor)
 
       koi.label("Title Bar Text")
       koi.color(currTheme.dialog.titleBarTextColor)
 
       koi.label("Background")
+      koi.nextItemHeight(61)
       koi.color(currTheme.dialog.backgroundColor)
 
       koi.label("Text")
