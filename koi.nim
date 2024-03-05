@@ -411,7 +411,7 @@ type
 
 
   DrawOffset = object
-    # Origin offset, used for relative coordinate handling (e.g in dialogs)
+    # Origin offset, used for relative coordinate handling (e.g., in dialogs)
     ox, oy: float
 
   AutoLayoutParams* = object
