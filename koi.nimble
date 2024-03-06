@@ -7,6 +7,6 @@ license       = "WTFPL"
 
 # Dependencies
 
-requires "nim >= 2.0.2", "glfw >= 3.3.3.0", "nanovg >= 0.3.4"
+requires "nim >= 2.0.2", "glfw >= 3.4.0.0", "nanovg >= 0.3.4"
 
 # Tasks
