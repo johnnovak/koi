@@ -1,6 +1,6 @@
 # koi — immediate mode UI for Nim
 
-![koi-orig-flat](https://github.com/johnnovak/koi/assets/698770/3f458971-4aa8-4ebe-a824-c0cdbfe1c530)
+![koi-orig-flat](https://github.com/johnnovak/koi/assets/698770/76e55eb0-c01c-4f9d-9ed0-a325058a21b0)
 
 **koi** is an immediate-mode UI library that uses OpenGL rendering via NanoVG. It was mainly invented for the dungeon mapper tool [Gridmonger](https://gridmonger.johnnovak.net/) (see screenshot below), but it's technically a general-purpose minimalist UI library with some restrictions.
 
