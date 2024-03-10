@@ -2,7 +2,7 @@
 
 ![koi-orig-flat](https://github.com/johnnovak/koi/assets/698770/76e55eb0-c01c-4f9d-9ed0-a325058a21b0)
 
-**koi** is an immediate-mode UI library that uses OpenGL rendering via NanoVG. It was mainly invented for the dungeon mapper tool [Gridmonger](https://gridmonger.johnnovak.net/) (see screenshot below), but it's technically a general-purpose minimalist UI library with some restrictions.
+**koi** is an immediate mode UI library that uses OpenGL for rendering via NanoVG. It was mainly invented for the dungeon mapper tool [Gridmonger](https://gridmonger.johnnovak.net/) (see screenshot below), but it's technically a general-purpose minimalist UI library with some restrictions.
 
 There is no documentation yet—check out the [examples](/examples) and Gridmonger for usage.
 
