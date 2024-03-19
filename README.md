@@ -1,12 +1,47 @@
-# koi
+# koi — immediate mode UI for Nim
 
-*Immediate mode UI for Nim*
+![koi-orig-flat](https://github.com/johnnovak/koi/assets/698770/76e55eb0-c01c-4f9d-9ed0-a325058a21b0)
 
-Koi is an immediate-mode UI library that uses OpenGL rendering via NanoVG. It was mainly invented for the dungeon mapper tool [Gridmonger](https://gridmonger.johnnovak.net/) (see screenshot below), but it's technically a general-purpose minimalist UI library with some restrictions.
+**koi** is a small (~5 KLOC) immediate mode UI library that uses OpenGL for rendering via NanoVG. It was mainly invented for the dungeon mapping tool [Gridmonger](https://gridmonger.johnnovak.net/) (see screenshot below), and then it evolved into a minimalist but feature-rich general-purpose UI library.
 
-Note that the API or even some of the functionality might change without warning at any moment.
+GLFW is currently a hard requirement, but it should be easy to adapt it to other frameworks or backends.
+
+There is no documentation yet—check out the [examples](/examples) and Gridmonger for usage.
+
+Support is currently *alpha level*, meaning that the API or the functionality might change without warning at any moment.
 
 <img width="1312" alt="image" src="https://github.com/johnnovak/koi/assets/698770/dbf58114-5a68-4937-96ed-cd0109eebc89">
+
+## Dependencies
+
+Nim 2.0.2 or later and the following two libraries are required:
+
+- [nim-glfw](https://github.com/johnnovak/nim-glfw)
+- [nim-nanovg](https://github.com/johnnovak/nim-nanovg)
+
+You can install them with [Nimble](https://github.com/nim-lang/nimble):
+
+```
+nimble install glfw nanovg
+```
+
+## Building
+
+To build the examples (the dependencies will be auto-installed if needed):
+
+```
+nimble test
+nimble paneltest
+```
+
+or
+
+```
+nimble testRelease
+nimble paneltestRelease
+```
+
+See [config.nims](/config.nims) on how to link statically **koi** and **GLFW** to your program.
 
 ## License
 
