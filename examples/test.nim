@@ -42,13 +42,13 @@ var
   checkBoxVal1 = true
   checkBoxVal2 = false
 
-  radioButtonsVal1 = @[itJpg]
+  radioButtonsVal1 = itJpg
   radioButtonsVal2 = @[2]
-  radioButtonsVal3 = @[1]
-  radioButtonsVal4 = @[1]
-  radioButtonsVal5 = @[1]
-  radioButtonsVal6 = @[1]
-  radioButtonsVal7 = @[1]
+  radioButtonsVal3 = 1
+  radioButtonsVal4 = 1
+  radioButtonsVal5 = 1
+  radioButtonsVal6 = 1
+  radioButtonsVal7 = 1
 
   dropDownVal1 = Fruits(0)
   dropDownVal2 = 0
@@ -284,12 +284,11 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
     tooltips = @["Save PNG image", "Save JPG image", "Save EXR image"])
 
   y += pad
-  koi.radioButtons(
+  koi.multiRadioButtons(
     x, y, 220, h+2,
     labels = @["One", "Two", "The Third Option"],
     radioButtonsVal2,
-    tooltips = @["First (1)", "Second (2)", "Third (3)"],
-    multiselect = true)
+    tooltips = @["First (1)", "Second (2)", "Third (3)"])
 
   # Custom drawn radio buttons
   var radioButtonsDrawProc: RadioButtonsDrawProc =
