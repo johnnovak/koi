@@ -151,7 +151,7 @@ var
   sectionUserInterfaceGeneral = false
   sectionWidget = false
   sectionTextField = false
-  sectionDialog = true
+  sectionDialog = false
   sectionTitleBar = false
   sectionStatusBar = false
   sectionLeveldropDown = true
@@ -284,7 +284,7 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
 
     if koi.subSectionHeader("Dialog", sectionDialog):
       koi.label("Title Bar Background")
-      koi.nextItemHeight(41)
+      koi.nextItemHeight(81)
       koi.color(currTheme.dialog.titleBarBgColor)
 
       koi.label("Title Bar Text")
@@ -342,18 +342,21 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
       koi.color(currTheme.statusBar.coordsColor)
 
     if koi.subSectionHeader("Level Drop Down", sectionLeveldropDown):
+#      koi.nextRowHeight(21)
       koi.label("Button")
       koi.color(currTheme.leveldropDown.buttonColor)
 
       koi.label("Button Hover")
       koi.color(currTheme.leveldropDown.buttonColorHover)
 
+      koi.nextRowHeight(21)
       koi.label("Text")
       koi.color(currTheme.leveldropDown.textColor)
 
       koi.label("Item List")
       koi.color(currTheme.leveldropDown.itemListColor)
 
+#      koi.nextRowHeight(21)
       koi.label("Item")
       koi.color(currTheme.leveldropDown.itemColor)
 

@@ -24,9 +24,9 @@ export CursorShape
 
 # {{{ Types
 
-type ItemId = int64
+type ItemId* = int64
 
-# {{{ DrawLayer
+# {{{ DrawLayer*
 #
 type
   DrawLayer* = enum
@@ -51,8 +51,8 @@ type
 
   ColorPickerStateVars = object
     opened:          bool
-    colorMode:       ColorPickerColorMode
-    lastColorMode:   ColorPickerColorMode
+    colorMode:       seq[ColorPickerColorMode]
+    lastColorMode:   seq[ColorPickerColorMode]
     mouseMode:       ColorPickerMouseMode
     activeItem:      ItemId
     h, s, v:         float
@@ -262,10 +262,12 @@ type
 
 # }}}
 
-# {{{ WidgetState
+# {{{ WidgetState*
 
 type WidgetState* = enum
-  wsNormal, wsHover, wsDown, wsActive, wsActiveHover, wsDisabled
+  wsNormal, wsHover, wsDown,
+  wsActive, wsActiveHover, wsActiveDown,
+  wsDisabled
 
 # }}}
 # {{{ WidgetGrouping
@@ -417,7 +419,10 @@ type
   AutoLayoutParams* = object
     itemsPerRow*:       Natural
     rowWidth*:          float
+
+    # Replace with table of 'itemsPerRow' number of column widths
     labelWidth*:        float
+
     sectionPad*:        float
     leftPad*:           float
     rightPad*:          float
@@ -431,7 +436,7 @@ type
     rowHeight:          float
     x, y:               float
     currColIndex:       Natural
-    nextRowHeight:      float
+    nextRowHeight:      Option[float]
     nextItemWidth:      float
     nextItemHeight:     float
     firstRow:           bool
@@ -1127,6 +1132,13 @@ func clampToRange*(value, startVal, endVal: float): float =
 
 # }}}
 
+# {{{ enumToSeq*()
+proc enumToSeq*[E: enum](): seq[string] =
+  result = newSeq[string]()
+  for e in E.low..E.high:
+    result.add($e)
+# }}}
+
 # }}}
 # {{{ Draw layers
 
@@ -1509,6 +1521,7 @@ proc fromClipboard*(): string =
 # }}}
 # {{{ Mouse handling
 
+# {{{ mouseButtonCb()
 proc mouseButtonCb(win: Window, button: MouseButton, pressed: bool,
                    modKeys: set[ModifierKey]) =
 
@@ -1525,6 +1538,8 @@ proc mouseButtonCb(win: Window, button: MouseButton, pressed: bool,
     )
   )
 
+# }}}
+# {{{ scrollCb()
 proc scrollCb(win: Window, offset: tuple[x, y: float64]) =
   # The scroll callback seems to only be called during pollEvents/waitEvents.
   # GLFW coalesces all scroll events since the last poll into a single event.
@@ -1536,19 +1551,29 @@ proc scrollCb(win: Window, offset: tuple[x, y: float64]) =
     )
   )
 
+# }}}
 
+# {{{ showCursor*()
 proc showCursor*() =
   glfw.currentContext().cursorMode = cmNormal
 
+# }}}
+# {{{ hideCursor*()
 proc hideCursor*() =
   glfw.currentContext().cursorMode = cmHidden
 
+# }}}
+# {{{ disableCursor*()
 proc disableCursor*() =
   glfw.currentContext().cursorMode = cmDisabled
 
+# }}}
+# {{{ setCursorShape*()
 proc setCursorShape*(cs: CursorShape) =
   g_uiState.cursorShape = cs
 
+# }}}
+# {{{ setCursorMode*()
 proc setCursorMode*(cs: CursorShape) =
   let win = glfw.currentContext()
 
@@ -1565,17 +1590,22 @@ proc setCursorMode*(cs: CursorShape) =
 
   win.cursor = c
 
-
+# }}}
+# {{{ setCursorPosX*()
 proc setCursorPosX*(x: float) =
   let win = glfw.currentContext()
   let (_, currY) = win.cursorPos()
   win.cursorPos = (x, currY)
 
+# }}}
+# {{{ setCursorPosY*()
 proc setCursorPosY*(y: float) =
   let win = glfw.currentContext()
   let (currX, _) = win.cursorPos()
   win.cursorPos = (currX, y)
 
+# }}}
+# {{{ isDoubleClick*()
 proc isDoubleClick*(): bool =
   alias(ui, g_uiState)
 
@@ -1583,6 +1613,8 @@ proc isDoubleClick*(): bool =
   getTime() - ui.lastMbLeftDownT <= DoubleClickMaxDelay and
   abs(ui.lastMbLeftDownX - ui.mx) <= DoubleClickMaxXOffs and
   abs(ui.lastMbLeftDownY - ui.my) <= DoubleClickMaxYOffs
+
+# }}}
 
 # }}}
 # {{{ Layout handling
@@ -1608,17 +1640,16 @@ proc initAutoLayout*(params: AutoLayoutParams) =
   ui.autoLayoutParams = params
 
   a = AutoLayoutStateVars.default
-  a.rowWidth = params.rowWidth
-  a.nextRowHeight  = params.defaultRowHeight
-  a.nextItemWidth  = params.labelWidth
-  a.nextItemHeight = params.defaultItemHeight.clamp(0, a.nextRowHeight)
-  a.firstRow = true
+
+  a.rowWidth       = params.rowWidth
+  a.nextItemHeight = params.defaultItemHeight
+  a.firstRow       = true
 
 # }}}
 # {{{ nextRowHeight*()
 proc nextRowHeight*(h: float) =
   alias(ui, g_uiState)
-  ui.autoLayoutState.nextRowHeight = h
+  ui.autoLayoutState.nextRowHeight = h.some
 
 # }}}
 # {{{ nextItemWidth*()
@@ -1630,7 +1661,7 @@ proc nextItemWidth*(w: float) =
 # {{{ nextItemHeight*()
 proc nextItemHeight*(h: float) =
   alias(ui, g_uiState)
-  ui.autoLayoutState.nextItemHeight = h.clamp(0, ui.autoLayoutState.rowHeight)
+  ui.autoLayoutState.nextItemHeight = h
 
 # }}}
 # {{{ currAutoLayoutX*()
@@ -1649,47 +1680,52 @@ proc currAutoLayoutY*(): float =
 # {{{ autoLayoutPre()
 proc autoLayoutPre(section: bool = false) =
   alias(ui, g_uiState)
-  alias(a, ui.autoLayoutState)
+  alias(a,  ui.autoLayoutState)
   alias(ap, ui.autoLayoutParams)
+
+  let firstColumn = (a.currColIndex == 0)
+
+  if firstColumn:
+    a.rowHeight = if a.nextRowHeight.isSome: a.nextRowHeight.get
+                  else: ap.defaultRowHeight
+
+    a.nextRowHeight = float.none
+    a.nextItemWidth = ap.labelWidth
+    a.x             = ap.leftPad
 
   if not a.firstRow:
     if section:
       if a.prevSection:
         a.y -= ap.sectionPad
     else:
-      if a.currColIndex == 0 and not a.prevSection:
+      if firstColumn and not a.prevSection:
         a.y -= ap.sectionPad
         a.y += (if a.groupBegin: ap.rowGroupPad else: ap.rowPad)
 
 # }}}
 # {{{ autoLayoutPost()
-proc autoLayoutPost(rowHeight: Option[float] = float.none,
-                    section: bool = false) =
-
+proc autoLayoutPost(section: bool = false) =
   alias(ui, g_uiState)
-  alias(a, ui.autoLayoutState)
+  alias(a,  ui.autoLayoutState)
   alias(ap, ui.autoLayoutParams)
 
-  inc(a.currColIndex)
+  let lastColumn = (a.currColIndex == ap.itemsPerRow-1)
 
-  a.rowHeight = if rowHeight.isSome: rowHeight.get
-                else: ap.defaultRowHeight
-
-  if a.currColIndex == ap.itemsPerRow or section:
+  if lastColumn or section:
+    # Progress to next row
     a.currColIndex = 0
-    a.nextItemWidth = ap.labelWidth
-    a.x = ap.leftPad
 
     a.y += a.rowHeight
     a.y += ap.sectionPad
-
     a.prevSection = section
-    a.firstRow = false
+    a.firstRow    = false
 
-  # TODO this only works for the default 2-column layout
   else:
-    a.x += ap.labelWidth
-    a.nextItemWidth = a.rowWidth - a.x - ap.rightPad
+    # Progress to next column
+    inc(a.currColIndex)
+
+    a.x += a.nextItemWidth
+    a.nextItemWidth  = a.rowWidth - a.x - ap.rightPad
     a.nextItemHeight = ap.defaultItemHeight
 
   a.groupBegin = false
@@ -1704,14 +1740,24 @@ proc autoLayoutFinal() =
     a.y -= ui.autoLayoutParams.sectionPad
 
 # }}}
-# {{{ autoLayoutCalcY()
-proc autoLayoutCalcY(): float =
-  alias(ui, g_uiState)
-  alias(a, ui.autoLayoutState)
-  alias(ap, ui.autoLayoutParams)
+# {{{ autoLayoutNextItemWidth()
+proc autoLayoutNextItemWidth(): float =
+  alias(a, g_uiState.autoLayoutState)
+  a.nextItemWidth
+
+# }}}
+# {{{ autoLayoutNextItemHeight()
+proc autoLayoutNextItemHeight(): float =
+  alias(a, g_uiState.autoLayoutState)
+  a.nextItemHeight.clamp(0, a.rowHeight)
+
+# }}}
+# {{{ autoLayoutNextY()
+proc autoLayoutNextY(): float =
+  alias(a, g_uiState.autoLayoutState)
 
   result = a.y
-  let dy = ap.defaultRowHeight - a.nextItemHeight
+  let dy = a.rowHeight - autoLayoutNextItemHeight()
   if dy > 0:
     result += round(dy*0.5)
 
@@ -1748,6 +1794,7 @@ proc nextLayoutColumn*() =
 
 # {{{ Shadow
 
+# {{{ Shadow style
 type ShadowStyle* = ref object
   enabled*:      bool
   cornerRadius*: float
@@ -1775,6 +1822,7 @@ proc getDefaultShadowStyle*(): ShadowStyle =
 proc setDefaultShadowStyle*(style: ShadowStyle) =
   DefaultShadowStyle = style.deepCopy
 
+# }}}
 # {{{ drawShadow*()
 proc drawShadow*(vg: NVGContext, x, y, w, h: float,
                  style: ShadowStyle = DefaultShadowStyle) =
@@ -1947,6 +1995,7 @@ proc tooltipPost() =
 # }}}
 # {{{ Popup
 
+# {{{ Popup style
 type PopupStyle* = ref object
   autoClose*:              bool
   autoCloseBorder*:        float
@@ -1972,6 +2021,7 @@ proc getDefaultPopupStyle*(): PopupStyle =
 proc setDefaultPopupStyle*(style: PopupStyle) =
   DefaultPopupStyle = style.deepCopy
 
+# }}}
 # {{{ closePopup*()
 proc closePopup*() =
   alias(ui, g_uiState)
@@ -2080,6 +2130,8 @@ proc endPopup*() =
 
 # {{{ Label
 
+# {{{ Label style
+#
 type LabelStyle* = ref object
   fontSize*:         float
   fontFace*:         string
@@ -2117,6 +2169,7 @@ proc getDefaultLabelStyle*(): LabelStyle =
 proc setDefaultLabelStyle*(style: LabelStyle) =
   DefaultLabelStyle = style.deepCopy
 
+# }}}
 # {{{ drawLabel()
 proc drawLabel(vg: NVGContext; x, y, w, h: float; label: string;
                state: WidgetState = wsNormal,
@@ -2151,6 +2204,7 @@ proc drawLabel(vg: NVGContext; x, y, w, h: float; label: string;
               of wsDown:        s.colorDown
               of wsActive:      s.colorActive
               of wsActiveHover: s.colorActiveHover
+              of wsActiveDown:  s.colorDown
               of wsDisabled:    s.colorDisabled
 
   vg.fillColor(color)
@@ -2164,7 +2218,7 @@ proc drawLabel(vg: NVGContext; x, y, w, h: float; label: string;
   vg.restore()
 
 # }}}
-# {{{ label()
+# {{{ label*()
 proc label*(x, y, w, h: float,
            labelText:  string,
            state:      WidgetState = wsNormal,
@@ -2177,20 +2231,20 @@ proc label*(x, y, w, h: float,
   addDrawLayer(ui.currentLayer, vg):
     vg.drawLabel(x, y, w, h, labelText, state, style)
 
-# }}}
-
 proc label*(labelText: string,
             state: WidgetState = wsNormal,
             style: LabelStyle = DefaultLabelStyle) =
   alias(ui, g_uiState)
-  alias(a, ui.autoLayoutState)
 
   autoLayoutPre()
 
-  # Labels are currenty always vertically centered to the auto-layout rows
-  label(a.x, a.y, a.nextItemWidth, a.nextRowHeight, labelText, state, style)
+  label(ui.autoLayoutState.x, autoLayoutNextY(),
+        autoLayoutNextItemWidth(), autoLayoutNextItemHeight(),
+        labelText, state, style)
 
   autoLayoutPost()
+
+# }}}
 
 # }}}
 # {{{ Image
@@ -2209,7 +2263,7 @@ proc drawImage(vg: NVGContext; x, y, w, h: float; paint: Paint) =
   vg.restore()
 
 # }}}
-# {{{ image()
+# {{{ image*()
 proc image*(x, y, w, h: float, paint: Paint) =
   alias(ui, g_uiState)
 
@@ -2218,20 +2272,23 @@ proc image*(x, y, w, h: float, paint: Paint) =
   addDrawLayer(ui.currentLayer, vg):
     vg.drawImage(x, y, w, h, paint)
 
-# }}}
-
 proc image*(paint: Paint) =
   alias(ui, g_uiState)
   alias(a, ui.autoLayoutState)
 
   autoLayoutPre()
 
-  image(a.x, a.y, a.nextItemWidth, a.nextItemHeight, paint)
+  image(a.x, a.y, autoLayoutNextItemWidth(), autoLayoutNextItemHeight(),
+        paint)
 
   autoLayoutPost()
 
 # }}}
+
+# }}}
 # {{{ Button
+
+# {{{ Button style
 
 type ButtonStyle* = ref object
   cornerRadius*:        float
@@ -2277,37 +2334,22 @@ proc getDefaultButtonStyle*(): ButtonStyle =
 proc setDefaultButtonStyle*(style: ButtonStyle) =
   DefaultButtonStyle = style.deepCopy
 
-# {{{ button()
-proc button(id:         ItemId,
-            x, y, w, h: float,
-            label:      string,
-            tooltip:    string,
-            disabled:   bool,
-            style:      ButtonStyle): bool =
+# }}}
+# {{{ ButtonDrawProc*
+type
+  ButtonDrawProc* = proc (vg: NVGContext,
+                          id: ItemId, x, y, w, h: float, label: string,
+                          state: WidgetState, style: ButtonStyle)
 
-  alias(ui, g_uiState)
-  alias(s, style)
+let DefaultButtonDrawProc: ButtonDrawProc =
+  proc (vg: NVGContext,
+        id: ItemId, x, y, w, h: float, label: string,
+        state: WidgetState, style: ButtonStyle) =
 
-  let (x, y) = addDrawOffset(x, y)
+    alias(s, style)
 
-  # Hit testing
-  if isHit(x, y, w, h):
-    setHot(id)
-    if not disabled and ui.mbLeftDown and hasNoActiveItem():
-      setActive(id)
-
-  # LMB released over active widget means it was clicked
-  if not ui.mbLeftDown and isHot(id) and isActive(id):
-    result = true
-
-  addDrawLayer(ui.currentLayer, vg):
     let sw = s.strokeWidth
     let (x, y, w, h) = snapToGrid(x, y, w, h, sw)
-
-    let state = if   disabled: wsDisabled
-                elif isHot(id) and hasNoActiveItem(): wsHover
-                elif isHot(id) and isActive(id): wsDown
-                else: wsNormal
 
     let (fillColor, strokeColor) =
       case state
@@ -2315,7 +2357,7 @@ proc button(id:         ItemId,
         (s.fillColor, s.strokeColor)
       of wsHover:
         (s.fillColorHover, s.strokeColorHover)
-      of wsDown:
+      of wsDown, wsActiveDown:
         (s.fillColorDown, s.strokeColorDown)
       of wsDisabled:
         (s.fillColorDisabled, s.strokeColorDisabled)
@@ -2332,27 +2374,73 @@ proc button(id:         ItemId,
 
     vg.drawLabel(x, y, w, h, label, state, s.label)
 
+# }}}
+# {{{ button()
+proc button(id:                   ItemId,
+            x, y, w, h:           float,
+            label:                string,
+            tooltip:              string,
+            disabled:             bool,
+            activateOnButtonDown: bool,
+            drawProc:             Option[ButtonDrawProc] = ButtonDrawProc.none,
+            style:                ButtonStyle = DefaultButtonStyle): bool =
+
+  alias(ui, g_uiState)
+
+  let (x, y) = addDrawOffset(x, y)
+
+  # Hit testing
+  if isHit(x, y, w, h):
+    setHot(id)
+    if not disabled and ui.mbLeftDown and hasNoActiveItem():
+      setActive(id)
+      if activateOnButtonDown:
+        result = true
+
+  # LMB released over active widget means it was clicked
+  if not activateOnButtonDown:
+    if not ui.mbLeftDown and isHot(id) and isActive(id):
+      result = true
+
+  addDrawLayer(ui.currentLayer, vg):
+    let state = if   disabled: wsDisabled
+                elif isHot(id) and hasNoActiveItem(): wsHover
+                elif isHot(id) and isActive(id): wsDown
+                else: wsNormal
+
+    let drawProc = if drawProc.isSome: drawProc.get
+                   else: DefaultButtonDrawProc
+
+    drawProc(vg, id, x, y, w, h, label, state, style)
+
+
   if isHot(id):
     handleTooltip(id, tooltip)
 
 # }}}
+# {{{ Button templates
 
-template button*(x, y, w, h: float,
-                 label:      string,
-                 tooltip:    string = "",
-                 disabled:   bool = false,
-                 style:      ButtonStyle = DefaultButtonStyle): bool =
+template button*(x, y, w, h:           float,
+                 label:                string,
+                 tooltip:              string = "",
+                 disabled:             bool = false,
+                 activateOnButtonDown: bool = false,
+                 drawProc:        Option[ButtonDrawProc] = ButtonDrawProc.none,
+                 style:           ButtonStyle = DefaultButtonStyle): bool =
 
   let i = instantiationInfo(fullPaths=true)
   let id = getNextId(i.filename, i.line)
 
-  button(id, x, y, w, h, label, tooltip, disabled, style)
+  button(id, x, y, w, h, label, tooltip, disabled, activateOnButtonDown,
+         drawProc, style)
 
 
-template button*(label:      string,
-                 tooltip:    string = "",
-                 disabled:   bool = false,
-                 style:      ButtonStyle = DefaultButtonStyle): bool =
+template button*(label:                string,
+                 tooltip:              string = "",
+                 disabled:             bool = false,
+                 activateOnButtonDown: bool = false,
+                 drawProc:        Option[ButtonDrawProc] = ButtonDrawProc.none,
+                 style:           ButtonStyle = DefaultButtonStyle): bool =
 
   let i = instantiationInfo(fullPaths=true)
   let id = getNextId(i.filename, i.line)
@@ -2360,17 +2448,20 @@ template button*(label:      string,
   autoLayoutPre()
 
   let res = button(id,
-                   g_uiState.autoLayoutState.x,
-                   autoLayoutCalcY(),
-                   g_uiState.autoLayoutState.nextItemWidth,
-                   g_uiState.autoLayoutState.nextItemHeight,
-                   label, tooltip, disabled, style)
+                   g_uiState.autoLayoutState.x, autoLayoutNextY(),
+                   autoLayoutNextItemWidth(), autoLayoutNextItemHeight(),
+                   label, tooltip, disabled, activateOnButtonDown,
+                   drawProc, style)
 
   autoLayoutPost()
   res
 
 # }}}
+
+# }}}
 # {{{ CheckBox
+
+# {{{ CheckBox style
 
 type CheckBoxStyle* = ref object
   cornerRadius*:        float
@@ -2420,15 +2511,18 @@ proc getDefaultCheckBoxStyle*(): CheckBoxStyle =
 proc setDefaultCheckBoxStyle*(style: CheckBoxStyle) =
   DefaultCheckBoxStyle = style.deepCopy
 
+# }}}
+# {{{ CheckBoxDrawProc*
 type
   CheckBoxDrawProc* = proc (vg: NVGContext,
-                            x, y, w: float, checked: bool, state: WidgetState,
-                            style: CheckBoxStyle)
+                            id: ItemId, x, y, w: float, checked: bool,
+                            state: WidgetState, style: CheckBoxStyle)
+
 
 let DefaultCheckBoxDrawProc: CheckBoxDrawProc =
   proc (vg: NVGContext,
-        x, y, w: float, checked: bool, state: WidgetState,
-        style: CheckBoxStyle) =
+        id: ItemId, x, y, w: float, checked: bool,
+        state: WidgetState, style: CheckBoxStyle) =
 
     alias(s, style)
 
@@ -2437,7 +2531,7 @@ let DefaultCheckBoxDrawProc: CheckBoxDrawProc =
         (s.fillColor, s.strokeColor)
       of wsHover:
         (s.fillColorHover, s.strokeColorHover)
-      of wsDown:
+      of wsDown, wsActiveDown:
         (s.fillColorDown, s.strokeColorDown)
       of wsActive, wsActiveHover:
         (s.fillColorActive, s.strokeColorActive)
@@ -2460,13 +2554,14 @@ let DefaultCheckBoxDrawProc: CheckBoxDrawProc =
     if icon != "":
       vg.drawLabel(x, y, w, w, icon, state, s.icon)
 
+# }}}
 # {{{ checkBox()
 proc checkBox(id:          ItemId,
               x, y, w:     float,
               checked_out: var bool,
               tooltip:     string,
               disabled:    bool = false,
-              drawProc:    CheckBoxDrawProc = DefaultCheckBoxDrawProc,
+              drawProc:    Option[CheckBoxDrawProc] = CheckBoxDrawProc.none,
               style:       CheckBoxStyle = DefaultCheckBoxStyle) =
 
   var checked = checked_out
@@ -2495,19 +2590,24 @@ proc checkBox(id:          ItemId,
                 else:
                   if checked: wsActive else: wsNormal
 
-    drawProc(vg, x, y, w, checked, state, style)
+
+    let drawProc = if drawProc.isSome: drawProc.get
+                   else: DefaultCheckBoxDrawProc
+
+    drawProc(vg, id, x, y, w, checked, state, style)
 
 
   if isHot(id):
     handleTooltip(id, tooltip)
 
 # }}}
+# {{{ CheckBox templates
 
 template checkBox*(x, y, w:  float,
                    active:   var bool,
                    tooltip:  string = "",
                    disabled: bool = false,
-                   drawProc: CheckBoxDrawProc = DefaultCheckBoxDrawProc,
+                   drawProc: Option[CheckBoxDrawProc] = CheckBoxDrawProc.none,
                    style:    CheckBoxStyle = DefaultCheckBoxStyle) =
 
   let i = instantiationInfo(fullPaths=true)
@@ -2519,7 +2619,7 @@ template checkBox*(x, y, w:  float,
 template checkBox*(active:   var bool,
                    tooltip:  string = "",
                    disabled: bool = false,
-                   drawProc: CheckBoxDrawProc = DefaultCheckBoxDrawProc,
+                   drawProc: Option[CheckBoxDrawProc] = CheckBoxDrawProc.none,
                    style:    CheckBoxStyle = DefaultCheckBoxStyle) =
 
   let i = instantiationInfo(fullPaths=true)
@@ -2528,16 +2628,28 @@ template checkBox*(active:   var bool,
   autoLayoutPre()
 
   checkbox(id,
-           g_uiState.autoLayoutState.x,
-           autoLayoutCalcY(),
-           g_uiState.autoLayoutState.nextItemHeight,
-           active, tooltip, disabled, drawProc,
-           style)
+           g_uiState.autoLayoutState.x, autoLayoutNextY(),
+           autoLayoutNextItemHeight(),
+           active, tooltip, disabled, drawProc, style)
 
   autoLayoutPost()
 
 # }}}
+
+# }}}
 # {{{ RadioButtons
+
+type
+  RadioButtonsLayoutKind* = enum
+    rblHoriz, rblGridHoriz, rblGridVert
+
+  RadioButtonsLayout* = object
+    case kind*: RadioButtonsLayoutKind
+    of rblHoriz: discard
+    of rblGridHoriz: itemsPerRow*:    Natural
+    of rblGridVert:  itemsPerColumn*: Natural
+
+# {{{ RadioButtons style
 
 type RadioButtonsStyle* = ref object
   buttonPadHoriz*:               float
@@ -2590,27 +2702,22 @@ proc getDefaultRadioButtonsStyle*(): RadioButtonsStyle =
 proc setDefaultRadioButtonsStyle*(style: RadioButtonsStyle) =
   DefaultRadioButtonsStyle = style.deepCopy
 
+# }}}
+# {{{ RadioButtonsDrawProc*
 type
-  RadioButtonsLayoutKind* = enum
-    rblHoriz, rblGridHoriz, rblGridVert
-
-  RadioButtonsLayout* = object
-    case kind*: RadioButtonsLayoutKind
-    of rblHoriz: discard
-    of rblGridHoriz: itemsPerRow*:    Natural
-    of rblGridVert:  itemsPerColumn*: Natural
-
-  RadioButtonsDrawProc* = proc (vg: NVGContext, buttonIdx: Natural,
-                                label: string,
-                                state: WidgetState, first, last: bool,
-                                x, y, w, h: float,
-                                style: RadioButtonsStyle)
+  RadioButtonsDrawProc* = proc (
+    vg: NVGContext,
+    id: ItemId, x, y, w, h: float,
+    buttonIdx, numButtons: Natural, label: string,
+    state: WidgetState, style: RadioButtonsStyle
+  )
 
 # {{{ DefaultRadioButtonDrawProc
 let DefaultRadioButtonDrawProc: RadioButtonsDrawProc =
-  proc (vg: NVGContext, buttonIdx: Natural, label: string,
-        state: WidgetState, first, last: bool,
-        x, y, w, h: float, style: RadioButtonsStyle) =
+  proc (vg: NVGContext,
+        id: ItemId, x, y, w, h: float,
+        buttonIdx, numButtons: Natural, label: string,
+        state: WidgetState, style: RadioButtonsStyle) =
 
     alias(s, style)
 
@@ -2620,7 +2727,7 @@ let DefaultRadioButtonDrawProc: RadioButtonsDrawProc =
         (s.buttonFillColor, s.buttonStrokeColor)
       of wsHover:
         (s.buttonFillColorHover, s.buttonStrokeColorHover)
-      of wsDown:
+      of wsDown, wsActiveDown:
         (s.buttonFillColorDown, s.buttonStrokeColorDown)
       of wsActive:
         (s.buttonFillColorActive, s.buttonStrokeColorActive)
@@ -2636,6 +2743,10 @@ let DefaultRadioButtonDrawProc: RadioButtonsDrawProc =
     vg.strokeWidth(sw)
     vg.beginPath()
 
+    let
+      first = (buttonIdx == 0)
+      last  = (buttonIdx == numButtons-1)
+
     let cr = s.buttonCornerRadius
     if   first: vg.roundedRect(x, y, w, h, cr, 0, 0, cr)
     elif last:  vg.roundedRect(x, y, w, h, 0, cr, cr, 0)
@@ -2645,13 +2756,13 @@ let DefaultRadioButtonDrawProc: RadioButtonsDrawProc =
     vg.stroke()
 
     vg.drawLabel(x, y, w, h, label, state, s.label)
-
 # }}}
 # {{{ DefaultRadioButtonGridDrawProc
 let DefaultRadioButtonGridDrawProc: RadioButtonsDrawProc =
-  proc (vg: NVGContext, buttonIdx: Natural, label: string,
-        state: WidgetState, first, last: bool,
-        x, y, w, h: float, style: RadioButtonsStyle) =
+  proc (vg: NVGContext,
+        id: ItemId, x, y, w, h: float,
+        buttonIdx, numButtons: Natural, label: string,
+        state: WidgetState, style: RadioButtonsStyle) =
 
     alias(s, style)
 
@@ -2663,7 +2774,7 @@ let DefaultRadioButtonGridDrawProc: RadioButtonsDrawProc =
         (s.buttonFillColor, s.buttonStrokeColor)
       of wsHover:
         (s.buttonFillColorHover, s.buttonStrokeColorHover)
-      of wsDown:
+      of wsDown, wsActiveDown:
         (s.buttonFillColorDown, s.buttonStrokeColorDown)
       of wsActive:
         (s.buttonFillColorActive, s.buttonStrokeColorActive)
@@ -2682,6 +2793,10 @@ let DefaultRadioButtonGridDrawProc: RadioButtonsDrawProc =
     let bw = w - s.buttonPadHoriz
     let bh = h - s.buttonPadVert
 
+    let
+      first = (buttonIdx == 0)
+      last  = (buttonIdx == numButtons-1)
+
     let cr = s.buttonCornerRadius
     if   first: vg.roundedRect(x, y, bw, bh, cr, 0, 0, cr)
     elif last:  vg.roundedRect(x, y, bw, bh, 0, cr, cr, 0)
@@ -2693,21 +2808,29 @@ let DefaultRadioButtonGridDrawProc: RadioButtonsDrawProc =
     vg.drawLabel(x, y, bw, bh, label, state, s.label)
 
 # }}}
-# {{{ radioButtons()
 
+# }}}
+# {{{ radioButtons()
 proc radioButtons[T](
-  id:               ItemId,
-  x, y, w, h:       float,
-  labels:           seq[string],
-  activeButton_out: var T,
-  tooltips:         seq[string] = @[],
-  layout:           RadioButtonsLayout = RadioButtonsLayout(kind: rblHoriz),
-  drawProc:         Option[RadioButtonsDrawProc] = RadioButtonsDrawProc.none,
-  style:            RadioButtonsStyle = DefaultRadioButtonsStyle
+  id:                ItemId,
+  x, y, w, h:        float,
+  labels:            seq[string],
+  activeButtons_out: var seq[T],
+  tooltips:          seq[string] = @[],
+  multiselect:       bool = false,
+  layout:            RadioButtonsLayout = RadioButtonsLayout(kind: rblHoriz),
+  drawProc:          Option[RadioButtonsDrawProc] = RadioButtonsDrawProc.none,
+  style:             RadioButtonsStyle = DefaultRadioButtonsStyle
 ) =
 
-  assert activeButton_out.ord >= 0 and activeButton_out.ord <= labels.high
-  var activeButton = activeButton_out.clamp(T(0), T(labels.high))
+  if multiselect: assert activeButtons_out.len <= labels.len
+  else:           assert activeButtons_out.len == 1
+
+  for i in 0..activeButtons_out.high:
+    assert activeButtons_out[i].ord >= 0 and
+           activeButtons_out[i].ord <= labels.high
+
+    activeButtons_out[i] = activeButtons_out[i].clamp(T.low, T.high)
 
   alias(ui, g_uiState)
   alias(rs, ui.radioButtonState)
@@ -2742,7 +2865,8 @@ proc radioButtons[T](
     let button = calcHorizButtonIdx(x = ui.mx-x, w, numButtons)
     setHotButton(button)
 
-    if isHit(x, y, w, h) and hotButton > -1: setHotAndActive()
+    if isHit(x, y, w, h) and hotButton > -1:
+      setHotAndActive()
 
   of rblGridHoriz:
     let
@@ -2756,10 +2880,8 @@ proc radioButtons[T](
     if row >= 0 and col >= 0 and button < numButtons:
       setHotButton(button)
 
-    # TODO why twice?
-    setHotButton(button)
-
-    if isHit(x, y, bbWidth, bbHeight) and hotButton > -1: setHotAndActive()
+    if isHit(x, y, bbWidth, bbHeight) and hotButton > -1:
+      setHotAndActive()
 
   of rblGridVert:
     let
@@ -2773,14 +2895,24 @@ proc radioButtons[T](
     if row >= 0 and col >= 0 and button < numButtons:
       setHotButton(button)
 
-    if isHit(x, y, bbWidth, bbHeight) and hotButton > -1: setHotAndActive()
+    if isHit(x, y, bbWidth, bbHeight) and hotButton > -1:
+      setHotAndActive()
 
   # LMB released over active widget means it was clicked
   if not ui.mbLeftDown and isHot(id) and isActive(id) and
      rs.activeItem == hotButton:
-    activeButton = T(hotButton)
+    let activeButton = T(hotButton)
 
-  activeButton_out = activeButton
+    if multiselect:
+      let idx = activeButtons_out.find(activeButton)
+      if idx < 0:
+        activeButtons_out.add(activeButton)
+      else:
+        activeButtons_out.del(idx)
+    else:
+      activeButtons_out = @[activeButton]
+
+  let activeButtons = activeButtons_out
 
   # Draw radio buttons
   proc buttonDrawState(i: Natural): WidgetState =
@@ -2788,17 +2920,19 @@ proc radioButtons[T](
                 elif isHot(id) and isActive(id): wsDown
                 else: wsNormal
 
-    if activeButton.ord == i:
-      if hotButton == i and state == wsHover: wsActiveHover
+    if T(i) in activeButtons:
+      if hotButton == i:
+        if   state == wsHover: wsActiveHover
+        elif state == wsDown:  wsActiveDown
+        else:                  wsActive
       else: wsActive
 
     else:
       if hotButton == i:
         if   state == wsHover: wsHover
         elif state == wsDown:  wsDown
-        else: wsNormal
-      else:
-        wsNormal
+        else:                  wsNormal
+      else: wsNormal
 
 
   addDrawLayer(ui.currentLayer, vg):
@@ -2818,11 +2952,12 @@ proc radioButtons[T](
       for i, label in labels:
         let
           state = buttonDrawState(i)
-          first = i == 0
-          last = i == labels.len-1
+          last = (i == labels.len-1)
           w = round(x + bw) - round(x)
 
-        drawProc(vg, i, label, state, first, last, round(x), y, w, h, style)
+        drawProc(vg, id, round(x), y, w, h,
+                 buttonIdx=i, numButtons=labels.len, label,
+                 state, style)
 
         x += bw
         if not last: x += s.buttonPadHoriz
@@ -2832,8 +2967,9 @@ proc radioButtons[T](
       var itemsInRow = 0
       for i, label in labels:
         let state = buttonDrawState(i)
-        drawProc(vg, i, label, state, first=false, last=false,
-                 x, y, w, h, style)
+        drawProc(vg, id, x, y, w, h,
+                 buttonIdx=i, numButtons=labels.len, label,
+                 state, style)
 
         inc(itemsInRow)
         if itemsInRow == layout.itemsPerRow:
@@ -2848,8 +2984,9 @@ proc radioButtons[T](
       var itemsInColumn = 0
       for i, label in labels:
         let state = buttonDrawState(i)
-        drawProc(vg, i, label, state, first=false, last=false,
-                 x, y, w, h, style)
+        drawProc(vg, id, x, y, w, h,
+                 buttonIdx=i, numButtons=labels.len, label,
+                 state, style)
 
         inc(itemsInColumn)
         if itemsInColumn == layout.itemsPerColumn:
@@ -2867,31 +3004,34 @@ proc radioButtons[T](
     handleTooltip(id, tt)
 
 # }}}
+# {{{ RadioButtons templates - seq[string]
 
 template radioButtons*[T](
-  x, y, w, h:   float,
-  labels:       seq[string],
-  activeButton: var T,
-  tooltips:     seq[string] = @[],
-  layout:       RadioButtonsLayout = RadioButtonsLayout(kind: rblHoriz),
-  drawProc:     Option[RadioButtonsDrawProc] = RadioButtonsDrawProc.none,
-  style:        RadioButtonsStyle = DefaultRadioButtonsStyle
+  x, y, w, h:    float,
+  labels:        seq[string],
+  activeButtons: var seq[T],
+  tooltips:      seq[string] = @[],
+  multiselect:   bool = false,
+  layout:        RadioButtonsLayout = RadioButtonsLayout(kind: rblHoriz),
+  drawProc:      Option[RadioButtonsDrawProc] = RadioButtonsDrawProc.none,
+  style:         RadioButtonsStyle = DefaultRadioButtonsStyle
 ) =
 
   let i = instantiationInfo(fullPaths=true)
   let id = getNextId(i.filename, i.line)
 
-  radioButtons(id, x, y, w, h, labels, activeButton, tooltips,
+  radioButtons(id, x, y, w, h, labels, activeButtons, tooltips, multiselect,
                layout, drawProc, style)
 
 
 template radioButtons*[T](
-  labels:       seq[string],
-  activeButton: var T,
-  tooltips:     seq[string] = @[],
-  layout:       RadioButtonsLayout = RadioButtonsLayout(kind: rblHoriz),
-  drawProc:     Option[RadioButtonsDrawProc] = RadioButtonsDrawProc.none,
-  style:        RadioButtonsStyle = DefaultRadioButtonsStyle
+  labels:        seq[string],
+  activeButtons: var seq[T],
+  tooltips:      seq[string] = @[],
+  multiselect:   bool = false,
+  layout:        RadioButtonsLayout = RadioButtonsLayout(kind: rblHoriz),
+  drawProc:      Option[RadioButtonsDrawProc] = RadioButtonsDrawProc.none,
+  style:         RadioButtonsStyle = DefaultRadioButtonsStyle
 ) =
 
   let i = instantiationInfo(fullPaths=true)
@@ -2900,17 +3040,65 @@ template radioButtons*[T](
   autoLayoutPre()
 
   radioButtons(id,
-               g_uiState.autoLayoutState.x,
-               autoLayoutCalcY(),
-               g_uiState.autoLayoutState.nextItemWidth,
-               g_uiState.autoLayoutState.nextItemHeight,
-               labels, activeButton, tooltips,
-               layout, drawProc, style)
+               g_uiState.autoLayoutState.x, autoLayoutNextY(),
+               autoLayoutNextItemWidth(), autoLayoutNextItemHeight(),
+               labels, activeButtons, tooltips, multiselect, layout,
+               drawProc, style)
 
   autoLayoutPost()
 
 # }}}
+# {{{ RadioButtons templates - enum
+
+template radioButtons*[E: enum](
+  x, y, w, h:    float,
+  activeButtons: seq[E],
+  tooltips:      seq[string] = @[],
+  multiselect:   bool = false,
+  layout:        RadioButtonsLayout = RadioButtonsLayout(kind: rblHoriz),
+  drawProc:      Option[RadioButtonsDrawProc] = RadioButtonsDrawProc.none,
+  style:         RadioButtonsStyle = DefaultRadioButtonsStyle
+) =
+
+  let
+    i = instantiationInfo(fullPaths=true)
+    id = getNextId(i.filename, i.line)
+    labels = enumToSeq[E]()
+
+  radioButtons(id, x, y, w, h, labels, activeButtons, tooltips, multiselect,
+               layout, drawProc, style)
+
+
+template radioButtons*[E: enum](
+  activeButtons: seq[E],
+  tooltips:      seq[string] = @[],
+  multiselect:   bool = false,
+  layout:        RadioButtonsLayout = RadioButtonsLayout(kind: rblHoriz),
+  drawProc:      Option[RadioButtonsDrawProc] = RadioButtonsDrawProc.none,
+  style:         RadioButtonsStyle = DefaultRadioButtonsStyle
+) =
+
+  let
+    i = instantiationInfo(fullPaths=true)
+    id = getNextId(i.filename, i.line)
+    labels = enumToSeq[E]()
+
+  autoLayoutPre()
+
+  radioButtons(id,
+               g_uiState.autoLayoutState.x, autoLayoutNextY(),
+               autoLayoutNextItemWidth(), autoLayoutNextItemHeight(),
+               labels, activeButtons, tooltips, multiselect, layout,
+               drawProc, style)
+
+  autoLayoutPost()
+
+# }}}
+
+# }}}
 # {{{ ScrollBar
+
+# {{{ ScrollBar style
 
 type ScrollBarStyle* = ref object
   trackCornerRadius*:      float
@@ -2967,7 +3155,8 @@ proc getDefaultScrollBarStyle*(): ScrollBarStyle =
 proc setDefaultScrollBarStyle*(style: ScrollBarStyle) =
   DefaultScrollBarStyle = style.deepCopy
 
-# {{{ horizScrollBar
+# }}}
+# {{{ horizScrollBar()
 
 # Must be kept in sync with vertScrollBar!
 proc horizScrollBar(id:         ItemId,
@@ -3143,7 +3332,7 @@ proc horizScrollBar(id:         ItemId,
         of wsHover:
           (s.trackFillColorHover, s.trackStrokeColorHover,
            s.thumbFillColorHover, s.thumbStrokeColorHover)
-        of wsDown:
+        of wsDown, wsActiveDown:
           (s.trackFillColorDown, s.trackStrokeColorDown,
            s.thumbFillColorDown, s.thumbStrokeColorDown)
         else:
@@ -3187,7 +3376,7 @@ proc horizScrollBar(id:         ItemId,
     handleTooltip(id, tooltip)
 
 # }}}
-# {{{ vertScrollBar
+# {{{ vertScrollBar()
 
 # Must be kept in sync with horizScrollBar!
 proc vertScrollBar(id:         ItemId,
@@ -3371,7 +3560,7 @@ proc vertScrollBar(id:         ItemId,
         of wsHover:
           (s.trackFillColorHover, s.trackStrokeColorHover,
            s.thumbFillColorHover, s.thumbStrokeColorHover)
-        of wsDown:
+        of wsDown, wsActiveDown:
           (s.trackFillColorDown, s.trackStrokeColorDown,
            s.thumbFillColorDown, s.thumbStrokeColorDown)
         else:
@@ -3407,7 +3596,7 @@ proc vertScrollBar(id:         ItemId,
     handleTooltip(id, tooltip)
 
 # }}}
-# {{{ scrollBarPost
+# {{{ scrollBarPost()
 
 proc scrollBarPost() =
   alias(ui, g_uiState)
@@ -3430,6 +3619,7 @@ proc scrollBarPost() =
     ui.widgetMouseDrag = false
 
 # }}}
+# {{{ ScrollBar templates
 
 template horizScrollBar*(x, y, w, h: float,
                          startVal:  float,
@@ -3463,7 +3653,11 @@ template vertScrollBar*(x, y, w, h: float,
                 clickStep, style)
 
 # }}}
+
+# }}}
 # {{{ DropDown
+
+# {{{ DropDown style
 
 type DropDownStyle* = ref object
   buttonCornerRadius*:        float
@@ -3552,8 +3746,8 @@ proc getDefaultDropDownStyle*(): DropDownStyle =
 proc setDefaultDropDownStyle*(style: DropDownStyle) =
   DefaultDropDownStyle = style.deepCopy
 
+# }}}
 # {{{ dropDown()
-
 proc dropDown[T](id:               ItemId,
                  x, y, w, h:       float,
                  items:            seq[string],
@@ -3563,7 +3757,7 @@ proc dropDown[T](id:               ItemId,
                  style:            DropDownStyle) =
 
   assert selectedItem_out.ord <= items.high
-  var selectedItem = selectedItem_out.clamp(0, items.high)
+  var selectedItem = selectedItem_out.clamp(T.low, T.high)
 
   alias(ui, g_uiState)
   alias(s, style)
@@ -3707,14 +3901,14 @@ proc dropDown[T](id:               ItemId,
     if ds.state == dsOpenLMBPressed:
       if not ui.mbLeftDown:
         if hoverItem >= 0:
-          selectedItem = hoverItem
+          selectedItem = T(hoverItem)
           closeDropDown()
         else:
           ds.state = dsOpen
     else:
       if ui.mbLeftDown:
         if hoverItem >= 0:
-          selectedItem = hoverItem
+          selectedItem = T(hoverItem)
           closeDropDown()
         elif insideButton:
           closeDropDown()
@@ -3736,7 +3930,7 @@ proc dropDown[T](id:               ItemId,
         (s.buttonFillColor, s.buttonStrokeColor)
       of wsHover:
         (s.buttonFillColorHover, s.buttonStrokeColorHover)
-      of wsDown:
+      of wsDown, wsActiveDown:
         (s.buttonFillColorDown, s.buttonStrokeColorDown)
       of wsDisabled:
         (s.buttonFillColorDisabled, s.buttonStrokeColorDisabled)
@@ -3750,7 +3944,7 @@ proc dropDown[T](id:               ItemId,
     vg.fill()
     vg.stroke()
 
-    let itemText = items[selectedItem]
+    let itemText = items[ord(selectedItem)]
 
     vg.drawLabel(x, y, w, h, itemText, state, s.label)
 
@@ -3832,7 +4026,7 @@ proc dropDown[T](id:               ItemId,
   ui.itemState[id] = ds
 
 # }}}
-# {{{ dropDown templates - seq[string]
+# {{{ DropDown templates - seq[string]
 template dropDown*(
   x, y, w, h:   float,
   items:        seq[string],
@@ -3862,17 +4056,15 @@ template dropDown*(
   autoLayoutPre()
 
   dropDown(id,
-           g_uiState.autoLayoutState.x,
-           autoLayoutCalcY(),
-           g_uiState.autoLayoutState.nextItemWidth,
-           g_uiState.autoLayoutState.nextItemHeight,
-           items,
-           selectedItem, tooltip, disabled, style)
+           g_uiState.autoLayoutState.x, autoLayoutNextY(),
+           autoLayoutNextItemWidth(), autoLayoutNextItemHeight(),
+           items, selectedItem, tooltip, disabled, style)
 
   autoLayoutPost()
 
 # }}}
-# {{{ dropDown templates - enum
+# {{{ DropDown templates - enum
+
 template dropDown*[E: enum](
   x, y, w, h:   float,
   selectedItem: E,
@@ -3881,18 +4073,12 @@ template dropDown*[E: enum](
   style:        DropDownStyle = DefaultDropDownStyle
 ) =
 
-  let i = instantiationInfo(fullPaths=true)
-  let id = getNextId(i.filename, i.line)
+  let
+    i = instantiationInfo(fullPaths=true)
+    id = getNextId(i.filename, i.line)
+    items = enumToSeq[E]()
 
-  # TODO common. extract
-  var itemsSeq = newSeq[string]()
-  for e in E.low..E.high:
-    itemsSeq.add($e)
-
-  var selItem = ord(selectedItem)
-
-  dropDown(id, x, y, w, h, itemsSeq, selItem, tooltip, disabled, style)
-  selectedItem = E(selItem)
+  dropDown(id, x, y, w, h, items, selectedItem, tooltip, disabled, style)
 
 
 template dropDown*[E: enum](
@@ -3902,25 +4088,19 @@ template dropDown*[E: enum](
   style:        DropDownStyle = DefaultDropDownStyle
 ) =
 
-  let i = instantiationInfo(fullPaths=true)
-  let id = getNextId(i.filename, i.line)
-
-  # TODO common. extract
-  var itemsSeq = newSeq[string]()
-  for e in E.low..E.high:
-    itemsSeq.add($e)
+  let
+    i = instantiationInfo(fullPaths=true)
+    id = getNextId(i.filename, i.line)
+    items = enumToSeq[E]()
 
   var selItem = ord(selectedItem)
 
   autoLayoutPre()
 
   dropDown(id,
-           g_uiState.autoLayoutState.x,
-           autoLayoutCalcY(),
-           g_uiState.autoLayoutState.nextItemWidth,
-           g_uiState.autoLayoutState.nextItemHeight,
-           itemsSeq,
-           selItem, tooltip, disabled, style)
+           g_uiState.autoLayoutState.x, autoLayoutNextY(),
+           autoLayoutNextItemWidth(), autoLayoutNextItemHeight(),
+           items, selItem, tooltip, disabled, style)
 
   selectedItem = E(selItem)
 
@@ -4188,7 +4368,7 @@ proc handleCommonTextEditingShortcuts(
   result = if eventHandled: res.some else: TextEditResult.none
 
 # }}}
-
+# {{{ handleTabActivation()
 proc handleTabActivation(id: ItemId): bool =
   alias(tab, g_uiState.tabActivationState)
 
@@ -4201,7 +4381,24 @@ proc handleTabActivation(id: ItemId): bool =
     result = true
 
 # }}}
+
+# }}}
 # {{{ TextField
+
+type
+  TextFieldConstraintKind* = enum
+    tckString, tckInteger  # TODO tckFloat
+
+  TextFieldConstraint* = object
+    case kind*: TextFieldConstraintKind
+    of tckString:
+      minLen*: Natural
+      maxLen*: Option[Natural]
+
+    of tckInteger:
+      minInt*, maxInt*: int
+
+# {{{ TextField style
 
 type TextFieldStyle* = ref object
   bgCornerRadius*:        float
@@ -4262,19 +4459,7 @@ proc getDefaultTextFieldStyle*(): TextFieldStyle =
 proc setDefaultTextFieldStyle*(style: TextFieldStyle) =
   DefaultTextFieldStyle = style.deepCopy
 
-type
-  TextFieldConstraintKind* = enum
-    tckString, tckInteger  # TODO tckFloat
-
-  TextFieldConstraint* = object
-    case kind*: TextFieldConstraintKind
-    of tckString:
-      minLen*: Natural
-      maxLen*: Option[Natural]
-
-    of tckInteger:
-      minInt*, maxInt*: int
-
+# }}}
 # {{{ textFieldEnterEditMode()
 proc textFieldEnterEditMode(id: ItemId, text: string, startX: float) =
   alias(ui, g_uiState)
@@ -4691,6 +4876,7 @@ proc textField(
       of wsHover:    (s.bgFillColorHover,    s.bgStrokeColorHover)
       of wsActive,
          wsActiveHover,
+         wsActiveDown,
          wsDown:     (s.bgFillColorActive,   s.bgStrokeColorActive)
       of wsDisabled: (s.bgFillColorDisabled, s.bgStrokeColorDisabled)
 
@@ -4752,6 +4938,7 @@ proc textField(
       of wsHover:    s.textColorHover
       of wsActive,
          wsActiveHover,
+         wsActiveDown,
          wsDown:     s.textColorActive
       of wsDisabled: s.textColorDisabled
 
@@ -4771,6 +4958,7 @@ proc textField(
   tab.prevItem = id
 
 # }}}
+# {{{ TextField templates
 
 template rawTextField*(
   x, y, w, h: float,
@@ -4821,18 +5009,23 @@ template textField*(
   autoLayoutPre()
 
   textField(id,
-            g_uiState.autoLayoutState.x,
-            autoLayoutCalcY(),
-            g_uiState.autoLayoutState.nextItemWidth,
-            g_uiState.autoLayoutState.nextItemHeight,
-            text,
-            tooltip, disabled, activate, drawWidget=true, constraint, style)
+            g_uiState.autoLayoutState.x, autoLayoutNextY(),
+            autoLayoutNextItemWidth(), autoLayoutNextItemHeight(),
+            text, tooltip, disabled, activate, drawWidget=true, constraint,
+            style)
 
   autoLayoutPost()
 
 # }}}
+
+# }}}
 # {{{ TextArea
 
+type
+  TextAreaConstraint* = object
+    maxLen*: Option[Natural]
+
+# {{{ TextArea style
 type TextAreaStyle* = object
   bgCornerRadius*:        float
   bgStrokeWidth*:         float
@@ -4919,10 +5112,7 @@ proc getDefaultTextAreaStyle*(): TextAreaStyle =
 proc setDefaultTextAreaStyle*(style: TextAreaStyle) =
   DefaultTextAreaStyle = style.deepCopy
 
-type
-  TextAreaConstraint* = object
-    maxLen*: Option[Natural]
-
+# }}}
 # {{{ textAreaExitEditMode*()
 proc textAreaExitEditMode*(id: ItemId, ta: var TextAreaStateVars) =
   alias(ui, g_uiState)
@@ -5416,6 +5606,7 @@ proc textArea(
       of wsHover:    (s.bgFillColorHover,    s.bgStrokeColorHover)
       of wsActive,
          wsActiveHover,
+         wsActiveDown,
          wsDown:     (s.bgFillColorActive,   s.bgStrokeColorActive)
       of wsDisabled: (s.bgFillColorDisabled, s.bgStrokeColorDisabled)
 
@@ -5490,6 +5681,7 @@ proc textArea(
         of wsHover:    s.textColorHover
         of wsActive,
            wsActiveHover,
+           wsActiveDown,
            wsDown:     s.textColorActive
         of wsDisabled: s.textColorDisabled
 
@@ -5560,6 +5752,7 @@ proc textArea(
   ui.itemState[id] = ta
 
 # }}}
+# {{{ TextArea templates
 
 template textArea*(
   x, y, w, h: float,
@@ -5593,18 +5786,20 @@ template textArea*(
   autoLayoutPre()
 
   textArea(id,
-            g_uiState.autoLayoutState.x,
-            autoLayoutCalcY(),
-            g_uiState.autoLayoutState.nextItemWidth,
-            g_uiState.autoLayoutState.nextItemHeight,
-            text,
-            tooltip, disabled, activate, drawWidget=true, constraint, style)
+            g_uiState.autoLayoutState.x, autoLayoutNextY(),
+            autoLayoutNextItemWidth(), autoLayoutNextItemHeight(),
+            text, tooltip, disabled, activate, drawWidget=true, constraint,
+            style)
 
   autoLayoutPost()
 
 # }}}
 
+# }}}
+
 # {{{ Slider
+
+# {{{ Slider style
 
 type SliderStyle* = ref object
   trackCornerRadius*:     float
@@ -5664,7 +5859,8 @@ proc getDefaultSliderStyle*(): SliderStyle =
 proc setDefaultSliderStyle*(style: SliderStyle) =
   DefaultSliderStyle = style.deepCopy
 
-# {{{ horizSlider
+# }}}
+# {{{ horizSlider()
 proc horizSlider(id:         ItemId,
                  x, y, w, h: float,
                  startVal:   float,
@@ -5775,7 +5971,7 @@ proc horizSlider(id:         ItemId,
       case state
       of wsHover:
         (s.trackFillColorHover, s.trackStrokeColorHover, s.sliderColorHover)
-      of wsDown:
+      of wsDown, wsActiveDown:
         (s.trackFillColorDown, s.trackStrokeColorDown, s.sliderColorDown)
       else:
         (s.trackFillColor, s.trackStrokeColor, s.sliderColor)
@@ -5868,6 +6064,8 @@ proc horizSlider(id:         ItemId,
   if isHot(id):
     handleTooltip(id, tooltip)
 
+# }}}
+# {{{ horizSlider templates
 
 template horizSlider*(x, y, w, h: float,
                       startVal:   float = 0.0,
@@ -5899,18 +6097,14 @@ template horizSlider*(startVal:   float = 0.0,
   autoLayoutPre()
 
   horizSlider(id,
-              g_uiState.autoLayoutState.x,
-              autoLayoutCalcY(),
-              g_uiState.autoLayoutState.nextItemWidth,
-              g_uiState.autoLayoutState.nextItemHeight,
-              startVal, endVal, value, tooltip, label,
-              style, grouping)
+              g_uiState.autoLayoutState.x, autoLayoutNextY(),
+              autoLayoutNextItemWidth(), autoLayoutNextItemHeight(),
+              startVal, endVal, value, tooltip, label, style, grouping)
 
   autoLayoutPost()
 
 # }}}
-# {{{ vertSlider
-
+# {{{ vertSlider()
 proc vertSlider(id:         ItemId,
                 x, y, w, h: float,
                 startVal:   float,
@@ -6003,7 +6197,7 @@ proc vertSlider(id:         ItemId,
       case state
       of wsHover:
         (s.trackFillColorHover, s.trackStrokeColorHover, s.sliderColorHover)
-      of wsDown:
+      of wsDown, wsActiveDown:
         (s.trackFillColorDown, s.trackStrokeColorDown, s.sliderColorDown)
       else:
         (s.trackFillColor, s.trackStrokeColor, s.sliderColor)
@@ -6040,6 +6234,8 @@ proc vertSlider(id:         ItemId,
   if isHot(id):
     handleTooltip(id, tooltip)
 
+# }}}
+# {{{ vertSlider templates
 
 template vertSlider*(x, y, w, h: float,
                      startVal:   float,
@@ -6055,7 +6251,6 @@ template vertSlider*(x, y, w, h: float,
 
 # }}}
 # {{{ sliderPost
-
 proc sliderPost() =
   alias(ui, g_uiState)
   alias(ss, ui.sliderState)
@@ -6078,6 +6273,11 @@ proc sliderPost() =
 # }}}
 # {{{ Color
 
+# TODO mac shortcuts
+let g_copyColorShortcut  = mkKeyShortcut(keyC, {mkCtrl})
+let g_pasteColorShortcut = mkKeyShortcut(keyV, {mkCtrl})
+
+# {{{ Color style
 var ColorPickerRadioButtonStyle = RadioButtonsStyle(
   buttonPadHoriz             : 2.0,
   buttonPadVert              : 3.0,
@@ -6166,10 +6366,7 @@ var ColorPickerTextFieldStyle = TextFieldStyle(
   selectionColor      : rgba(200, 130, 0, 100)
 )
 
-# TODO mac shortcuts
-let g_copyColorShortcut  = mkKeyShortcut(keyC, {mkCtrl})
-let g_pasteColorShortcut = mkKeyShortcut(keyV, {mkCtrl})
-
+# }}}
 # {{{ createCheckeredImage()
 var g_checkeredImage: Image
 var g_checkeredImageSize: float
@@ -6522,7 +6719,7 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
 
       y += 30
 
-      case cs.colorMode
+      case cs.colorMode[0]
       of ccmRGB:
         var
           r = color.r.float * 255
@@ -6557,7 +6754,7 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
 
 
       of ccmHSV:
-        if cs.opened or cs.lastColorMode != ccmHSV:
+        if cs.opened or cs.lastColorMode[0] == ccmHSV:
           (cs.h, cs.s, cs.v) = color.toHSV
 
         var
@@ -6590,7 +6787,7 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
 
 
       of ccmHex:
-        if cs.opened or cs.lastColorMode != ccmHex:
+        if cs.opened or cs.lastColorMode[0] == ccmHex:
           cs.hexString = color.toHex
 
         var a = color.a.float * 255
@@ -6622,6 +6819,7 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
       endPopup()
 
 # }}}
+# {{{ Color templates
 
 template color*(x, y, w, h: float, color: var Color) =
   let i = instantiationInfo(fullPaths=true)
@@ -6636,22 +6834,20 @@ template color*(col: var Color) =
 
   autoLayoutPre()
 
-  color(
-    id,
-    g_uiState.autoLayoutState.x,
-    autoLayoutCalcY(),
-    g_uiState.autoLayoutState.nextItemWidth,
-    g_uiState.autoLayoutState.nextItemHeight,
-    col
-  )
+  color(id,
+        g_uiState.autoLayoutState.x, autoLayoutNextY(),
+        autoLayoutNextItemWidth(), autoLayoutNextItemHeight(),
+        col)
 
   autoLayoutPost()
 
 # }}}
 
+# }}}
+
 # {{{ View
 
-# {{{ beginView()
+# {{{ beginView*()
 proc beginView*(id: ItemId, x, y, w, h: float) =
   alias(ui, g_uiState)
 
@@ -6751,7 +6947,6 @@ proc setDefaultSubSectionHeaderStyle*(style: SectionHeaderStyle) =
   DefaultSubSectionHeaderStyle = style.deepCopy
 
 # }}}
-
 # {{{ sectionHeader()
 proc sectionHeader(id:           ItemId,
                    x, y, w:      float,
@@ -6834,6 +7029,7 @@ proc sectionHeader(id:           ItemId,
   result = expanded_out
 
 # }}}
+# {{{ sectionHeader templates
 
 template sectionHeader*(
   label:    string,
@@ -6845,6 +7041,8 @@ template sectionHeader*(
   let i = instantiationInfo(fullPaths=true)
   let id = getNextId(i.filename, i.line, label)
 
+  nextRowHeight(style.height)
+
   autoLayoutPre(section=true)
 
   let result = sectionHeader(
@@ -6855,7 +7053,7 @@ template sectionHeader*(
     tooltip, style
   )
 
-  autoLayoutPost(rowHeight=style.height.some, section=true)
+  autoLayoutPost(section=true)
   result
 
 
@@ -6869,6 +7067,8 @@ template subSectionHeader*(
   let i = instantiationInfo(fullPaths=true)
   let id = getNextId(i.filename, i.line, label)
 
+  nextRowHeight(style.height)
+
   autoLayoutPre(section=true)
 
   let result = sectionHeader(
@@ -6879,11 +7079,15 @@ template subSectionHeader*(
     tooltip, style
   )
 
-  autoLayoutPost(rowHeight=style.height.some, section=true)
+  autoLayoutPost(section=true)
   result
 
 # }}}
+
+# }}}
 # {{{ ScrollView
+
+# {{{ ScrollView style
 
 type ScrollViewStyle* = ref object
   vertScrollBarWidth*:     float
@@ -6917,6 +7121,7 @@ proc getDefaultScrollViewStyle*(): ScrollViewStyle =
 proc setDefaultScrollViewStyle*(style: ScrollViewStyle) =
   DefaultScrollViewStyle = style.deepCopy
 
+# }}}
 
 type ScrollViewState = ref object of RootObj
   x, y, w, h: float
@@ -7042,6 +7247,7 @@ proc endScrollView*(height: float = -1.0) =
 
 # {{{ Dialog
 
+# {{{ Dialog style
 type DialogStyle* = ref object
   cornerRadius*:       float
   backgroundColor*:    Color
@@ -7083,7 +7289,8 @@ proc getDefaultDialogStyle*(): DialogStyle =
 proc setDefaultDialogStyle*(style: DialogStyle) =
   DefaultDialogStyle = style.deepCopy
 
-# {{{ beginDialog()
+# }}}
+# {{{ beginDialog*()
 proc beginDialog*(w, h: float, title: string,
                   x: Option[float] = float.none,
                   y: Option[float] = float.none,
@@ -7154,7 +7361,7 @@ proc beginDialog*(w, h: float, title: string,
   )
 
 # }}}
-# {{{ endDialog()
+# {{{ endDialog*()
 proc endDialog*() =
   alias(ui, g_uiState)
   alias(ds, ui.dialogState)
@@ -7166,7 +7373,7 @@ proc endDialog*() =
     ui.focusCaptured = true
 
 # }}}
-# {{{ closeDialog()
+# {{{ closeDialog*()
 proc closeDialog*() =
   alias(ui, g_uiState)
 

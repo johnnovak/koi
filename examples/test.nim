@@ -16,11 +16,16 @@ var vg: NVGContext
 ### UI DATA ################################################
 
 type Fruits = enum
-  Orange    = (0, "Orange"),
-  Banana    = (1, "Banana"),
-  Blueberry = (2, "Blueberry"),
-  Apricot   = (3, "Apricot"),
-  Apple     = (4, "Apple")
+  fOrange    = "Orange"
+  fBanana    = "Banana"
+  fBlueberry = "Blueberry"
+  fApricot   = "Apricot"
+  fApple     = "Apple"
+
+type ImageType = enum
+  itPng     = "PNG"
+  itJpg     = "JPG"
+  itOpenExr = "OpenEXR"
 
 var
   scrollBarVal1 = 30.0
@@ -37,13 +42,13 @@ var
   checkBoxVal1 = true
   checkBoxVal2 = false
 
-  radioButtonsVal1 = 1
-  radioButtonsVal2 = 2
-  radioButtonsVal3 = 1
-  radioButtonsVal4 = 1
-  radioButtonsVal5 = 1
-  radioButtonsVal6 = 1
-  radioButtonsVal7 = 1
+  radioButtonsVal1 = @[itJpg]
+  radioButtonsVal2 = @[2]
+  radioButtonsVal3 = @[1]
+  radioButtonsVal4 = @[1]
+  radioButtonsVal5 = @[1]
+  radioButtonsVal6 = @[1]
+  radioButtonsVal7 = @[1]
 
   dropDownVal1 = Fruits(0)
   dropDownVal2 = 0
@@ -242,10 +247,10 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
   koi.dropDown(
     10, winHeight.float - 40, w, h,
     items = @[
-      "Red", "Green", "Blue", "Yellow", "Purple (with little yellow dots)",
+      "Red1", "Green1", "Blue1", "Yellow1", "Purple1 (with little yellow dots)",
       "Red2", "Green2", "Blue2", "Yellow2", "Purple2 (with little yellow dots)",
       "Red3", "Green3", "Blue3", "Yellow3", "Purple3 (with little yellow dots)",
-      "Red4", "Green4", "Blue4", "Yellow4", "Purple (with little yellow dots)"
+      "Red4", "Green4", "Blue4", "Yellow4", "Purple4 (with little yellow dots)"
     ],
     dropDownBottomLeft,
     tooltip = textAreaVal1)
@@ -275,7 +280,6 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
   y += pad * 2
   koi.radioButtons(
     x, y, 150, h+2,
-    labels = @["PNG", "JPG", "OpenEXR"],
     radioButtonsVal1,
     tooltips = @["Save PNG image", "Save JPG image", "Save EXR image"])
 
@@ -284,25 +288,27 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
     x, y, 220, h+2,
     labels = @["One", "Two", "The Third Option"],
     radioButtonsVal2,
-    tooltips = @["First (1)", "Second (2)", "Third (3)"])
+    tooltips = @["First (1)", "Second (2)", "Third (3)"],
+    multiselect = true)
 
   # Custom drawn radio buttons
   var radioButtonsDrawProc: RadioButtonsDrawProc =
-    proc (vg: NVGContext, buttonIdx: Natural, label: string,
-          state: WidgetState, first, last: bool,
-          x, y, w, h: float, style: RadioButtonsStyle) =
+    proc (vg: NVGContext,
+          id: ItemId, x, y, w, h: float,
+          buttonIdx, numButtons: Natural, label: string,
+          state: WidgetState, style: RadioButtonsStyle) =
 
-      var col = hsl(0.08 * buttonIdx, 0.6, 0.5)
+      var bgCol = hsl(0.08 * buttonIdx, 0.6, 0.5)
 
       if state in {wsHover, wsActiveHover}:
-        col = col.lerp(white(), 0.3)
+        bgCol = bgCol.lerp(white(), 0.3)
       if state == wsDown:
-        col = col.lerp(black(), 0.3)
+        bgCol = bgCol.lerp(black(), 0.3)
 
       const Pad = 4
 
       vg.beginPath()
-      vg.fillColor(col)
+      vg.fillColor(bgCol)
       vg.rect(x, y, w-Pad, h-Pad)
       vg.fill()
 
@@ -310,7 +316,7 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
       vg.setFont(14.0, horizAlign=haCenter)
       discard vg.text(x + (w-Pad)*0.5, y + h*0.5, label)
 
-      if state in {wsActive, wsActiveHover}:
+      if state in {wsActive, wsActiveHover, wsActiveDown}:
         vg.strokeColor(rgb(1.0, 0.4, 0.4))
         vg.strokeWidth(2)
         vg.stroke()
