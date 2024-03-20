@@ -1806,14 +1806,14 @@ type ShadowStyle* = ref object
   color*:        Color
 
 var DefaultShadowStyle = ShadowStyle(
-  enabled      : true,
-  cornerRadius : 8.0,
-  xOffset      : 1.0,
-  yOffset      : 1.0,
-  widthOffset  : 0.0,
-  heightOffset : 0.0,
-  feather      : 8.0,
-  color        : black(0.4)
+  enabled:      true,
+  cornerRadius: 8.0,
+  xOffset:      1.0,
+  yOffset:      1.0,
+  widthOffset:  0.0,
+  heightOffset: 0.0,
+  feather:      8.0,
+  color:        black(0.4)
 )
 
 proc getDefaultShadowStyle*(): ShadowStyle =
@@ -2006,13 +2006,13 @@ type PopupStyle* = ref object
   shadow*:                 ShadowStyle
 
 var DefaultPopupStyle = PopupStyle(
-  autoClose              : true,
-  autoCloseBorder        : 40,
-  backgroundCornerRadius : 5,
-  backgroundStrokeWidth  : 0,
-  backgroundStrokeColor  : black(),
-  backgroundFillColor    : gray(0.1),
-  shadow                 : getDefaultShadowStyle()
+  autoClose:              true,
+  autoCloseBorder:        40,
+  backgroundCornerRadius: 5,
+  backgroundStrokeWidth:  0,
+  backgroundStrokeColor:  black(),
+  backgroundFillColor:    gray(0.1),
+  shadow:                 getDefaultShadowStyle()
 )
 
 proc getDefaultPopupStyle*(): PopupStyle =
@@ -2148,19 +2148,19 @@ type LabelStyle* = ref object
   colorDisabled*:    Color
 
 var DefaultLabelStyle = LabelStyle(
-  fontSize         : 14.0,
-  fontFace         : "sans-bold",
-  vertAlignFactor  : 0.55,
-  padHoriz         : 0.0,
-  align            : haLeft,
-  multiLine        : false,
-  lineHeight       : 1.4,
-  color            : gray(0.7),
-  colorHover       : gray(0.7),
-  colorDown        : gray(0.7),
-  colorActive      : white(),
-  colorActiveHover : white(),
-  colorDisabled    : gray(0.7, 0.5)
+  fontSize:         14.0,
+  fontFace:         "sans-bold",
+  vertAlignFactor:  0.55,
+  padHoriz:         0.0,
+  align:            haLeft,
+  multiLine:        false,
+  lineHeight:       1.4,
+  color:            gray(0.7),
+  colorHover:       gray(0.7),
+  colorDown:        gray(0.7),
+  colorActive:      white(),
+  colorActiveHover: white(),
+  colorDisabled:    gray(0.7, 0.5)
 )
 
 proc getDefaultLabelStyle*(): LabelStyle =
@@ -2272,6 +2272,7 @@ proc image*(x, y, w, h: float, paint: Paint) =
   addDrawLayer(ui.currentLayer, vg):
     vg.drawImage(x, y, w, h, paint)
 
+
 proc image*(paint: Paint) =
   alias(ui, g_uiState)
   alias(a, ui.autoLayoutState)
@@ -2305,18 +2306,18 @@ type ButtonStyle* = ref object
   label*:               LabelStyle
 
 var DefaultButtonStyle = ButtonStyle(
-  cornerRadius        : 5.0,
-  strokeWidth         : 0.0,
-  strokeColor         : black(),
-  strokeColorHover    : black(),
-  strokeColorDown     : black(),
-  strokeColorDisabled : black(),
-  fillColor           : gray(0.6),
-  fillColorHover      : gray(0.7),
-  fillColorDown       : HighlightColor,
-  fillColorDisabled   : gray(0.6).withAlpha(0.5),
-  labelOnly           : false,
-  label               : getDefaultLabelStyle()
+  cornerRadius:        5.0,
+  strokeWidth:         0.0,
+  strokeColor:         black(),
+  strokeColorHover:    black(),
+  strokeColorDown:     black(),
+  strokeColorDisabled: black(),
+  fillColor:           gray(0.6),
+  fillColorHover:      gray(0.7),
+  fillColorDown:       HighlightColor,
+  fillColorDisabled:   gray(0.6).withAlpha(0.5),
+  labelOnly:           false,
+  label:               getDefaultLabelStyle()
 )
 
 with DefaultButtonStyle.label:
@@ -2481,21 +2482,21 @@ type CheckBoxStyle* = ref object
   iconInactive*:        string
 
 var DefaultCheckBoxStyle = CheckBoxStyle(
-  cornerRadius        : 5.0,
-  strokeWidth         : 0.0,
-  strokeColor         : black(),
-  strokeColorHover    : black(),
-  strokeColorDown     : black(),
-  strokeColorActive   : black(),
-  strokeColorDisabled : black(),
-  fillColor           : gray(0.6),
-  fillColorHover      : gray(0.7),
-  fillColorDown       : gray(0.35),
-  fillColorActive     : gray(0.25),
-  fillColorDisabled   : gray(0.6).withAlpha(0.5),
-  icon                : getDefaultLabelStyle(),
-  iconActive          : "",
-  iconInactive        : ""
+  cornerRadius:        5.0,
+  strokeWidth:         0.0,
+  strokeColor:         black(),
+  strokeColorHover:    black(),
+  strokeColorDown:     black(),
+  strokeColorActive:   black(),
+  strokeColorDisabled: black(),
+  fillColor:           gray(0.6),
+  fillColorHover:      gray(0.7),
+  fillColorDown:       gray(0.35),
+  fillColorActive:     gray(0.25),
+  fillColorDisabled:   gray(0.6).withAlpha(0.5),
+  icon:                getDefaultLabelStyle(),
+  iconActive:          "",
+  iconInactive:        ""
 )
 
 with DefaultCheckBoxStyle.icon:
@@ -2669,21 +2670,21 @@ type RadioButtonsStyle* = ref object
   label*:                        LabelStyle
 
 var DefaultRadioButtonsStyle = RadioButtonsStyle(
-  buttonPadHoriz               : 3.0,
-  buttonPadVert                : 3.0,
-  buttonCornerRadius           : 5.0,
-  buttonStrokeWidth            : 0.0,
-  buttonStrokeColor            : black(),
-  buttonStrokeColorHover       : black(),
-  buttonStrokeColorDown        : black(),
-  buttonStrokeColorActive      : black(),
-  buttonStrokeColorActiveHover : black(),
-  buttonFillColor              : gray(0.6),
-  buttonFillColorHover         : gray(0.7),
-  buttonFillColorDown          : HighlightLowColor,
-  buttonFillColorActive        : HighlightColor,
-  buttonFillColorActiveHover   : HighlightColor,
-  label                        : getDefaultLabelStyle(),
+  buttonPadHoriz:               3.0,
+  buttonPadVert:                3.0,
+  buttonCornerRadius:           5.0,
+  buttonStrokeWidth:            0.0,
+  buttonStrokeColor:            black(),
+  buttonStrokeColorHover:       black(),
+  buttonStrokeColorDown:        black(),
+  buttonStrokeColorActive:      black(),
+  buttonStrokeColorActiveHover: black(),
+  buttonFillColor:              gray(0.6),
+  buttonFillColorHover:         gray(0.7),
+  buttonFillColorDown:          HighlightLowColor,
+  buttonFillColorActive:        HighlightColor,
+  buttonFillColorActiveHover:   HighlightColor,
+  label:                        getDefaultLabelStyle(),
 )
 
 with DefaultRadioButtonsStyle.label:
@@ -3215,28 +3216,28 @@ type ScrollBarStyle* = ref object
   autoFadeDistance*:       float
 
 var DefaultScrollBarStyle = ScrollBarStyle(
-  trackCornerRadius      : 5.0,
-  trackStrokeWidth       : 0.0,
-  trackStrokeColor       : black(),
-  trackStrokeColorHover  : black(),
-  trackStrokeColorDown   : black(),
-  trackFillColor         : gray(0.6),
-  trackFillColorHover    : gray(0.7),
-  trackFillColorDown     : gray(0.6),
-  thumbCornerRadius      : 5.0,
-  thumbPad               : 3.0,
-  thumbMinSize           : 10.0,
-  thumbStrokeWidth       : 0.0,
-  thumbStrokeColor       : black(),
-  thumbStrokeColorHover  : black(),
-  thumbStrokeColorDown   : black(),
-  thumbFillColor         : gray(0.25),
-  thumbFillColorHover    : gray(0.35),
-  thumbFillColorDown     : HighlightColor,
-  autoFade               : false,
-  autoFadeStartAlpha     : 0.5,
-  autoFadeEndAlpha       : 1.0,
-  autoFadeDistance       : 60.0
+  trackCornerRadius:     5.0,
+  trackStrokeWidth:      0.0,
+  trackStrokeColor:      black(),
+  trackStrokeColorHover: black(),
+  trackStrokeColorDown:  black(),
+  trackFillColor:        gray(0.6),
+  trackFillColorHover:   gray(0.7),
+  trackFillColorDown:    gray(0.6),
+  thumbCornerRadius:     5.0,
+  thumbPad:              3.0,
+  thumbMinSize:          10.0,
+  thumbStrokeWidth:      0.0,
+  thumbStrokeColor:      black(),
+  thumbStrokeColorHover: black(),
+  thumbStrokeColorDown:  black(),
+  thumbFillColor:        gray(0.25),
+  thumbFillColorHover:   gray(0.35),
+  thumbFillColorDown:    HighlightColor,
+  autoFade:              false,
+  autoFadeStartAlpha:    0.5,
+  autoFadeEndAlpha:      1.0,
+  autoFadeDistance:      60.0
 )
 
 proc getDefaultScrollBarStyle*(): ScrollBarStyle =
@@ -3779,32 +3780,32 @@ type DropDownStyle* = ref object
 
 
 var DefaultDropDownStyle = DropDownStyle(
-  buttonCornerRadius        : 5.0,
-  buttonStrokeWidth         : 0.0,
-  buttonStrokeColor         : black(),
-  buttonStrokeColorHover    : black(),
-  buttonStrokeColorDown     : black(),
-  buttonStrokeColorDisabled : black(),
-  buttonFillColor           : gray(0.6),
-  buttonFillColorHover      : gray(0.7),
-  buttonFillColorDown       : gray(0.6),
-  buttonFillColorDisabled   : gray(0.25),
+  buttonCornerRadius:        5.0,
+  buttonStrokeWidth:         0.0,
+  buttonStrokeColor:         black(),
+  buttonStrokeColorHover:    black(),
+  buttonStrokeColorDown:     black(),
+  buttonStrokeColorDisabled: black(),
+  buttonFillColor:           gray(0.6),
+  buttonFillColorHover:      gray(0.7),
+  buttonFillColorDown:       gray(0.6),
+  buttonFillColorDisabled:   gray(0.25),
 
-  label                     : getDefaultLabelStyle(),
+  label:                     getDefaultLabelStyle(),
 
-  itemListAlign             : haCenter,
-  itemListPadHoriz          : 7.0,
-  itemListPadVert           : 7.0,
-  itemListCornerRadius      : 5.0,
-  itemListStrokeWidth       : 0.0,
-  itemListStrokeColor       : black(),
-  itemListFillColor         : gray(0.25),
-  item                      : getDefaultLabelStyle(),
-  itemBackgroundColorHover  : HighlightColor,
+  itemListAlign:             haCenter,
+  itemListPadHoriz:          7.0,
+  itemListPadVert:           7.0,
+  itemListCornerRadius:      5.0,
+  itemListStrokeWidth:       0.0,
+  itemListStrokeColor:       black(),
+  itemListFillColor:         gray(0.25),
+  item:                      getDefaultLabelStyle(),
+  itemBackgroundColorHover:  HighlightColor,
 
-  shadow                    : getDefaultShadowStyle(),
+  shadow:                    getDefaultShadowStyle(),
 
-  scrollBarWidth            : 12.0
+  scrollBarWidth:            12.0
 )
 
 with DefaultDropDownStyle:
@@ -4517,30 +4518,30 @@ type TextFieldStyle* = ref object
   selectionColor*:        Color
 
 var DefaultTextFieldStyle = TextFieldStyle(
-  bgCornerRadius        : 5.0,
-  bgStrokeWidth         : 0.0, # TODO
-  bgStrokeColor         : black(),
-  bgStrokeColorHover    : black(),
-  bgStrokeColorActive   : black(),
-  bgStrokeColorDisabled : black(),
-  bgFillColor           : gray(0.6),
-  bgFillColorHover      : gray(0.7),
-  bgFillColorActive     : gray(0.25),
-  bgFillColorDisabled   : gray(0.25),
+  bgCornerRadius:         5.0,
+  bgStrokeWidth:          0.0, # TODO
+  bgStrokeColor:          black(),
+  bgStrokeColorHover:     black(),
+  bgStrokeColorActive:    black(),
+  bgStrokeColorDisabled:  black(),
+  bgFillColor:            gray(0.6),
+  bgFillColorHover:       gray(0.7),
+  bgFillColorActive:      gray(0.25),
+  bgFillColorDisabled:    gray(0.25),
 
   # TODO use labelstyle?
-  textPadHoriz          : 8.0,
-  textPadVert           : 2.0,
-  textFontSize          : 14.0,
-  textFontFace          : "sans-bold",
-  textColor             : gray(0.25),
-  textColorHover        : gray(0.25), # TODO
-  textColorActive       : gray(0.7),
-  textColorDisabled     : gray(0.7),
-
-  cursorColor           : rgb(255, 190, 0),
-  cursorWidth           : 1.0,
-  selectionColor        : rgba(200, 130, 0, 100)
+  textPadHoriz:           8.0,
+  textPadVert:            2.0,
+  textFontSize:           14.0,
+  textFontFace:           "sans-bold",
+  textColor:              gray(0.25),
+  textColorHover:         gray(0.25), # TODO
+  textColorActive:        gray(0.7),
+  textColorDisabled:      gray(0.7),
+ 
+  cursorColor:            rgb(255, 190, 0),
+  cursorWidth:            1.0,
+  selectionColor:         rgba(200, 130, 0, 100)
 )
 
 proc getDefaultTextFieldStyle*(): TextFieldStyle =
@@ -5149,33 +5150,33 @@ type TextAreaStyle* = object
 
 
 var DefaultTextAreaStyle = TextAreaStyle(
-  bgCornerRadius        : 5.0,
-  bgStrokeWidth         : 0.0,
-  bgStrokeColor         : black(),
-  bgStrokeColorHover    : black(),
-  bgStrokeColorActive   : black(),
-  bgStrokeColorDisabled : black(),
-  bgFillColor           : gray(0.6),
-  bgFillColorHover      : gray(0.7),
-  bgFillColorActive     : gray(0.25),
-  bgFillColorDisabled   : gray(0.25),
+  bgCornerRadius:         5.0,
+  bgStrokeWidth:          0.0,
+  bgStrokeColor:          black(),
+  bgStrokeColorHover:     black(),
+  bgStrokeColorActive:    black(),
+  bgStrokeColorDisabled:  black(),
+  bgFillColor:            gray(0.6),
+  bgFillColorHover:       gray(0.7),
+  bgFillColorActive:      gray(0.25),
+  bgFillColorDisabled:    gray(0.25),
 
   # TODO use labelStyle?
-  textPadHoriz        : 8.0,
-  textPadVert         : 2.0,
-  textFontSize        : 14.0,
-  textFontFace        : "sans-bold",
-  textLineHeight      : 1.4,
-  textColor           : gray(0.25),
-  textColorHover      : gray(0.25),
-  textColorActive     : gray(0.7),
-  textColorDisabled   : gray(0.6),
+  textPadHoriz:      8.0,
+  textPadVert:       2.0,
+  textFontSize:      14.0,
+  textFontFace:      "sans-bold",
+  textLineHeight:    1.4,
+  textColor:         gray(0.25),
+  textColorHover:    gray(0.25),
+  textColorActive:   gray(0.7),
+  textColorDisabled: gray(0.6),
 
-  cursorColor         : rgb(255, 190, 0),
-  cursorWidth         : 1.0,
-  selectionColor      : rgba(200, 130, 0, 100),
+  cursorColor:       rgb(255, 190, 0),
+  cursorWidth:       1.0,
+  selectionColor:    rgba(200, 130, 0, 100),
 
-  scrollBarWidth      : 12.0
+  scrollBarWidth:    12.0
 )
 
 with DefaultTextAreaStyle:
@@ -5911,23 +5912,23 @@ type SliderStyle* = ref object
   cursorFollowsValue*:    bool
 
 var DefaultSliderStyle = SliderStyle(
-  trackCornerRadius     : 10.0,
-  trackPad              : 3.0,
-  trackStrokeWidth      : 0.0,
-  trackStrokeColor      : black(),
-  trackStrokeColorHover : black(),
-  trackStrokeColorDown  : black(),
-  trackFillColor        : gray(0.6),
-  trackFillColorHover   : gray(0.7),
-  trackFillColorDown    : gray(0.6),
-  valuePrecision        : 3,
-  valueCornerRadius     : 8.0,
-  sliderColor           : gray(0.25),
-  sliderColorHover      : gray(0.25),
-  sliderColorDown       : gray(0.25),
-  label                 : getDefaultLabelStyle(),
-  value                 : getDefaultLabelStyle(),
-  cursorFollowsValue    : true
+  trackCornerRadius:     10.0,
+  trackPad:              3.0,
+  trackStrokeWidth:      0.0,
+  trackStrokeColor:      black(),
+  trackStrokeColorHover: black(),
+  trackStrokeColorDown:  black(),
+  trackFillColor:        gray(0.6),
+  trackFillColorHover:   gray(0.7),
+  trackFillColorDown:    gray(0.6),
+  valuePrecision:        3,
+  valueCornerRadius:     8.0,
+  sliderColor:           gray(0.25),
+  sliderColorHover:      gray(0.25),
+  sliderColorDown:       gray(0.25),
+  label:                 getDefaultLabelStyle(),
+  value:                 getDefaultLabelStyle(),
+  cursorFollowsValue:    true
 )
 
 with DefaultSliderStyle:
@@ -6369,20 +6370,20 @@ let g_pasteColorShortcut = mkKeyShortcut(keyV, {mkCtrl})
 
 # {{{ Color style
 var ColorPickerRadioButtonStyle = RadioButtonsStyle(
-  buttonPadHoriz             : 2.0,
-  buttonPadVert              : 3.0,
-  buttonCornerRadius         : 4.0,
-  buttonStrokeWidth          : 0.0,
-  buttonStrokeColor          : black(),
-  buttonStrokeColorHover     : black(),
-  buttonStrokeColorDown      : black(),
-  buttonStrokeColorActive    : black(),
-  buttonFillColor            : gray(0.25),
-  buttonFillColorHover       : gray(0.25),
-  buttonFillColorDown        : gray(0.45),
-  buttonFillColorActive      : gray(0.45),
-  buttonFillColorActiveHover : gray(0.45),
-  label                      : getDefaultLabelStyle()
+  buttonPadHoriz:             2.0,
+  buttonPadVert:              3.0,
+  buttonCornerRadius:         4.0,
+  buttonStrokeWidth:          0.0,
+  buttonStrokeColor:          black(),
+  buttonStrokeColorHover:     black(),
+  buttonStrokeColorDown:      black(),
+  buttonStrokeColorActive:    black(),
+  buttonFillColor:            gray(0.25),
+  buttonFillColorHover:       gray(0.25),
+  buttonFillColorDown:        gray(0.45),
+  buttonFillColorActive:      gray(0.45),
+  buttonFillColorActiveHover: gray(0.45),
+  label:                      getDefaultLabelStyle()
 )
 
 with ColorPickerRadioButtonStyle.label:
@@ -6398,23 +6399,23 @@ with ColorPickerRadioButtonStyle.label:
 
 
 var ColorPickerSliderStyle = SliderStyle(
-  trackCornerRadius      : 4.0,
-  trackPad               : 0.0,
-  trackStrokeWidth       : 1.0,
-  trackStrokeColor       : gray(0.1),
-  trackStrokeColorHover  : gray(0.1),
-  trackStrokeColorDown   : gray(0.1),
-  trackFillColor         : gray(0.25),
-  trackFillColorHover    : gray(0.30),
-  trackFillColorDown     : gray(0.25),
-  sliderColor            : gray(0.45),
-  sliderColorHover       : gray(0.55),
-  sliderColorDown        : gray(0.45),
-  label                  : getDefaultLabelStyle(),
-  value                  : getDefaultLabelStyle(),
-  valuePrecision         : 0,
-  valueCornerRadius      : 4,
-  cursorFollowsValue     : true
+  trackCornerRadius:     4.0,
+  trackPad:              0.0,
+  trackStrokeWidth:      1.0,
+  trackStrokeColor:      gray(0.1),
+  trackStrokeColorHover: gray(0.1),
+  trackStrokeColorDown:  gray(0.1),
+  trackFillColor:        gray(0.25),
+  trackFillColorHover:   gray(0.30),
+  trackFillColorDown:    gray(0.25),
+  sliderColor:           gray(0.45),
+  sliderColorHover:      gray(0.55),
+  sliderColorDown:       gray(0.45),
+  label:                 getDefaultLabelStyle(),
+  value:                 getDefaultLabelStyle(),
+  valuePrecision:        0,
+  valueCornerRadius:     4,
+  cursorFollowsValue:    true
 )
 
 with ColorPickerSliderStyle:
@@ -6436,24 +6437,24 @@ with ColorPickerSliderStyle:
 
 
 var ColorPickerTextFieldStyle = TextFieldStyle(
-  bgCornerRadius      : 4.0,
-  bgStrokeWidth       : 1.0,
-  bgStrokeColor       : gray(0.1),
-  bgStrokeColorHover  : gray(0.1),
-  bgStrokeColorActive : gray(0.1),
-  bgFillColor         : gray(0.25),
-  bgFillColorHover    : gray(0.30),
-  bgFillColorActive   : gray(0.25),
-  textPadHoriz        : 8.0,
-  textPadVert         : 2.0,
-  textFontSize        : 13.0,
-  textFontFace        : "sans-bold",
-  textColor           : gray(0.8),
-  textColorHover      : gray(0.8),
-  textColorActive     : gray(0.8),
-  cursorColor         : rgb(255, 190, 0),
-  cursorWidth         : 1.0,
-  selectionColor      : rgba(200, 130, 0, 100)
+  bgCornerRadius:      4.0,
+  bgStrokeWidth:       1.0,
+  bgStrokeColor:       gray(0.1),
+  bgStrokeColorHover:  gray(0.1),
+  bgStrokeColorActive: gray(0.1),
+  bgFillColor:         gray(0.25),
+  bgFillColorHover:    gray(0.30),
+  bgFillColorActive:   gray(0.25),
+  textPadHoriz:        8.0,
+  textPadVert:         2.0,
+  textFontSize:        13.0,
+  textFontFace:        "sans-bold",
+  textColor:           gray(0.8),
+  textColorHover:      gray(0.8),
+  textColorActive:     gray(0.8),
+  cursorColor:         rgb(255, 190, 0),
+  cursorWidth:         1.0,
+  selectionColor:      rgba(200, 130, 0, 100)
 )
 
 # }}}
@@ -6992,15 +6993,15 @@ type SectionHeaderStyle* = ref object
   triangleColor*:   Color
 
 var DefaultSectionHeaderStyle = SectionHeaderStyle(
-  label           : getDefaultLabelStyle(),
-  labelLeftPad    : 28.0,
-  height          : 32.0,
-  hitRightPad     : 13.0,
-  backgroundColor : gray(0.15),
-  separatorColor  : gray(0.3),
-  triangleSize    : 4.0,
-  triangleLeftPad : 11.0,
-  triangleColor   : gray(0.65)
+  label:           getDefaultLabelStyle(),
+  labelLeftPad:    28.0,
+  height:          32.0,
+  hitRightPad:     13.0,
+  backgroundColor: gray(0.15),
+  separatorColor:  gray(0.3),
+  triangleSize:    4.0,
+  triangleLeftPad: 11.0,
+  triangleColor:   gray(0.65)
 )
 
 with DefaultSectionHeaderStyle.label:
@@ -7016,15 +7017,15 @@ proc setDefaultSectionHeaderStyle*(style: SectionHeaderStyle) =
 # {{{ SubSectionHeaderStyle
 
 var DefaultSubSectionHeaderStyle = SectionHeaderStyle(
-  label           : getDefaultLabelStyle(),
-  labelLeftPad    : 38.0,
-  height          : 25.0,
-  hitRightPad     : 13.0,
-  backgroundColor : gray(0.25),
-  separatorColor  : gray(0.3),
-  triangleSize    : 3.0,
-  triangleLeftPad : 21.0,
-  triangleColor   : white()
+  label:           getDefaultLabelStyle(),
+  labelLeftPad:    38.0,
+  height:          25.0,
+  hitRightPad:     13.0,
+  backgroundColor: gray(0.25),
+  separatorColor:  gray(0.3),
+  triangleSize:    3.0,
+  triangleLeftPad: 21.0,
+  triangleColor:   white()
 )
 
 with DefaultSubSectionHeaderStyle.label:
@@ -7185,8 +7186,8 @@ type ScrollViewStyle* = ref object
   scrollWheelSensitivity*: float
 
 var DefaultScrollViewStyle = ScrollViewStyle(
-  vertScrollBarWidth     : 12.0,
-  scrollWheelSensitivity : if defined(macosx): 10.0 else: 40.0
+  vertScrollBarWidth:     12.0,
+  scrollWheelSensitivity: if defined(macosx): 10.0 else: 40.0
 )
 
 DefaultScrollViewStyle.scrollBarStyle = getDefaultScrollBarStyle()
@@ -7351,26 +7352,26 @@ type DialogStyle* = ref object
   shadow*:             ShadowStyle
 
 var DefaultDialogStyle = DialogStyle(
-  cornerRadius      : 7.0,
-  backgroundColor   : gray(0.2),
-  drawTitleBar      : true,
-  titleBarBgColor   : gray(0.05),
-  titleBarTextColor : gray(0.85),
-  outerBorderColor  : black(),
-  innerBorderColor  : white(),
-  outerBorderWidth  : 0.0,
-  innerBorderWidth  : 0.0
+  cornerRadius:      7.0,
+  backgroundColor:   gray(0.2),
+  drawTitleBar:      true,
+  titleBarBgColor:   gray(0.05),
+  titleBarTextColor: gray(0.85),
+  outerBorderColor:  black(),
+  innerBorderColor:  white(),
+  outerBorderWidth:  0.0,
+  innerBorderWidth:  0.0
 )
 
 DefaultDialogStyle.shadow = ShadowStyle(
-  enabled      : true,
-  cornerRadius : 12.0,
-  xOffset      : 2.0,
-  yOffset      : 3.0,
-  widthOffset  : 0.0,
-  heightOffset : 0.0,
-  feather      : 25.0,
-  color        : black(0.4)
+  enabled:      true,
+  cornerRadius: 12.0,
+  xOffset:      2.0,
+  yOffset:      3.0,
+  widthOffset:  0.0,
+  heightOffset: 0.0,
+  feather:      25.0,
+  color:        black(0.4)
 )
 
 proc getDefaultDialogStyle*(): DialogStyle =
