@@ -2904,7 +2904,7 @@ proc radioButtons[T](
      rs.activeItem == hotButton:
     let activeButton = T(hotButton)
 
-    if multiselect:
+    if multiselect and not ctrlDown():
       let idx = activeButtons_out.find(activeButton)
       if idx < 0:
         activeButtons_out.add(activeButton)
@@ -2912,6 +2912,7 @@ proc radioButtons[T](
         activeButtons_out.del(idx)
     else:
       activeButtons_out = @[activeButton]
+
 
   let activeButtons = activeButtons_out
 
