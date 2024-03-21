@@ -522,7 +522,7 @@ proc generateId*(filename: string, line: int, id: string = ""): ItemId =
   g_lastIdString = idString
   hashId(idString)
 
-proc getNextId(filename: string, line: int, id: string = ""): ItemId =
+proc getNextId*(filename: string, line: int, id: string = ""): ItemId =
   if g_nextIdString == "":
     result = generateId(filename, line, id)
   else:
@@ -1664,21 +1664,9 @@ proc nextItemHeight*(h: float) =
   ui.autoLayoutState.nextItemHeight = h
 
 # }}}
-# {{{ currAutoLayoutX*()
-proc currAutoLayoutX*(): float =
-  alias(ui, g_uiState)
-  ui.autoLayoutState.x
 
-# }}}
-# {{{ currAutoLayoutY*()
-proc currAutoLayoutY*(): float =
-  alias(ui, g_uiState)
-  ui.autoLayoutState.y
-
-# }}}
-
-# {{{ autoLayoutPre()
-proc autoLayoutPre(section: bool = false) =
+# {{{ autoLayoutPre*()
+proc autoLayoutPre*(section: bool = false) =
   alias(ui, g_uiState)
   alias(a,  ui.autoLayoutState)
   alias(ap, ui.autoLayoutParams)
@@ -1703,8 +1691,8 @@ proc autoLayoutPre(section: bool = false) =
         a.y += (if a.groupBegin: ap.rowGroupPad else: ap.rowPad)
 
 # }}}
-# {{{ autoLayoutPost()
-proc autoLayoutPost(section: bool = false) =
+# {{{ autoLayoutPost*()
+proc autoLayoutPost*(section: bool = false) =
   alias(ui, g_uiState)
   alias(a,  ui.autoLayoutState)
   alias(ap, ui.autoLayoutParams)
@@ -1740,20 +1728,26 @@ proc autoLayoutFinal() =
     a.y -= ui.autoLayoutParams.sectionPad
 
 # }}}
-# {{{ autoLayoutNextItemWidth()
-proc autoLayoutNextItemWidth(): float =
+# {{{ autoLayoutNextItemWidth*()
+proc autoLayoutNextItemWidth*(): float =
   alias(a, g_uiState.autoLayoutState)
   a.nextItemWidth
 
 # }}}
-# {{{ autoLayoutNextItemHeight()
-proc autoLayoutNextItemHeight(): float =
+# {{{ autoLayoutNextItemHeight*()
+proc autoLayoutNextItemHeight*(): float =
   alias(a, g_uiState.autoLayoutState)
   a.nextItemHeight.clamp(0, a.rowHeight)
 
 # }}}
-# {{{ autoLayoutNextY()
-proc autoLayoutNextY(): float =
+# {{{ autoLayoutNextX*()
+proc autoLayoutNextX*(): float =
+  alias(ui, g_uiState)
+  ui.autoLayoutState.x
+
+# }}}
+# {{{ autoLayoutNextY*()
+proc autoLayoutNextY*(): float =
   alias(a, g_uiState.autoLayoutState)
 
   result = a.y
@@ -2391,7 +2385,7 @@ proc button(id:                   ItemId,
   let (x, y) = addDrawOffset(x, y)
 
   # Hit testing
-  if isHit(x, y, w, h):
+  if isHit(x, y, w-12, h):
     setHot(id)
     if not disabled and ui.mbLeftDown and hasNoActiveItem():
       setActive(id)
@@ -3409,8 +3403,10 @@ proc horizScrollBar(id:         ItemId,
   # Draw scrollbar
   addDrawLayer(ui.currentLayer, vg):
     let dy = abs(y - ui.my)
+    let withinX = ui.mx >= x and ui.mx <= x + w
 
-    if not s.autoFade or (s.autoFade and dy < s.autoFadeDistance):
+    if not s.autoFade or (s.autoFade and dy < s.autoFadeDistance and
+                          withinX and not ui.focusCaptured):
       let state = if   isHot(id) and hasNoActiveItem(): wsHover
                   elif isActive(id): wsDown
                   else: wsNormal
@@ -3628,9 +3624,10 @@ proc vertScrollBar(id:         ItemId,
   # Draw scrollbar
   addDrawLayer(ui.currentLayer, vg):
     let dx = abs(x - ui.mx)
+    let withinY = ui.my >= y and ui.my <= y + h
 
     if not s.autoFade or (s.autoFade and dx < s.autoFadeDistance and
-                          not ui.focusCaptured):
+                          withinY and not ui.focusCaptured):
       let state = if   isHot(id) and hasNoActiveItem(): wsHover
                   elif isActive(id): wsDown
                   else: wsNormal
