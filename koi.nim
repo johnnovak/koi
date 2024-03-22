@@ -2385,7 +2385,7 @@ proc button(id:                   ItemId,
   let (x, y) = addDrawOffset(x, y)
 
   # Hit testing
-  if isHit(x, y, w-12, h):
+  if isHit(x, y, w, h):
     setHot(id)
     if not disabled and ui.mbLeftDown and hasNoActiveItem():
       setActive(id)
