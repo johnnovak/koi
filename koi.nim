@@ -2371,14 +2371,13 @@ let DefaultButtonDrawProc: ButtonDrawProc =
 
 # }}}
 # {{{ button()
-proc button(id:                   ItemId,
-            x, y, w, h:           float,
-            label:                string,
-            tooltip:              string,
-            disabled:             bool,
-            activateOnButtonDown: bool,
-            drawProc:             Option[ButtonDrawProc] = ButtonDrawProc.none,
-            style:                ButtonStyle = DefaultButtonStyle): bool =
+proc button(id:         ItemId,
+            x, y, w, h: float,
+            label:      string,
+            tooltip:    string,
+            disabled:   bool,
+            drawProc:   Option[ButtonDrawProc] = ButtonDrawProc.none,
+            style:      ButtonStyle = DefaultButtonStyle): bool =
 
   alias(ui, g_uiState)
 
@@ -2389,13 +2388,10 @@ proc button(id:                   ItemId,
     setHot(id)
     if not disabled and ui.mbLeftDown and hasNoActiveItem():
       setActive(id)
-      if activateOnButtonDown:
-        result = true
 
   # LMB released over active widget means it was clicked
-  if not activateOnButtonDown:
-    if not ui.mbLeftDown and isHot(id) and isActive(id):
-      result = true
+  if not ui.mbLeftDown and isHot(id) and isActive(id):
+    result = true
 
   addDrawLayer(ui.currentLayer, vg):
     let state = if   disabled: wsDisabled
@@ -2415,27 +2411,24 @@ proc button(id:                   ItemId,
 # }}}
 # {{{ Button templates
 
-template button*(x, y, w, h:           float,
-                 label:                string,
-                 tooltip:              string = "",
-                 disabled:             bool = false,
-                 activateOnButtonDown: bool = false,
-                 drawProc:        Option[ButtonDrawProc] = ButtonDrawProc.none,
-                 style:           ButtonStyle = DefaultButtonStyle): bool =
+template button*(x, y, w, h: float,
+                 label:      string,
+                 tooltip:    string = "",
+                 disabled:   bool = false,
+                 drawProc:   Option[ButtonDrawProc] = ButtonDrawProc.none,
+                 style:      ButtonStyle = DefaultButtonStyle): bool =
 
   let i = instantiationInfo(fullPaths=true)
   let id = getNextId(i.filename, i.line)
 
-  button(id, x, y, w, h, label, tooltip, disabled, activateOnButtonDown,
-         drawProc, style)
+  button(id, x, y, w, h, label, tooltip, disabled, drawProc, style)
 
 
-template button*(label:                string,
-                 tooltip:              string = "",
-                 disabled:             bool = false,
-                 activateOnButtonDown: bool = false,
-                 drawProc:        Option[ButtonDrawProc] = ButtonDrawProc.none,
-                 style:           ButtonStyle = DefaultButtonStyle): bool =
+template button*(label:    string,
+                 tooltip:  string = "",
+                 disabled: bool = false,
+                 drawProc: Option[ButtonDrawProc] = ButtonDrawProc.none,
+                 style:    ButtonStyle = DefaultButtonStyle): bool =
 
   let i = instantiationInfo(fullPaths=true)
   let id = getNextId(i.filename, i.line)
@@ -2445,8 +2438,7 @@ template button*(label:                string,
   let res = button(id,
                    g_uiState.autoLayoutState.x, autoLayoutNextY(),
                    autoLayoutNextItemWidth(), autoLayoutNextItemHeight(),
-                   label, tooltip, disabled, activateOnButtonDown,
-                   drawProc, style)
+                   label, tooltip, disabled, drawProc, style)
 
   autoLayoutPost()
   res
