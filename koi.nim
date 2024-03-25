@@ -7221,9 +7221,10 @@ proc setDefaultScrollViewStyle*(style: ScrollViewStyle) =
 # }}}
 
 type ScrollViewState = ref object of RootObj
-  x, y, w, h: float
-  viewStartY: float
-  style:      ScrollViewStyle
+  x, y, w, h:    float
+  viewStartY:    float
+  contentHeight: float
+  style:         ScrollViewStyle
 
 # {{{ beginScrollView*()
 proc beginScrollView*(id: ItemId, x, y, w, h: float,
@@ -7326,7 +7327,9 @@ proc endScrollView*(height: float = -1.0) =
   else:
     viewStartY = 0
 
-  ss.viewStartY = viewStartY
+  ss.viewStartY    = viewStartY
+  ss.contentHeight = contentHeight
+
   ui.itemState[id] = ss
 
   ui.scrollViewState.activeItem = 0
@@ -7337,6 +7340,16 @@ proc endScrollView*(height: float = -1.0) =
   ui.sectionHeaderState.openSubHeaders = false
 
   resetHitClip()
+
+# }}}
+
+# {{{ setScrollViewStartY*()
+proc setScrollViewStartY*(id: ItemId, startY: float) =
+  alias(ui, g_uiState)
+
+  var ss = cast[ScrollViewState](ui.itemState[id])
+  ss.viewStartY = startY.clamp(0, max(ss.contentHeight - ss.h, 0.0))
+  ui.itemState[id] = ss
 
 # }}}
 
