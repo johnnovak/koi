@@ -28,117 +28,117 @@ type
     ofsHatched  = (1, "Hatched")
 
   Theme = object
-    general: GeneralStyle
-    widget: WidgetStyle
-    textField: TextFieldStyle
-    dialog: DialogStyle
-    window: WindowStyle
-    statusBar: StatusBarStyle
-    levelDropDown: LevelDropDownStyle
-    aboutButton: AboutButtonStyle
-    level: LevelStyle
-    notesPane: NotesPaneStyle
-    toolbarPane: ToolbarPaneStyle
+    general:                GeneralStyle
+    widget:                 WidgetStyle
+    textField:              TextFieldStyle
+    dialog:                 DialogStyle
+    window:                 WindowStyle
+    statusBar:              StatusBarStyle
+    levelDropDown:          LevelDropDownStyle
+    aboutButton:            AboutButtonStyle
+    level:                  LevelStyle
+    notesPane:              NotesPaneStyle
+    toolbarPane:            ToolbarPaneStyle
 
   GeneralStyle = object
-    backgroundColor: Color
-    highlightColor: Color
+    backgroundColor:        Color
+    highlightColor:         Color
 
   WidgetStyle = object
-    bgColor: Color
-    bgColorHover: Color
-    bgColorDisabled: Color
-    textColor: Color
-    textColorDisabled: Color
+    bgColor:                Color
+    bgColorHover:           Color
+    bgColorDisabled:        Color
+    textColor:              Color
+    textColorDisabled:      Color
 
   TextFieldStyle = object
-    bgColorActive: Color
-    textColorActive: Color
-    cursorColor: Color
-    selectionColor: Color
+    bgColorActive:          Color
+    textColorActive:        Color
+    cursorColor:            Color
+    selectionColor:         Color
 
   DialogStyle = object
-    titleBarBgColor: Color
-    titleBarTextColor: Color
-    backgroundColor: Color
-    textColor: Color
-    warningTextColor: Color
+    titleBarBgColor:        Color
+    titleBarTextColor:      Color
+    backgroundColor:        Color
+    textColor:              Color
+    warningTextColor:       Color
 
   WindowStyle = object
-    backgroundColor: Color
-    bgColorUnfocused: Color
-    textColor: Color
-    textColorUnfocused: Color
-    modifiedFlagColor: Color
-    buttonColor: Color
-    buttonColorHover: Color
-    buttonColorDown: Color
+    backgroundColor:        Color
+    bgColorUnfocused:       Color
+    textColor:              Color
+    textColorUnfocused:     Color
+    modifiedFlagColor:      Color
+    buttonColor:            Color
+    buttonColorHover:       Color
+    buttonColorDown:        Color
 
   StatusBarStyle = object
-    backgroundColor: Color
-    textColor: Color
-    commandBgColor: Color
-    commandColor: Color
-    coordsColor: Color
+    backgroundColor:        Color
+    textColor:              Color
+    commandBgColor:         Color
+    commandColor:           Color
+    coordsColor:            Color
 
   LevelDropDownStyle = object
-    buttonColor: Color
-    buttonColorHover: Color
-    textColor: Color
-    itemListColor: Color
-    itemColor: Color
-    itemColorHover: Color
+    buttonColor:            Color
+    buttonColorHover:       Color
+    textColor:              Color
+    itemListColor:          Color
+    itemColor:              Color
+    itemColorHover:         Color
 
   AboutButtonStyle = object
-    color: Color
-    colorHover: Color
-    colorActive: Color
+    color:                  Color
+    colorHover:             Color
+    colorActive:            Color
 
   LevelStyle = object
-    backgroundColor: Color
-    drawColor: Color
-    lightDrawColor: Color
-    lineWidth: LineWidth
-    coordsColor: Color
-    coordsHighlightColor: Color
-    cursorColor: Color
-    cursorGuideColor: Color
-    gridStyleBackground: GridStyle
-    gridColorBackground: Color
-    gridStyleFloor: GridStyle
-    gridColorFloor: Color
-    selectionColor: Color
-    pastePreviewColor: Color
-    linkMarkerColor: Color
-    bgHatch: bool
-    bgHatchColor: Color
-    bgHatchStrokeWidth: float
-    bgHatchSpacingFactor: float
-    outlineStyle: OutlineStyle
-    outlineFillStyle: OutlineFillStyle
-    outlineOverscan: bool
-    outlineColor: Color
-    outlineWidthFactor: float
-    innerShadowColor: Color
+    backgroundColor:        Color
+    drawColor:              Color
+    lightDrawColor:         Color
+    lineWidth:              LineWidth
+    coordsColor:            Color
+    coordsHighlightColor:   Color
+    cursorColor:            Color
+    cursorGuideColor:       Color
+    gridStyleBackground:    GridStyle
+    gridColorBackground:    Color
+    gridStyleFloor:         GridStyle
+    gridColorFloor:         Color
+    selectionColor:         Color
+    pastePreviewColor:      Color
+    linkMarkerColor:        Color
+    bgHatch:                bool
+    bgHatchColor:           Color
+    bgHatchStrokeWidth:     float
+    bgHatchSpacingFactor:   float
+    outlineStyle:           OutlineStyle
+    outlineFillStyle:       OutlineFillStyle
+    outlineOverscan:        bool
+    outlineColor:           Color
+    outlineWidthFactor:     float
+    innerShadowColor:       Color
     innerShadowWidthFactor: float
-    outerShadowColor: Color
+    outerShadowColor:       Color
     outerShadowWidthFactor: float
-    floorColor: array[9, Color]
-    noteMarkerColor: Color
-    noteCommentColor: Color
-    noteIndexColor: Color
-    noteIndexBgColor: array[4, Color]
-    noteTooltipBgColor: Color
-    noteTooltipTextColor: Color
+    floorColor:             array[9, Color]
+    noteMarkerColor:        Color
+    noteCommentColor:       Color
+    noteIndexColor:         Color
+    noteIndexBgColor:       array[4, Color]
+    noteTooltipBgColor:     Color
+    noteTooltipTextColor:   Color
 
   NotesPaneStyle = object
-    textColor: Color
-    indexColor: Color
-    indexBgColor: array[4, Color]
+    textColor:              Color
+    indexColor:             Color
+    indexBgColor:           array[4, Color]
 
   ToolbarPaneStyle = object
-    buttonBgColor: Color
-    buttonBgColorHover: Color
+    buttonBgColor:          Color
+    buttonBgColorHover:     Color
 
 
 # Global NanoVG context
