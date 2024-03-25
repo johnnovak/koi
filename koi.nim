@@ -943,6 +943,8 @@ proc addDrawOffset*(x, y: float): (float, float) =
 
 # {{{ toHSV*()
 func toHSV*(c: Color): (float, float, float) =
+  const HueMax = 360
+
   let
     r = c.r
     g = c.g
@@ -953,9 +955,9 @@ func toHSV*(c: Color): (float, float, float) =
     c = xmax - xmin
 
   let h = if   c == 0: 0.0
-          elif v == r: ((60 * (g-b)/c + 360) mod 360) / 360
-          elif v == g: ((60 * (b-r)/c + 120) mod 360) / 360
-          else:        ((60 * (r-g)/c + 240) mod 360) / 360  # v == b
+          elif v == r: ((60 * (g-b)/c + HueMax) mod HueMax) / HueMax
+          elif v == g: ((60 * (b-r)/c + 120)    mod HueMax) / HueMax
+          else:        ((60 * (r-g)/c + 240)    mod HueMax) / HueMax  # v == b
 
   let s = if v == 0.0: 0.0 else: c/v
 
@@ -991,17 +993,19 @@ func hsva(h, s, v, a: float): Color =
 # }}}
 # {{{ toHex*()
 func toHex*(c: Color): string =
-  (c.r * 255).int.toHex(2) &
-  (c.g * 255).int.toHex(2) &
-  (c.b * 255).int.toHex(2)
+  const RgbMax = 255
+  (c.r * RgbMax).int.toHex(2) &
+  (c.g * RgbMax).int.toHex(2) &
+  (c.b * RgbMax).int.toHex(2)
 
 # }}}
 # {{{ colorFromHex*()
 func colorFromHexStr*(s: string): Color =
+  const RgbMax = 255
   try:
-    let r = parseHexInt(s.substr(0, 1)) / 255
-    let g = parseHexInt(s.substr(2, 3)) / 255
-    let b = parseHexInt(s.substr(4, 5)) / 255
+    let r = parseHexInt(s.substr(0, 1)) / RgbMax
+    let g = parseHexInt(s.substr(2, 3)) / RgbMax
+    let b = parseHexInt(s.substr(4, 5)) / RgbMax
     result = rgb(r, g, b)
   except CatchableError:
     discard
@@ -6800,93 +6804,104 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
 
       y += 30
 
+      const
+        RgbMax   = 255
+        AlphaMax = 255
+
       case cs.colorMode
       of ccmRGB:
         var
-          r = color.r.float * 255
-          g = color.g.float * 255
-          b = color.b.float * 255
-          a = color.a.float * 255
+          r = color.r.float * RgbMax
+          g = color.g.float * RgbMax
+          b = color.b.float * RgbMax
+          a = color.a.float * RgbMax
 
-        horizSlider(x, y, w, h, startVal = 0, endVal = 255, r,
+        horizSlider(x, y, w, h, startVal=0, endVal=RgbMax, r,
                     grouping=wgStart, label="R", style=ColorPickerSliderStyle)
 
         y += 20
-        horizSlider(x, y, w, h, startVal = 0, endVal = 255, g,
+        horizSlider(x, y, w, h, startVal=0, endVal=RgbMax, g,
                     grouping=wgMiddle, label="G", style=ColorPickerSliderStyle)
 
         y += 20
-        horizSlider(x, y, w, h, startVal = 0, endVal = 255, b,
+        horizSlider(x, y, w, h, startVal=0, endVal=RgbMax, b,
                     grouping=wgEnd, label="B", style=ColorPickerSliderStyle)
 
         y += 30
-        horizSlider(x, y, w, h-1, startVal = 0, endVal = 255, a,
+        horizSlider(x, y, w, h-1, startVal=0, endVal=RgbMax, a,
                     label="A", style=ColorPickerSliderStyle)
 
         const Eps = 0.0001
-        var (hue, sat, val) = rgba(r/255, g/255, b/255, a/255).toHSV
+        var (hue, sat, val) = rgba(r/RgbMax, g/RgbMax, b/RgbMax,
+                                   a/AlphaMax).toHSV
+
         if sat < Eps or r < Eps and g < Eps and b < Eps:
           hue = cs.lastHue
 
         colorWheel(x, startY, w+0.5, w+0.5, hue, sat, val)
 
         cs.lastHue = hue
-        color_out = hsva(hue, sat, val, a/255)
+        color_out = hsva(hue, sat, val, a/AlphaMax)
 
 
       of ccmHSV:
+        const
+          HueMax = 360
+          SatMax = 100
+          ValMax = 100
+
         if cs.opened or cs.lastColorMode == ccmHSV:
           (cs.h, cs.s, cs.v) = color.toHSV
 
         var
-          hue = cs.h * 360
-          sat = cs.s * 100
+          hue = cs.h * HueMax
+          sat = cs.s * SatMax
           val = cs.v * 100
 
-        var a = color.a.float * 255
+        var a = color.a.float * AlphaMax
 
-        horizSlider(x, y, w, h, startVal = 0, endVal = 360, hue,
+        horizSlider(x, y, w, h, startVal=0, endVal=HueMax, hue,
                     grouping=wgStart, label="H", style=ColorPickerSliderStyle)
 
         y += 20
-        horizSlider(x, y, w, h, startVal = 0, endVal = 100, sat,
+        horizSlider(x, y, w, h, startVal=0, endVal=SatMax, sat,
                     grouping=wgMiddle, label="S", style=ColorPickerSliderStyle)
 
         y += 20
-        horizSlider(x, y, w, h, startVal = 0, endVal = 100, val,
+        horizSlider(x, y, w, h, startVal=0, endVal=SatMax, val,
                     grouping=wgEnd, label="V", style=ColorPickerSliderStyle)
 
         y += 30
-        horizSlider(x, y, w, h-1, startVal = 0, endVal = 255, a,
+        horizSlider(x, y, w, h-1, startVal=0, endVal=AlphaMax, a,
                     label="A", style=ColorPickerSliderStyle)
 
-        (cs.h, cs.s, cs.v) = (hue/360, sat/100, val/100)
+        (cs.h, cs.s, cs.v) = (hue/HueMax, sat/SatMax, val/ValMax)
 
         colorWheel(x, startY, w+0.5, w+0.5, cs.h, cs.s, cs.v)
 
-        color_out = hsva(cs.h, cs.s, cs.v, a/255)
+        color_out = hsva(cs.h, cs.s, cs.v, a/AlphaMax)
 
 
       of ccmHex:
         if cs.opened or cs.lastColorMode == ccmHex:
           cs.hexString = color.toHex
 
-        var a = color.a.float * 255
+        var a = color.a.float * RgbMax
 
         textField(x, y, w, h-1, cs.hexString, style=ColorPickerTextFieldStyle)
 
         y += 20 + 20 + 30
-        horizSlider(x, y, w, h-1, startVal = 0, endVal = 255, a,
+        horizSlider(x, y, w, h-1, startVal=0, endVal=RgbMax, a,
                     label="A", style=ColorPickerSliderStyle)
 
-        color = colorFromHexStr(cs.hexString).withAlpha(a/255)
+        color = colorFromHexStr(cs.hexString).withAlpha(a/RgbMax)
 
         var (hue, sat, val) = color.toHSV
         let (oldHue, oldSat, oldVal) = (hue, sat, val)
 
         colorWheel(x, startY, w+0.5, w+0.5, hue, sat, val)
 
-        color = hsva(hue, sat, val, a/255)
+        color = hsva(hue, sat, val, a/RgbMax)
         if hue != oldHue or sat != oldSat or val != oldVal:
           cs.hexString = color.toHex
 
