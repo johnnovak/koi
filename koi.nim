@@ -6745,6 +6745,7 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
       cs.opened = true
       cs.mouseMode = cmmNormal
 
+
   # Draw color widget
   addDrawLayer(ui.currentLayer, vg):
     # it's important to use "unsnapped" x & y coords here
@@ -6850,7 +6851,7 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
           SatMax = 100
           ValMax = 100
 
-        if cs.opened or cs.lastColorMode == ccmHSV:
+        if cs.opened or cs.lastColorMode != ccmHSV:
           (cs.h, cs.s, cs.v) = color.toHSV
 
         var
@@ -6883,7 +6884,7 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
 
 
       of ccmHex:
-        if cs.opened or cs.lastColorMode == ccmHex:
+        if cs.opened or cs.lastColorMode != ccmHex:
           cs.hexString = color.toHex
 
         var a = color.a.float * RgbMax
@@ -6905,7 +6906,7 @@ proc color(id: ItemId, x, y, w, h: float, color_out: var Color) =
         if hue != oldHue or sat != oldSat or val != oldVal:
           cs.hexString = color.toHex
 
-        color_out =  color
+        color_out = color
 
 
       # Make sure 'opened' is only true in the first frame after opening the
