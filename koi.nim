@@ -7351,7 +7351,7 @@ proc setScrollViewStartY*(id: ItemId, startY: float) =
   alias(ui, g_uiState)
 
   var ss = cast[ScrollViewState](ui.itemState[id])
-  ss.viewStartY = startY.clamp(0, max(ss.contentHeight - ss.h, 0.0))
+  ss.viewStartY = startY.clamp(0, max(ss.contentHeight - ss.h, 0))
   ui.itemState[id] = ss
 
 # }}}
