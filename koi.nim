@@ -4090,9 +4090,12 @@ proc dropDown[T](id:               ItemId,
     ui.focusCaptured = false
     ui.currentLayer = layerWidgetOverlay
 
+    let offs = drawOffset()
+
     vertScrollBar(
       sbId,
-      x = (itemListX + itemListW - s.scrollBarWidth), y = itemListY,
+      x = (itemListX + itemListW - s.scrollBarWidth) - offs.ox,
+      y = itemListY - offs.oy,
       w = s.scrollBarWidth, h = itemListH,
       startVal = 0, endVal = endVal,
       ds.displayStartItem,
