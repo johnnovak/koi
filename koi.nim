@@ -5,6 +5,7 @@ import std/math
 import std/options
 import std/sequtils
 import std/sets
+import std/setutils
 import std/strformat
 import std/strutils
 import std/tables
@@ -3138,7 +3139,7 @@ template multiRadioButtons*[T](
 
 template multiRadioButtons*[E: enum](
   x, y, w, h:    float,
-  activeButtons: seq[E],
+  activeButtons: set[E],
   tooltips:      seq[string] = @[],
   layout:        RadioButtonsLayout = RadioButtonsLayout(kind: rblHoriz),
   drawProc:      Option[RadioButtonsDrawProc] = RadioButtonsDrawProc.none,
@@ -3149,12 +3150,16 @@ template multiRadioButtons*[E: enum](
     id = getNextId(i.filename, i.line)
     labels = enumToSeq[E]()
 
-  radioButtons(id, x, y, w, h, labels, activeButtons, tooltips,
+  var activeButtonsSeq = activeButtons.toSeq
+
+  radioButtons(id, x, y, w, h, labels, activeButtonsSeq, tooltips,
                multiselect=true, layout, drawProc, style)
+
+  activeButtons = activeButtonsSeq.toSet
 
 
 template multiRadioButtons*[E: enum](
-  activeButtons: seq[E],
+  activeButtons: set[E],
   tooltips:      seq[string] = @[],
   layout:        RadioButtonsLayout = RadioButtonsLayout(kind: rblHoriz),
   drawProc:      Option[RadioButtonsDrawProc] = RadioButtonsDrawProc.none,
@@ -3167,11 +3172,15 @@ template multiRadioButtons*[E: enum](
 
   autoLayoutPre()
 
+  var activeButtonsSeq = activeButtons.toSeq
+
   radioButtons(id,
                g_uiState.autoLayoutState.x, autoLayoutNextY(),
                autoLayoutNextItemWidth(), autoLayoutNextItemHeight(),
-               labels, activeButtons, tooltips, multiselect=true, layout,
+               labels, activeButtonsSeq, tooltips, multiselect=true, layout,
                drawProc, style)
+
+  activeButtons = activeButtonsSeq.toSet
 
   autoLayoutPost()
 
