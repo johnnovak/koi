@@ -1,4 +1,5 @@
 import std/lenientops
+import std/options
 import std/strformat
 
 import glad/gl

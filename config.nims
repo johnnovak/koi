@@ -5,6 +5,7 @@ proc setCommonCompileParams() =
   --d:nvgGL3
   --d:glfwStaticLib
   --d:glStaticProcs
+  --path:"."
   --hint:"Name:off"
 
 task test, "build test":

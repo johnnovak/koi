@@ -239,8 +239,6 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
   var ap = DefaultAutoLayoutParams
   ap.rowWidth = w
   ap.rightPad = 16
-  ap.defaultItemHeight = 21
-  ap.defaultRowHeight = 41
 
   initAutoLayout(ap)
 
@@ -342,26 +340,26 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
       koi.color(currTheme.statusBar.coordsColor)
 
     if koi.subSectionHeader("Level Drop Down", sectionLeveldropDown):
-#      koi.nextRowHeight(21)
+      koi.nextRowHeight(21)
       koi.label("Button")
-      koi.color(currTheme.leveldropDown.buttonColor)
+      koi.color(currTheme.levelDropDown.buttonColor)
 
       koi.label("Button Hover")
-      koi.color(currTheme.leveldropDown.buttonColorHover)
+      koi.color(currTheme.levelDropDown.buttonColorHover)
 
       koi.nextRowHeight(21)
       koi.label("Text")
-      koi.color(currTheme.leveldropDown.textColor)
+      koi.color(currTheme.levelDropDown.textColor)
 
       koi.label("Item List")
-      koi.color(currTheme.leveldropDown.itemListColor)
+      koi.color(currTheme.levelDropDown.itemListColor)
 
-#      koi.nextRowHeight(21)
+      koi.nextRowHeight(21)
       koi.label("Item")
-      koi.color(currTheme.leveldropDown.itemColor)
+      koi.color(currTheme.levelDropDown.itemColor)
 
       koi.label("Item Hover")
-      koi.color(currTheme.leveldropDown.itemColorHover)
+      koi.color(currTheme.levelDropDown.itemColorHover)
 
     if koi.subSectionHeader("About Button", sectionAboutButton):
       koi.label("Color")
@@ -680,6 +678,8 @@ proc cleanup() =
 
 proc main() =
   let win = init()
+
+  currTheme.levelDropDown.buttonColor = red().withAlpha(0.5)
 
   while not win.shouldClose: # TODO key buf, like char buf?
     if koi.shouldRenderNextFrame():
