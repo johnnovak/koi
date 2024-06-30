@@ -43,13 +43,16 @@ var
   checkBoxVal1 = true
   checkBoxVal2 = false
 
+  multiRadioButtonsSeqVal = @[2]
+  multiRadioButtonsEnumVal = {fOrange, fApricot}
+
   radioButtonsVal1 = itJpg
-  radioButtonsVal2 = @[2]
-  radioButtonsVal3 = 1
-  radioButtonsVal4 = 1
-  radioButtonsVal5 = 1
-  radioButtonsVal6 = 1
-  radioButtonsVal7 = 1
+  customRadioButtonsVal1 = 1
+  customRadioButtonsVal2 = 1
+  customGridRadioButtonsVal = 1
+
+  customVertRadioButtonsVal = 1
+  customVertGridRadioButtonsVal = 1
 
   dropDownVal1 = Fruits(0)
   dropDownVal2 = 0
@@ -288,8 +291,14 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
   koi.multiRadioButtons(
     x, y, 220, h+2,
     labels = @["One", "Two", "The Third Option"],
-    radioButtonsVal2,
+    multiRadioButtonsSeqVal,
     tooltips = @["First (1)", "Second (2)", "Third (3)"])
+
+  koi.multiRadioButtons(
+    x+300, y, 400, h+2,
+    multiRadioButtonsEnumVal,
+    tooltips = @["First (1)", "Second (2)", "Third (3)"]
+  )
 
   # Custom drawn radio buttons
   var radioButtonsDrawProc: RadioButtonsDrawProc =
@@ -324,7 +333,7 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
   koi.radioButtons(
     500, 100, 150, 30,
     labels = @["1", "2", "3", "4"],
-    radioButtonsVal3,
+    customRadioButtonsVal1,
     tooltips = @["First (1)", "Second (2)", "Third (3)", "Fourth (4)"],
     drawProc=radioButtonsDrawProc.some
   )
@@ -332,7 +341,7 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
   koi.radioButtons(
     500, 160, 30, 30,
     labels = @["1", "2", "3", "4"],
-    radioButtonsVal4,
+    customRadioButtonsVal2,
     tooltips = @["First (1)", "Second (2)", "Third (3)", "Fourth (4)"],
     layout=RadioButtonsLayout(kind: rblGridHoriz, itemsPerRow: 4),
     drawProc=radioButtonsDrawProc.some
@@ -341,7 +350,7 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
   koi.radioButtons(
     500, 220, 30, 30,
     labels = @["1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B"],
-    radioButtonsVal5,
+    customGridRadioButtonsVal,
     tooltips = @[],
     layout=RadioButtonsLayout(kind: rblGridHoriz, itemsPerRow: 4),
     drawProc=radioButtonsDrawProc.some
@@ -351,7 +360,7 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
   koi.radioButtons(
     700, 100, 30, 30,
     labels = @["1", "2", "3", "4"],
-    radioButtonsVal6,
+    customVertRadioButtonsVal,
     tooltips = @["First (1)", "Second (2)", "Third (3)", "Fourth (4)"],
     layout=RadioButtonsLayout(kind: rblGridVert, itemsPerColumn: 4),
     drawProc=radioButtonsDrawProc.some
@@ -360,7 +369,7 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
   koi.radioButtons(
     770, 100, 30, 30,
     labels = @["1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B",],
-    radioButtonsVal7,
+    customVertGridRadioButtonsVal,
     tooltips = @[],
     layout=RadioButtonsLayout(kind: rblGridVert, itemsPerColumn: 4),
     drawProc=radioButtonsDrawProc.some
