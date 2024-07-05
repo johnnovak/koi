@@ -942,56 +942,6 @@ proc addDrawOffset*(x, y: float): (float, float) =
 
 # }}}
 
-# {{{ toHSV*()
-func toHSV*(c: Color): (float, float, float) =
-  const HueMax = 360
-
-  let
-    r = c.r
-    g = c.g
-    b = c.b
-    xmax = max(r, max(g, b))
-    xmin = min(r, min(g, b))
-    v = xmax
-    c = xmax - xmin
-
-  let h = if   c == 0: 0.0
-          elif v == r: ((60 * (g-b)/c + HueMax) mod HueMax) / HueMax
-          elif v == g: ((60 * (b-r)/c + 120)    mod HueMax) / HueMax
-          else:        ((60 * (r-g)/c + 240)    mod HueMax) / HueMax  # v == b
-
-  let s = if v == 0.0: 0.0 else: c/v
-
-  result = (h.float, s.float, v.float)
-
-# }}}
-# {{{ hsva*()
-func hsva(h, s, v, a: float): Color =
-  var r, g, b: float
-  if s == 0.0:
-    r = v
-    g = v
-    b = v
-  else:
-    let
-      hf = if h >= 1.0: 0.0 else: h*6
-      i = hf.int  # should be in the range 0..5
-      f = hf - i  # fractional part
-
-      m = v * (1 - s)
-      n = v * (1 - s*f)
-      k = v * (1 - s*(1-f))
-
-    (r, g, b) = if   i == 0: (v, k, m)
-                elif i == 1: (n, v, m)
-                elif i == 2: (m, v, k)
-                elif i == 3: (m, n, v)
-                elif i == 4: (k, m, v)
-                else:        (v, m, n)
-
-  result = rgba(r, g, b, a)
-
-# }}}
 # {{{ toHex*()
 func toHex*(c: Color): string =
   const RgbMax = 255
