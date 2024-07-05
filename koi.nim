@@ -579,7 +579,9 @@ proc resetHitClip*() =
 
 
 proc focusCaptured*(): bool = g_uiState.focusCaptured
-proc setFocusCaptured*(c: bool) = g_uiState.focusCaptured = c
+
+proc setFocusCaptured*(c: bool) =
+  g_uiState.focusCaptured = c
 
 proc isHit*(x, y, w, h: float): bool =
   alias(ui, g_uiState)
