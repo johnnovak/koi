@@ -7200,6 +7200,27 @@ type ScrollViewState = ref object of RootObj
   contentHeight: float
   style:         ScrollViewStyle
 
+proc getClampedStartY(ss: ScrollViewState): float =
+  result = ss.viewStartY.clamp(0, max(ss.contentHeight - ss.h, 0))
+
+# {{{ setScrollViewStartY*()
+proc setScrollViewStartY*(id: ItemId, startY: float) =
+  alias(ui, g_uiState)
+
+  var ss = cast[ScrollViewState](ui.itemState[id])
+  ss.viewStartY = startY
+  ui.itemState[id] = ss
+
+# }}}
+# {{{ getScrollViewStartY*()
+proc getScrollViewStartY*(id: ItemId): float =
+  alias(ui, g_uiState)
+
+  var ss = cast[ScrollViewState](ui.itemState[id])
+  result = ss.getClampedStartY()
+
+# }}}
+
 # {{{ beginScrollView*()
 proc beginScrollView*(id: ItemId, x, y, w, h: float,
                       style: ScrollViewStyle = DefaultScrollViewStyle) =
@@ -7229,7 +7250,7 @@ proc beginScrollView*(id: ItemId, x, y, w, h: float,
   var ss = cast[ScrollViewState](ui.itemState[id])
 
   pushDrawOffset(
-    DrawOffset(ox: x, oy: y - ss.viewStartY)
+    DrawOffset(ox: x, oy: y - ss.getClampedStartY)
   )
 
   ss.x = x
@@ -7266,7 +7287,7 @@ proc endScrollView*(height: float = -1.0) =
   let id = ui.scrollViewState.activeItem
   var ss = cast[ScrollViewState](ui.itemState[id])
 
-  var viewStartY = ss.viewStartY
+  var viewStartY = ss.getClampedStartY
 
   let visibleHeight = ss.h
   let contentHeight = if autoLayout: a.y else: height
@@ -7314,24 +7335,6 @@ proc endScrollView*(height: float = -1.0) =
   ui.sectionHeaderState.openSubHeaders = false
 
   resetHitClip()
-
-# }}}
-
-# {{{ setScrollViewStartY*()
-proc setScrollViewStartY*(id: ItemId, startY: float) =
-  alias(ui, g_uiState)
-
-  var ss = cast[ScrollViewState](ui.itemState[id])
-  ss.viewStartY = startY
-  ui.itemState[id] = ss
-
-# }}}
-# {{{ getScrollViewStartY*()
-proc getScrollViewStartY*(id: ItemId): float =
-  alias(ui, g_uiState)
-
-  var ss = cast[ScrollViewState](ui.itemState[id])
-  result = ss.viewStartY.clamp(0, max(ss.contentHeight - ss.h, 0))
 
 # }}}
 
