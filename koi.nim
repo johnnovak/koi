@@ -2484,7 +2484,7 @@ let DefaultCheckBoxDrawProc: CheckBoxDrawProc =
       of wsActive:
         (s.fillColorActive, s.strokeColorActive)
       of wsActiveHover:
-        (s.fillColorActiveHover, s.strokeColorActive)
+        (s.fillColorActiveHover, s.strokeColorActiveHover)
       of wsDisabled:
         (s.fillColorDisabled, s.strokeColorDisabled)
 
