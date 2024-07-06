@@ -2408,38 +2408,42 @@ template button*(label:    string,
 # {{{ CheckBox style
 
 type CheckBoxStyle* = ref object
-  cornerRadius*:        float
-  strokeWidth*:         float
-  strokeColor*:         Color
-  strokeColorHover*:    Color
-  strokeColorDown*:     Color
-  strokeColorActive*:   Color
-  strokeColorDisabled*: Color
-  fillColor*:           Color
-  fillColorHover*:      Color
-  fillColorDown*:       Color
-  fillColorActive*:     Color
-  fillColorDisabled*:   Color
-  icon*:                LabelStyle
-  iconActive*:          string
-  iconInactive*:        string
+  cornerRadius*:           float
+  strokeWidth*:            float
+  strokeColor*:            Color
+  strokeColorHover*:       Color
+  strokeColorDown*:        Color
+  strokeColorActive*:      Color
+  strokeColorActiveHover*: Color
+  strokeColorDisabled*:    Color
+  fillColor*:              Color
+  fillColorHover*:         Color
+  fillColorDown*:          Color
+  fillColorActive*:        Color
+  fillColorActiveHover*:   Color
+  fillColorDisabled*:      Color
+  icon*:                   LabelStyle
+  iconActive*:             string
+  iconInactive*:           string
 
 var DefaultCheckBoxStyle = CheckBoxStyle(
-  cornerRadius:        5.0,
-  strokeWidth:         0.0,
-  strokeColor:         black(),
-  strokeColorHover:    black(),
-  strokeColorDown:     black(),
-  strokeColorActive:   black(),
-  strokeColorDisabled: black(),
-  fillColor:           gray(0.6),
-  fillColorHover:      gray(0.7),
-  fillColorDown:       gray(0.35),
-  fillColorActive:     gray(0.25),
-  fillColorDisabled:   gray(0.6).withAlpha(0.5),
-  icon:                getDefaultLabelStyle(),
-  iconActive:          "",
-  iconInactive:        ""
+  cornerRadius:           5.0,
+  strokeWidth:            0.0,
+  strokeColor:            black(),
+  strokeColorHover:       black(),
+  strokeColorDown:        black(),
+  strokeColorActive:      black(),
+  strokeColorActiveHover: black(),
+  strokeColorDisabled:    black(),
+  fillColor:              gray(0.6),
+  fillColorHover:         gray(0.7),
+  fillColorDown:          gray(0.35),
+  fillColorActive:        gray(0.25),
+  fillColorActiveHover:   gray(0.27),
+  fillColorDisabled:      gray(0.6).withAlpha(0.5),
+  icon:                   getDefaultLabelStyle(),
+  iconActive:             "",
+  iconInactive:           ""
 )
 
 with DefaultCheckBoxStyle.icon:
@@ -2477,8 +2481,10 @@ let DefaultCheckBoxDrawProc: CheckBoxDrawProc =
         (s.fillColorHover, s.strokeColorHover)
       of wsDown, wsActiveDown:
         (s.fillColorDown, s.strokeColorDown)
-      of wsActive, wsActiveHover:
+      of wsActive:
         (s.fillColorActive, s.strokeColorActive)
+      of wsActiveHover:
+        (s.fillColorActiveHover, s.strokeColorActive)
       of wsDisabled:
         (s.fillColorDisabled, s.strokeColorDisabled)
 
