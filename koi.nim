@@ -7255,10 +7255,11 @@ proc beginScrollView*(id: ItemId, x, y, w, h: float,
     DrawOffset(ox: x, oy: y - ss.getClampedStartY)
   )
 
-  ss.x = x
-  ss.y = y
-  ss.w = w
-  ss.h = h
+  ss.x     = x
+  ss.y     = y
+  ss.w     = w
+  ss.h     = h
+  ss.style = style
 
   ui.itemState[id] = ss
 
