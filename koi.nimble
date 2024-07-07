@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.2.0"
+version       = "0.2.1"
 author        = "John Novak <john@johnnovak.net>"
 description   = "imgui for Nim"
 license       = "WTFPL"
