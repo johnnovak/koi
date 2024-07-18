@@ -147,26 +147,26 @@ var vg: NVGContext
 
 ### UI DATA ##################################################################
 var
-  sectionUserInterface = true
+  sectionUserInterface        = true
   sectionUserInterfaceGeneral = false
-  sectionWidget = false
-  sectionTextField = false
-  sectionDialog = false
-  sectionTitleBar = false
-  sectionStatusBar = false
-  sectionLeveldropDown = true
-  sectionAboutButton = false
+  sectionWidget               = false
+  sectionTextField            = false
+  sectionDialog               = false
+  sectionTitleBar             = false
+  sectionStatusBar            = false
+  sectionLeveldropDown        = true
+  sectionAboutButton          = false
 
-  sectionLevel = true
-  sectionLevelGeneral = true
-  sectionOutline = true
-  sectionShadow = true
+  sectionLevel           = true
+  sectionLevelGeneral    = true
+  sectionOutline         = true
+  sectionShadow          = true
   sectionBackgroundHatch = true
-  sectionFloorColors = true
-  sectionNotes = true
+  sectionFloorColors     = true
+  sectionNotes           = true
 
-  sectionPanes = true
-  sectionNotesPane = true
+  sectionPanes       = true
+  sectionNotesPane   = true
   sectionToolbarPane = true
 
 var currTheme: Theme
@@ -193,18 +193,18 @@ var
 
 proc createWindow(): Window =
   var cfg = DefaultOpenglWindowConfig
-  cfg.size = (w: 1000, h: 800)
-  cfg.title = "Koi Test"
-  cfg.resizable = true
-  cfg.visible = false
-  cfg.bits = (r: 8, g: 8, b: 8, a: 8, stencil: 8, depth: 16)
-  cfg.debugContext = true
+  cfg.size          = (w: 1000, h: 800)
+  cfg.title         = "Koi Test"
+  cfg.resizable     = true
+  cfg.visible       = false
+  cfg.bits          = (r: 8, g: 8, b: 8, a: 8, stencil: 8, depth: 16)
+  cfg.debugContext  = true
   cfg.nMultiSamples = 4
 
   when defined(macosx):
-    cfg.version = glv32
+    cfg.version       = glv32
     cfg.forwardCompat = true
-    cfg.profile = opCoreProfile
+    cfg.profile       = opCoreProfile
 
   newWindow(cfg)
 
@@ -223,11 +223,11 @@ var propsSliderStyle = getDefaultSliderStyle()
 propsSliderStyle.trackCornerRadius = 8.0
 propsSliderStyle.valueCornerRadius = 6.0
 
-proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
-  koi.beginFrame(winWidth, winHeight, fbWidth, fbHeight)
+proc renderUI() =
+  koi.beginFrame()
 
   vg.beginPath()
-  vg.rect(0, 0, winWidth.float, winHeight.float)
+  vg.rect(0, 0, koi.winWidth(), koi.winHeight())
   vg.fillColor(gray(0.3))
   vg.fill()
 
@@ -629,14 +629,8 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
 
 
 proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
-  let
-    (winWidth, winHeight) = win.size
-    (fbWidth, fbHeight) = win.framebufferSize
-
-  renderUI(winWidth, winHeight, fbWidth, fbHeight)
-
+  renderUI()
   glfw.swapBuffers(win)
-
 
 proc windowPosCb(win: Window, pos: tuple[x, y: int32]) =
   renderFrame(win)
@@ -658,13 +652,12 @@ proc init(): Window =
   loadData(vg)
 
   koi.init(vg, getProcAddress)
+#  koi.setScale(1.5)
 
   win.windowPositionCb = windowPosCb
   win.framebufferSizeCb = framebufSizeCb
 
-  glfw.swapInterval(1)
-
-  win.pos = (400, 150)  # TODO for development
+  win.pos = (400, 150)
   wrapper.showWindow(win.getHandle())
 
   result = win
@@ -681,7 +674,7 @@ proc main() =
 
   currTheme.levelDropDown.buttonColor = red().withAlpha(0.5)
 
-  while not win.shouldClose: # TODO key buf, like char buf?
+  while not win.shouldClose:
     if koi.shouldRenderNextFrame():
       glfw.pollEvents()
     else:

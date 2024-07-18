@@ -309,6 +309,9 @@ type
     # Frames left to render; this is decremented in endFrame()
     framesLeft:      Natural
 
+    # Scale factor
+    scale:           float
+
     # This is the draw layer all widgets will draw on
     # TODO bit hacky, it's needed only for drawing the CSD decoration on top
     # of everything
@@ -633,7 +636,7 @@ proc getPxRatio*(): float =
   let (winWidth, _) = win.size
   let (fbWidth, _) = win.framebufferSize
 
-  result = fbWidth / winWidth
+  result = fbWidth / (winWidth / g_uiState.scale)
 
 # }}}
 # {{{ snapToGrid*()
@@ -1150,6 +1153,7 @@ func mkKeyShortcut*(k: Key, m: set[ModifierKey] = {}): KeyShortcut {.inline.} =
 
   KeyShortcut(key: k, mods: m)
 
+# }}}
 
 # {{{ Shortcuts
 
@@ -1531,12 +1535,12 @@ proc mouseButtonCb(win: Window, button: MouseButton, pressed: bool,
 
   discard g_eventBuf.write(
     Event(
-      kind: ekMouseButton,
-      button: button,
+      kind:    ekMouseButton,
+      button:  button,
       pressed: pressed,
-      x: x,
-      y: y,
-      mods: modKeys
+      x:       x / g_uiState.scale,
+      y:       y / g_uiState.scale,
+      mods:    modKeys
     )
   )
 
@@ -1548,8 +1552,8 @@ proc scrollCb(win: Window, offset: tuple[x, y: float64]) =
   discard g_eventBuf.write(
     Event(
       kind: ekScroll,
-      ox: offset.x,
-      oy: offset.y
+      ox:   offset.x,
+      oy:   offset.y
     )
   )
 
@@ -1597,14 +1601,14 @@ proc setCursorMode*(cs: CursorShape) =
 proc setCursorPosX*(x: float) =
   let win = glfw.currentContext()
   let (_, currY) = win.cursorPos()
-  win.cursorPos = (x, currY)
+  win.cursorPos = (x * g_uiState.scale, currY)
 
 # }}}
 # {{{ setCursorPosY*()
 proc setCursorPosY*(y: float) =
   let win = glfw.currentContext()
   let (currX, _) = win.cursorPos()
-  win.cursorPos = (currX, y)
+  win.cursorPos = (currX, y * g_uiState.scale)
 
 # }}}
 # {{{ isDoubleClick*()
@@ -4559,7 +4563,7 @@ var DefaultTextFieldStyle = TextFieldStyle(
   textColorHover:         gray(0.25), # TODO
   textColorActive:        gray(0.7),
   textColorDisabled:      gray(0.7),
- 
+
   cursorColor:            rgb(255, 190, 0),
   cursorWidth:            1.0,
   selectionColor:         rgba(200, 130, 0, 100)
@@ -7688,6 +7692,11 @@ proc setShortcuts*(sm: ShortcutMode) =
     g_pasteColorShortcut = PasteColorShortcut_Mac
 
 # }}}
+# {{{ setScale*()
+proc setScale*(scale: float) =
+  assert(scale > 0.0)
+  g_uiState.scale = scale
+# }}}
 # {{{ init*()
 
 proc init*(nvg: NVGContext, getProcAddress: proc) =
@@ -7696,22 +7705,22 @@ proc init*(nvg: NVGContext, getProcAddress: proc) =
 
   g_nvgContext = nvg
 
-  g_cursorArrow       = createStandardCursor(csArrow)
-  g_cursorIBeam       = createStandardCursor(csIBeam)
-  g_cursorCrosshair   = createStandardCursor(csCrosshair)
-  g_cursorHand        = createStandardCursor(csHand)
-  g_cursorResizeEW    = createStandardCursor(csResizeEW)
-  g_cursorResizeNS    = createStandardCursor(csResizeNS)
-  g_cursorResizeNWSE  = createStandardCursor(csResizeNWSE)
-  g_cursorResizeNESW  = createStandardCursor(csResizeNESW)
-  g_cursorResizeAll   = createStandardCursor(csResizeAll)
+  g_cursorArrow      = createStandardCursor(csArrow)
+  g_cursorIBeam      = createStandardCursor(csIBeam)
+  g_cursorCrosshair  = createStandardCursor(csCrosshair)
+  g_cursorHand       = createStandardCursor(csHand)
+  g_cursorResizeEW   = createStandardCursor(csResizeEW)
+  g_cursorResizeNS   = createStandardCursor(csResizeNS)
+  g_cursorResizeNWSE = createStandardCursor(csResizeNWSE)
+  g_cursorResizeNESW = createStandardCursor(csResizeNESW)
+  g_cursorResizeAll  = createStandardCursor(csResizeAll)
 
   let win = currentContext()
 
-  win.keyCb  = keyCb
-  win.charCb = charCb
+  win.keyCb         = keyCb
+  win.charCb        = charCb
   win.mouseButtonCb = mouseButtonCb
-  win.scrollCb = scrollCb
+  win.scrollCb      = scrollCb
 
   # LockKeyMods must be enabled so we can differentiate between keypad keys
   # and keypad cursor movement keys
@@ -7723,10 +7732,10 @@ proc init*(nvg: NVGContext, getProcAddress: proc) =
                      else:                  smLinux
 
   setShortcuts(shortcutMode)
+  setScale(1.0)
+  setFramesLeft()
 
   glfw.swapInterval(1)
-
-  setFramesLeft()
 
 # }}}
 # {{{ deinit*()
@@ -7745,14 +7754,15 @@ proc deinit*() =
 # }}}
 # {{{ beginFrame*()
 
-proc beginFrame*(winWidth, winHeight, fbWidth, fbHeight: int) =
+proc beginFrame*() =
   alias(ui, g_uiState)
   alias(vg, g_nvgContext)
 
   let win = glfw.currentContext()
+  let (winWidth, winHeight) = win.size
 
-  ui.winWidth = winWidth.float
-  ui.winHeight = winHeight.float
+  ui.winWidth  = winWidth.float  / g_uiState.scale
+  ui.winHeight = winHeight.float / g_uiState.scale
 
   ui.drawOffsetStack = @[
     DrawOffset(ox: 0, oy: 0)
@@ -7766,8 +7776,12 @@ proc beginFrame*(winWidth, winHeight, fbWidth, fbHeight: int) =
 
   if ui.widgetMouseDrag:
     (ui.dx, ui.dy) = win.cursorPos()
+    ui.dx /= g_uiState.scale
+    ui.dy /= g_uiState.scale
   else:
     (ui.mx, ui.my) = win.cursorPos()
+    ui.mx /= g_uiState.scale
+    ui.my /= g_uiState.scale
 
   ui.hasEvent = false
   ui.eventHandled = false
@@ -7815,14 +7829,14 @@ proc beginFrame*(winWidth, winHeight, fbWidth, fbHeight: int) =
     createCheckeredImage(vg)
 
   # Update and render
+  let (fbWidth, fbHeight) = win.framebufferSize
   glViewport(0, 0, fbWidth.GLsizei, fbHeight.GLsizei)
 
   glClear(GL_COLOR_BUFFER_BIT or
           GL_DEPTH_BUFFER_BIT or
           GL_STENCIL_BUFFER_BIT)
 
-  let pxRatio = fbWidth / winWidth
-  vg.beginFrame(winWidth.float, winHeight.float, pxRatio)
+  vg.beginFrame(ui.winWidth, ui.winHeight, getPxRatio())
 
 # }}}
 # {{{ endFrame*()

@@ -74,18 +74,16 @@ var
 ############################################################
 
 proc createWindow(): Window =
-  var cfg = DefaultOpenglWindowConfig
-  # TODO
-  cfg.size = (w: 1000, h: 800)
-#  cfg.size = (w: 300, h: 300)
-  cfg.title = "Koi Test"
-  cfg.resizable = true
-  cfg.visible = true
-  cfg.bits = (r: 8, g: 8, b: 8, a: 8, stencil: 8, depth: 16)
-#  cfg.transparentFramebuffer = true
-#  cfg.focusOnShow = true
-#  cfg.decorated = false
+  var cfg           = DefaultOpenglWindowConfig
+  cfg.size          = (w: 1000, h: 800)
+  cfg.title         = "Koi Test"
+  cfg.resizable     = true
+  cfg.visible       = true
+  cfg.bits          = (r: 8, g: 8, b: 8, a: 8, stencil: 8, depth: 16)
   cfg.nMultiSamples = 4
+#  cfg.decorated     = false
+#  cfg.focusOnShow   = true
+#  cfg.transparentFramebuffer = true
 
   when defined(macosx):
     cfg.version = glv32
@@ -105,11 +103,11 @@ proc loadData(vg: NVGContext) =
     quit "Could not load bold font.\n"
 
 
-proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
-  koi.beginFrame(winWidth, winHeight, fbWidth, fbHeight)
+proc renderUI() =
+  koi.beginFrame()
 
   vg.beginPath()
-  vg.rect(0, 0, winWidth.float, winHeight.float)
+  vg.rect(0, 0, koi.winWidth(), koi.winHeight())
   vg.fillColor(gray(0.3))
   vg.fill()
 
@@ -237,19 +235,19 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
     disabled = true)
 
   koi.dropDown(
-    winWidth.float - (w+10), 20, w, h,
+    koi.winWidth() - (w+10), 20, w, h,
     items = @["Red", "Green", "Blue", "Yellow", "Purple (with little yellow dots)"],
     dropDownTopRight,
     tooltip = textAreaVal1)
 
   koi.dropDown(
-    winWidth.float - (w+10), winHeight.float - 40, w, h,
+    koi.winWidth() - (w+10), koi.winHeight() - 40, w, h,
     items = @["Red", "Green", "Blue", "Yellow", "Purple (with little yellow dots)"],
     dropDownBottomRight,
     tooltip = textAreaVal1)
 
   koi.dropDown(
-    10, winHeight.float - 40, w, h,
+    10, koi.winHeight() - 40, w, h,
     items = @[
       "Red1", "Green1", "Blue1", "Yellow1", "Purple1 (with little yellow dots)",
       "Red2", "Green2", "Blue2", "Yellow2", "Purple2 (with little yellow dots)",
@@ -462,14 +460,8 @@ proc renderUI(winWidth, winHeight, fbWidth, fbHeight: int) =
 
 
 proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
-  let
-    (winWidth, winHeight) = win.size
-    (fbWidth, fbHeight) = win.framebufferSize
-
-  renderUI(winWidth, winHeight, fbWidth, fbHeight)
-
+  renderUI()
   glfw.swapBuffers(win)
-
 
 proc windowPosCb(win: Window, pos: tuple[x, y: int32]) =
   renderFrame(win)
@@ -491,13 +483,12 @@ proc init(): Window =
   loadData(vg)
 
   koi.init(vg, getProcAddress)
+#  koi.setScale(1.2)
 
   win.windowPositionCb = windowPosCb
   win.framebufferSizeCb = framebufSizeCb
 
-  glfw.swapInterval(1)
-
-  win.pos = (400, 150)  # TODO for development
+  win.pos = (400, 150)
   wrapper.showWindow(win.getHandle())
 
   result = win
@@ -512,7 +503,7 @@ proc cleanup() =
 proc main() =
   let win = init()
 
-  while not win.shouldClose: # TODO key buf, like char buf?
+  while not win.shouldClose:
     if koi.shouldRenderNextFrame():
       glfw.pollEvents()
     else:
