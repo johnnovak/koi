@@ -1139,6 +1139,7 @@ type KeyShortcut* = object
   key*:    Key
   mods*:   set[ModifierKey]
 
+# {{{ mkKeyShortcut*()
 func mkKeyShortcut*(k: Key, m: set[ModifierKey] = {}): KeyShortcut {.inline.} =
   # always ignore caps lock state
   var m = m - {mkCapsLock}
@@ -1150,7 +1151,7 @@ func mkKeyShortcut*(k: Key, m: set[ModifierKey] = {}): KeyShortcut {.inline.} =
   KeyShortcut(key: k, mods: m)
 
 
-# {{{ Shortcut definitions
+# {{{ Shortcuts
 
 type TextEditShortcuts = enum
   tesCursorOneCharLeft,
@@ -1199,72 +1200,72 @@ type TextEditShortcuts = enum
   tesAccept,
   tesCancel
 
-
-# {{{ Shortcuts - Windows/Linux
+# }}}
+# {{{ Shortcut definitions - Windows/Linux
 
 let g_textFieldEditShortcuts_WinLinux = {
 
   # Cursor movement
-  tesCursorOneCharLeft:       @[mkKeyShortcut(keyLeft),
-                                mkKeyShortcut(keyKp4,     {})],
+  tesCursorOneCharLeft:     @[mkKeyShortcut(keyLeft),
+                              mkKeyShortcut(keyKp4,       {})],
 
-  tesCursorOneCharRight:      @[mkKeyShortcut(keyRight,   {}),
-                                mkKeyShortcut(keyKp6,     {})],
+  tesCursorOneCharRight:    @[mkKeyShortcut(keyRight,     {}),
+                              mkKeyShortcut(keyKp6,       {})],
 
-  tesCursorToPreviousWord:    @[mkKeyShortcut(keyLeft,    {mkCtrl}),
-                                mkKeyShortcut(keyKp4,     {mkCtrl}),
-                                mkKeyShortcut(keySlash,   {mkCtrl})],
+  tesCursorToPreviousWord:  @[mkKeyShortcut(keyLeft,      {mkCtrl}),
+                              mkKeyShortcut(keyKp4,       {mkCtrl}),
+                              mkKeyShortcut(keySlash,     {mkCtrl})],
 
-  tesCursorToNextWord:        @[mkKeyShortcut(keyRight,   {mkCtrl}),
-                                mkKeyShortcut(keyKp6,     {mkCtrl})],
+  tesCursorToNextWord:      @[mkKeyShortcut(keyRight,     {mkCtrl}),
+                              mkKeyShortcut(keyKp6,       {mkCtrl})],
 
-  tesCursorToLineStart:       @[mkKeyShortcut(keyHome,    {}),
-                                mkKeyShortcut(keyKp7,     {})],
+  tesCursorToLineStart:     @[mkKeyShortcut(keyHome,      {}),
+                              mkKeyShortcut(keyKp7,       {})],
 
-  tesCursorToLineEnd:         @[mkKeyShortcut(keyEnd,     {}),
-                                mkKeyShortcut(keyKp1,     {})],
+  tesCursorToLineEnd:       @[mkKeyShortcut(keyEnd,       {}),
+                              mkKeyShortcut(keyKp1,       {})],
 
-  tesCursorToDocumentStart:   @[mkKeyShortcut(keyHome,    {mkCtrl}),
-                                mkKeyShortcut(keyKp7,     {mkCtrl})],
+  tesCursorToDocumentStart: @[mkKeyShortcut(keyHome,      {mkCtrl}),
+                              mkKeyShortcut(keyKp7,       {mkCtrl})],
 
-  tesCursorToDocumentEnd:     @[mkKeyShortcut(keyEnd,     {mkCtrl}),
-                                mkKeyShortcut(keyKp1,     {mkCtrl})],
+  tesCursorToDocumentEnd:   @[mkKeyShortcut(keyEnd,       {mkCtrl}),
+                              mkKeyShortcut(keyKp1,       {mkCtrl})],
 
-  tesCursorToPreviousLine:    @[mkKeyShortcut(keyUp,      {}),
-                                mkKeyShortcut(keyKp8,     {})],
+  tesCursorToPreviousLine:  @[mkKeyShortcut(keyUp,        {}),
+                              mkKeyShortcut(keyKp8,       {})],
 
-  tesCursorToNextLine:       @[mkKeyShortcut(Key.keyDown, {}),
-                               mkKeyShortcut(keyKp2,      {})],
+  tesCursorToNextLine:      @[mkKeyShortcut(keyDown,      {}),
+                              mkKeyShortcut(keyKp2,       {})],
 
-  tesCursorPageUp:            @[mkKeyShortcut(keyPageUp,  {}),
-                                mkKeyShortcut(keyKp9,     {})],
+  tesCursorPageUp:          @[mkKeyShortcut(keyPageUp,    {}),
+                              mkKeyShortcut(keyKp9,       {})],
 
-  tesCursorPageDown:         @[mkKeyShortcut(keyPageDown, {}),
-                               mkKeyShortcut(keyKp3,      {})],
+  tesCursorPageDown:        @[mkKeyShortcut(keyPageDown,  {}),
+                              mkKeyShortcut(keyKp3,       {})],
 
   # Selection
-  tesSelectionAll:            @[mkKeyShortcut(keyA,       {mkCtrl})],
+  tesSelectionAll:          @[mkKeyShortcut(keyA,         {mkCtrl})],
 
-  tesSelectionOneCharLeft:    @[mkKeyShortcut(keyLeft,    {mkShift}),
-                                mkKeyShortcut(keyKp4,     {mkShift})],
+  tesSelectionOneCharLeft:  @[mkKeyShortcut(keyLeft,      {mkShift}),
+                              mkKeyShortcut(keyKp4,       {mkShift})],
 
-  tesSelectionOneCharRight:   @[mkKeyShortcut(keyRight,   {mkShift}),
-                                mkKeyShortcut(keyKp6,     {mkShift})],
+  tesSelectionOneCharRight: @[mkKeyShortcut(keyRight,     {mkShift}),
+                              mkKeyShortcut(keyKp6,       {mkShift})],
 
   tesSelectionToPreviousWord: @[mkKeyShortcut(keyLeft,    {mkCtrl, mkShift}),
-                                mkKeyShortcut(keykp4,     {mkCtrl, mkShift})],
+                                mkKeyShortcut(keyKp4,     {mkCtrl, mkShift})],
 
-  tesSelectionToNextWord:     @[mkKeyShortcut(keyRight,   {mkCtrl, mkShift}),
-                                mkKeyShortcut(keykp6,     {mkCtrl, mkShift})],
+  tesSelectionToNextWord:   @[mkKeyShortcut(keyRight,     {mkCtrl, mkShift}),
+                              mkKeyShortcut(keyKp6,       {mkCtrl, mkShift})],
 
-  tesSelectionToLineStart:    @[mkKeyShortcut(keyHome,    {mkShift}),
-                                mkKeyShortcut(keyKp7,     {mkShift})],
+  tesSelectionToLineStart:  @[mkKeyShortcut(keyHome,      {mkShift}),
+                              mkKeyShortcut(keyKp7,       {mkShift})],
 
-  tesSelectionToLineEnd:      @[mkKeyShortcut(keyEnd,     {mkShift}),
-                                mkKeyShortcut(keyKp1,     {mkShift})],
+  tesSelectionToLineEnd:    @[mkKeyShortcut(keyEnd,       {mkShift}),
+                              mkKeyShortcut(keyKp1,       {mkShift})],
 
-  tesSelectionToDocumentStart:   @[mkKeyShortcut(keyHome, {mkCtrl, mkShift}),
-                                mkKeyShortcut(keyKp7,     {mkCtrl, mkShift})],
+  tesSelectionToDocumentStart:  @[mkKeyShortcut(keyHome,  {mkCtrl, mkShift}),
+                                  mkKeyShortcut(keyKp7,   {mkCtrl, mkShift})],
 
   tesSelectionToDocumentEnd:  @[mkKeyShortcut(keyEnd,     {mkCtrl, mkShift}),
                                 mkKeyShortcut(keyKp1,     {mkCtrl, mkShift})],
@@ -1272,14 +1273,14 @@ let g_textFieldEditShortcuts_WinLinux = {
   tesSelectionToPreviousLine: @[mkKeyShortcut(keyUp,      {mkShift}),
                                 mkKeyShortcut(keyKp8,     {mkShift})],
 
-  tesSelectionToNextLine:    @[mkKeyShortcut(Key.keyDown, {mkShift}),
+  tesSelectionToNextLine:   @[mkKeyShortcut(keyDown,      {mkShift}),
                                mkKeyShortcut(keyKp2,      {mkShift})],
 
-  tesSelectionPageUp:        @[mkKeyShortcut(keyPageUp,   {mkShift}),
-                               mkKeyShortcut(keyKp9,      {mkShift})],
+  tesSelectionPageUp:       @[mkKeyShortcut(keyPageUp,    {mkShift}),
+                              mkKeyShortcut(keyKp9,       {mkShift})],
 
-  tesSelectionPageDown:      @[mkKeyShortcut(keyPageDown, {mkShift}),
-                               mkKeyShortcut(keyKp3,      {mkShift})],
+  tesSelectionPageDown:     @[mkKeyShortcut(keyPageDown,  {mkShift}),
+                              mkKeyShortcut(keyKp3,       {mkShift})],
 
   # Delete
   tesDeleteOneCharLeft:     @[mkKeyShortcut(keyBackspace, {})],
@@ -1287,10 +1288,10 @@ let g_textFieldEditShortcuts_WinLinux = {
   tesDeleteOneCharRight:    @[mkKeyShortcut(keyDelete,    {}),
                               mkKeyShortcut(keyKpDecimal, {})],
 
+  tesDeleteWordToLeft:      @[mkKeyShortcut(keyBackspace, {mkCtrl})],
+
   tesDeleteWordToRight:     @[mkKeyShortcut(keyDelete,    {mkCtrl}),
                               mkKeyShortcut(keykpDecimal, {mkCtrl})],
-
-  tesDeleteWordToLeft:      @[mkKeyShortcut(keyBackspace, {mkCtrl})],
 
   tesDeleteToLineStart:     @[mkKeyShortcut(keyBackspace, {mkCtrl, mkShift})],
 
@@ -1313,95 +1314,136 @@ let g_textFieldEditShortcuts_WinLinux = {
                                 mkKeyShortcut(keyKpEnter, {})],
 
   tesCancel:              @[mkKeyShortcut(keyEscape,      {}),
+                            # vim-mode addition
                             mkKeyShortcut(keyLeftBracket, {mkCtrl})]
 }.toTable
 
 # }}}
-# {{{ Shortcuts - Mac
-# TODO update
-#[
+# {{{ Shortcut definitions - Mac
 let g_textFieldEditShortcuts_Mac = {
-  tesPrevTextField:        @[mkKeyShortcut(keyTab,       {mkShift})],
-  tesNextTextField:        @[mkKeyShortcut(keyTab,       {})],
 
+  # Cursor movement
+  tesCursorOneCharLeft:     @[mkKeyShortcut(keyLeft,      {}),
+                              mkKeyShortcut(keyKp4,       {}),
+                              mkKeyShortcut(keyB,         {mkCtrl})],
 
-  tesCursorOneCharLeft:    @[mkKeyShortcut(keyLeft,      {}),
-                             mkKeyShortcut(keyB,         {mkCtrl})],
+  tesCursorOneCharRight:    @[mkKeyShortcut(keyRight,     {}),
+                              mkKeyShortcut(keyKp6,       {}),
+                              mkKeyShortcut(keyF,         {mkCtrl})],
 
-  tesCursorOneCharRight:   @[mkKeyShortcut(keyRight,     {}),
-                             mkKeyShortcut(keyF,         {mkCtrl})],
+  tesCursorToPreviousWord:  @[mkKeyShortcut(keyLeft,      {mkAlt})],
+  tesCursorToNextWord:      @[mkKeyShortcut(keyRight,     {mkAlt})],
 
-  tesCursorToPreviousWord: @[mkKeyShortcut(keyLeft,      {mkAlt})],
-  tesCursorToNextWord:     @[mkKeyShortcut(keyRight,     {mkAlt})],
+  tesCursorToLineStart:     @[mkKeyShortcut(keyLeft,      {mkSuper}),
+                              mkKeyShortcut(keyKp4,       {mkSuper})],
 
-  tesCursorToPreviousLine,
-  tesCursorToNextLine,
+  tesCursorToLineEnd:       @[mkKeyShortcut(keyRight,     {mkSuper}),
+                              mkKeyShortcut(keyKp6,       {mkSuper})],
 
-  tesCursorToLineStart:    @[mkKeyShortcut(keyLeft,      {mkSuper}),
-                             mkKeyShortcut(keyA,         {mkCtrl}),
-                             mkKeyShortcut(keyP,         {mkCtrl}),
-                             mkKeyShortcut(keyV,         {mkShift, mkCtrl}),
-                             mkKeyShortcut(keyUp,        {})],
+  tesCursorToDocumentStart: @[mkKeyShortcut(keyUp,        {mkSuper}),
+                              mkKeyShortcut(keyKp8,       {mkSuper})],
 
-  tesCursorToLineEnd:      @[mkKeyShortcut(keyRight,     {mkSuper}),
-                             mkKeyShortcut(keyE,         {mkCtrl}),
-                             mkKeyShortcut(keyN,         {mkCtrl}),
-                             mkKeyShortcut(keyV,         {mkCtrl}),
-                             mkKeyShortcut(Key.keyDown,  {})],
+  tesCursorToDocumentEnd:   @[mkKeyShortcut(keyDown,      {mkSuper}),
+                              mkKeyShortcut(keyKp2,       {mkSuper})],
 
-  tesCursorToDocumentStart,
-  tesCursorToDocumentEnd,
+  tesCursorToPreviousLine:  @[mkKeyShortcut(keyUp,        {}),
+                              mkKeyShortcut(keyKp8,       {}),
+                              mkKeyShortcut(keyP,         {mkCtrl})],
 
+  tesCursorToNextLine:      @[mkKeyShortcut(keyDown,      {}),
+                              mkKeyShortcut(keyKp2,       {}),
+                              mkKeyShortcut(keyN,         {mkCtrl})],
 
-  tesSelectionAll,
+  # There two are slight alterations of the standard macOS behaviour (the
+  # standard is to just scroll the content but leave the cursor in the same
+  # spot on the screen).
+  tesCursorPageUp:          @[mkKeyShortcut(keyPageUp,    {}),
+                              mkKeyShortcut(keyKp9,       {})],
 
-  tesSelectionOneCharLeft:    @[mkKeyShortcut(keyLeft,   {mkShift})],
-  tesSelectionOneCharRight:   @[mkKeyShortcut(keyRight,  {mkShift})],
-  tesSelectionToPreviousWord: @[mkKeyShortcut(keyLeft,   {mkShift, mkAlt})],
-  tesSelectionToNextWord:     @[mkKeyShortcut(keyRight,  {mkShift, mkAlt})],
+  tesCursorPageDown:        @[mkKeyShortcut(keyPageDown,  {}),
+                              mkKeyShortcut(keyKp3,       {})],
 
-  tesSelectionToLineStart: @[mkKeyShortcut(keyLeft,      {mkShift, mkSuper}),
-                             mkKeyShortcut(keyA,         {mkShift, mkCtrl}),
-                             mkKeyShortcut(keyUp,        {mkShift})],
+  # Selection
+  tesSelectionAll:          @[mkKeyShortcut(keyA,         {mkSuper})],
 
-  tesSelectionToLineEnd:   @[mkKeyShortcut(keyRight,     {mkShift, mkSuper}),
-                             mkKeyShortcut(keyE,         {mkShift, mkCtrl}),
-                             mkKeyShortcut(Key.keyDown,  {mkShift})],
+  tesSelectionOneCharLeft:  @[mkKeyShortcut(keyLeft,      {mkShift}),
+                                mkKeyShortcut(keyKp4,     {mkShift})],
 
+  tesSelectionOneCharRight: @[mkKeyShortcut(keyRight,     {mkShift}),
+                                mkKeyShortcut(keyKp6,     {mkShift})],
 
-  tesDeleteOneCharLeft:    @[mkKeyShortcut(keyBackspace, {}),
-                             mkKeyShortcut(keyH,         {mkCtrl})],
+  tesSelectionToPreviousWord: @[mkKeyShortcut(keyLeft,    {mkSuper, mkShift}),
+                                mkKeyShortcut(keyKp4,     {mkSuper, mkShift})],
 
-  tesDeleteOneCharRight:   @[mkKeyShortcut(keyDelete,    {})],
+  tesSelectionToNextWord:   @[mkKeyShortcut(keyRight,     {mkSuper, mkShift}),
+                                mkKeyShortcut(keyKp6,     {mkSuper, mkShift})],
 
-  tesDeleteWordToRight:    @[mkKeyShortcut(keyDelete,    {mkAlt}),
-                             mkKeyShortcut(keyD,         {mkCtrl})],
+  tesCursorToLineStart:     @[mkKeyShortcut(keyLeft,      {mkSuper, mkShift}),
+                             mkKeyShortcut(keyKp4,        {mkSuper, mkShift})],
 
-  tesDeleteWordToLeft:     @[mkKeyShortcut(keyBackspace, {mkAlt})],
-  tesDeleteToLineStart:    @[mkKeyShortcut(keyBackspace, {mkSuper})],
+  tesCursorToLineEnd:       @[mkKeyShortcut(keyRight,     {mkSuper, mkShift}),
+                             mkKeyShortcut(keyKp6,        {mkSuper, mkShift})],
 
-  tesDeleteToLineEnd:      @[mkKeyShortcut(keyDelete,    {mkAlt}),
-                             mkKeyShortcut(keyK,         {mkCtrl})],
+  tesCursorToDocumentStart: @[mkKeyShortcut(keyUp,        {mkSuper, mkShift}),
+                                mkKeyShortcut(keyKp8,     {mkSuper, mkShift})],
 
-  tesCutText:              @[mkKeyShortcut(keyX,         {mkSuper})],
-  tesCopyText:             @[mkKeyShortcut(keyC,         {mkSuper})],
-  tesPasteText:            @[mkKeyShortcut(keyV,         {mkSuper})],
+  tesCursorToDocumentEnd:   @[mkKeyShortcut(keyDown,      {mkSuper, mkShift}),
+                                mkKeyShortcut(keyKp2,     {mkSuper, mkShift})],
 
-  tesInsertNewline:        @[mkKeyShortcut(keyEnter,   {mkShift})],
+  tesSelectionToPreviousLine: @[mkKeyShortcut(keyUp,      {mkShift}),
+                                mkKeyShortcut(keyKp8,     {mkShift}),
+                                mkKeyShortcut(keyP,       {mkCtrl, mkShift})],
 
-  tesAccept:               @[mkKeyShortcut(keyEnter,     {}),
-                             mkKeyShortcut(keyKpEnter,   {})],
+  tesSelectionToNextLine:   @[mkKeyShortcut(keyDown,      {mkShift}),
+                              mkKeyShortcut(keyKp2,       {mkShift}),
+                              mkKeyShortcut(keyN,         {mkCtrl, mkShift})],
 
-  tesCancel:               @[mkKeyShortcut(keyEscape,    {}),
-                             mkKeyShortcut(keyLeftBracket, {mkCtrl})]
+  # These two are additions to the standard macOS text editing behaviour.
+  tesCursorPageUp:          @[mkKeyShortcut(keyPageUp,    {mkShift}),
+                                mkKeyShortcut(keyKp9,     {mkShift})],
+
+  tesCursorPageDown:        @[mkKeyShortcut(keyPageDown,  {mkShift}),
+                              mkKeyShortcut(keyKp3,       {mkShift})],
+
+  # Delete
+  tesDeleteOneCharLeft:   @[mkKeyShortcut(keyBackspace,   {}),
+                            mkKeyShortcut(keyH,           {mkCtrl})],
+
+  tesDeleteOneCharRight:  @[mkKeyShortcut(keyDelete,      {}),
+                            mkKeyShortcut(keyD,           {mkCtrl})],
+
+  tesDeleteWordToLeft:    @[mkKeyShortcut(keyBackspace,   {mkAlt})],
+  tesDeleteWordToRight:   @[mkKeyShortcut(keyDelete,      {mkAlt})],
+
+  tesDeleteToLineStart:   @[mkKeyShortcut(keyBackspace,   {mkSuper})],
+
+  tesDeleteToLineEnd:     @[mkKeyShortcut(keyDelete,      {mkAlt}),
+                            mkKeyShortcut(keyK,           {mkCtrl})],
+
+  # Clipboard
+  tesCutText:             @[mkKeyShortcut(keyX,           {mkSuper})],
+  tesCopyText:            @[mkKeyShortcut(keyC,           {mkSuper})],
+  tesPasteText:           @[mkKeyShortcut(keyV,           {mkSuper})],
+
+  # General
+  tesInsertNewline:       @[mkKeyShortcut(keyEnter,       {mkShift}),
+                            mkKeyShortcut(keyKpEnter,     {mkShift}),
+                            mkKeyShortcut(keyO,           {mkCtrl})],
+
+  tesPrevTextField:       @[mkKeyShortcut(keyTab,         {mkShift})],
+  tesNextTextField:       @[mkKeyShortcut(keyTab,         {})],
+
+  tesAccept:              @[mkKeyShortcut(keyEnter,       {}),
+                            mkKeyShortcut(keyKpEnter,     {})],
+
+  tesCancel:              @[mkKeyShortcut(keyEscape,      {}),
+                            # vim-mode addition
+                            mkKeyShortcut(keyLeftBracket, {mkCtrl})]
 }.toTable
-]#
-# }}}
-
-# TODO make this configurable
-let g_textFieldEditShortcuts = g_textFieldEditShortcuts_WinLinux
 
 # }}}
+
+var g_textFieldEditShortcuts: Table[TextEditShortcuts, seq[KeyShortcut]]
 
 const CharBufSize = 256
 var
@@ -1412,6 +1454,7 @@ proc charCb(win: Window, codePoint: Rune) =
   if g_charBufIdx <= g_charBuf.high:
     g_charBuf[g_charBufIdx] = codePoint
     inc(g_charBufIdx)
+
 
 proc clearCharBuf() = g_charBufIdx = 0
 
@@ -1425,6 +1468,8 @@ proc consumeCharBuf(): string =
 
 const EventBufSize = 64
 var g_eventBuf = initRingBuffer[Event](EventBufSize)
+
+proc clearEventBuf*() = g_eventBuf.clear()
 
 
 # No key events will be generated for these keys
@@ -1443,6 +1488,7 @@ const ExcludedKeyEvents = @[
   keyNumLock
 ]
 
+# {{{ keyCb()
 proc keyCb(win: Window, key: Key, scanCode: int32, action: KeyAction,
            mods: set[ModifierKey]) =
 
@@ -1461,8 +1507,7 @@ proc keyCb(win: Window, key: Key, scanCode: int32, action: KeyAction,
     )
     discard g_eventBuf.write(event)
 
-
-proc clearEventBuf*() = g_eventBuf.clear()
+# }}}
 
 # {{{ toClipboard*()
 proc toClipboard*(s: string) =
@@ -6340,9 +6385,16 @@ proc sliderPost() =
 # }}}
 # {{{ Color
 
-# TODO mac shortcuts
-let g_copyColorShortcut  = mkKeyShortcut(keyC, {mkCtrl})
-let g_pasteColorShortcut = mkKeyShortcut(keyV, {mkCtrl})
+const
+  CopyColorShortcut_WinLinux  = mkKeyShortcut(keyC, {mkCtrl})
+  PasteColorShortcut_WinLinux = mkKeyShortcut(keyV, {mkCtrl})
+
+  CopyColorShortcut_Mac       = mkKeyShortcut(keyC, {mkSuper})
+  PasteColorShortcut_Mac      = mkKeyShortcut(keyV, {mkSuper})
+
+var
+  g_copyColorShortcut  = CopyColorShortcut_WinLinux
+  g_pasteColorShortcut = CopyColorShortcut_WinLinux
 
 # {{{ Color style
 var ColorPickerRadioButtonStyle = RadioButtonsStyle(
@@ -7605,6 +7657,37 @@ proc menuItemSeparator*() =
 
 # {{{ General
 
+# {{{ setShortcuts*()
+type
+  ShortcutMode* = enum
+    smWindows = (0, "Windows")
+    smMac     = (1, "Mac")
+    smLinux   = (2, "Linux")
+
+proc setShortcuts*(sm: ShortcutMode) =
+  alias(shortcuts, g_textFieldEditShortcuts)
+  shortcuts = initTable[TextEditShortcuts, seq[KeyShortcut]]()
+
+  # Make sure all shorcuts are present in the table
+  for e in TextEditShortcuts:
+    shortcuts[e] = @[]
+
+  case sm
+  of smWindows, smLinux:
+    for k, v in g_textFieldEditShortcuts_WinLinux:
+      shortcuts[k] = v
+
+    g_copyColorShortcut  = CopyColorShortcut_WinLinux
+    g_pasteColorShortcut = PasteColorShortcut_WinLinux
+
+  of smMac:
+    for k, v in g_textFieldEditShortcuts_Mac:
+      shortcuts[k] = v
+
+    g_copyColorShortcut  = CopyColorShortcut_Mac
+    g_pasteColorShortcut = PasteColorShortcut_Mac
+
+# }}}
 # {{{ init*()
 
 proc init*(nvg: NVGContext, getProcAddress: proc) =
@@ -7633,6 +7716,13 @@ proc init*(nvg: NVGContext, getProcAddress: proc) =
   # LockKeyMods must be enabled so we can differentiate between keypad keys
   # and keypad cursor movement keys
   win.lockKeyMods = true
+
+  # Default to OS-appropriate shortcuts
+  let shortcutMode = when defined(windows): smWindows
+                     elif defined(macosx):  smMac
+                     else:                  smLinux
+
+  setShortcuts(shortcutMode)
 
   glfw.swapInterval(1)
 
