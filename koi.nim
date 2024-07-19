@@ -7692,10 +7692,16 @@ proc setShortcuts*(sm: ShortcutMode) =
     g_pasteColorShortcut = PasteColorShortcut_Mac
 
 # }}}
+# {{{ getScale*()
+proc getScale*(): float=
+  g_uiState.scale
+
+# }}}
 # {{{ setScale*()
 proc setScale*(scale: float) =
   assert(scale > 0.0)
   g_uiState.scale = scale
+
 # }}}
 # {{{ init*()
 
