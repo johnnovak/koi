@@ -6036,7 +6036,10 @@ proc horizSlider(id:         ItemId,
 
       if not ui.mbLeftDown and not ss.cursorMoved:
         ss.state = ssEditValue
-        ss.valueText = fmt"{value:.4f}"
+
+        ss.valueText = if s.valuePrecision == 0: $value.int
+                       else: value.formatFloat(ffDecimal, s.valuePrecision)
+
         trimZeros(ss.valueText)
 
         ss.editModeItem = id
