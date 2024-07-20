@@ -5927,7 +5927,7 @@ type SliderStyle* = ref object
   trackFillColor*:        Color
   trackFillColorHover*:   Color
   trackFillColorDown*:    Color
-  valuePrecision:         Natural
+  valuePrecision*:        Natural
   valueCornerRadius*:     float
   sliderColor*:           Color
   sliderColorHover*:      Color
@@ -6121,6 +6121,8 @@ proc horizSlider(id:         ItemId,
         # TODO hacky
         clipW = (newPosX - x - s.trackPad).int +
                 (if sw mod 2 == 1: 0.5 else: 0)
+
+
 
       vg.fillColor(sliderColor)
       vg.beginPath()
