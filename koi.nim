@@ -5928,6 +5928,7 @@ type SliderStyle* = ref object
   trackFillColorHover*:   Color
   trackFillColorDown*:    Color
   valuePrecision*:        Natural
+  valueSuffix*:           string
   valueCornerRadius*:     float
   sliderColor*:           Color
   sliderColorHover*:      Color
@@ -5947,6 +5948,7 @@ var DefaultSliderStyle = SliderStyle(
   trackFillColorHover:   gray(0.7),
   trackFillColorDown:    gray(0.6),
   valuePrecision:        3,
+  valueSuffix:           "",
   valueCornerRadius:     8.0,
   sliderColor:           gray(0.25),
   sliderColorHover:      gray(0.25),
@@ -6005,6 +6007,13 @@ proc horizSlider(id:         ItemId,
     let t = invLerp(startVal, endVal, val)
     lerp(posMinX, posMaxX, t)
 
+  func formatValue(value: float, precision: Natural, suffix: string,
+                   trimZeros: bool): string =
+    result = if precision == 0: $value.int
+             else: value.formatFloat(ffDecimal, precision)
+    trimZeros(result)
+    result &= s.valueSuffix
+
   let posX = calcPosX(value)
 
   # Hit testing
@@ -6036,12 +6045,8 @@ proc horizSlider(id:         ItemId,
 
       if not ui.mbLeftDown and not ss.cursorMoved:
         ss.state = ssEditValue
-
-        ss.valueText = if s.valuePrecision == 0: $value.int
-                       else: value.formatFloat(ffDecimal, s.valuePrecision)
-
-        trimZeros(ss.valueText)
-
+        ss.valueText = formatValue(value, s.valuePrecision, s.valueSuffix,
+                                   trimZeros=true)
         ss.editModeItem = id
         showCursor()
 
@@ -6144,8 +6149,8 @@ proc horizSlider(id:         ItemId,
         vg.drawLabel(x, y, w, h, label, state, s.label)
 
       # Draw value text
-      let valueString = if s.valuePrecision == 0: $value.int
-                        else: value.formatFloat(ffDecimal, s.valuePrecision)
+      let valueString  = formatValue(value, s.valuePrecision, s.valueSuffix,
+                                     trimZeros=false)
 
       vg.drawLabel(x, y, w, h, valueString, state, s.value)
 
@@ -6160,6 +6165,8 @@ proc horizSlider(id:         ItemId,
 
   # Handle text field edit mode
   if isActive(id) and ss.state == ssEditValue:
+    ss.valueText.removeSuffix(s.valueSuffix)
+
     rawTextField(ox, oy, w, h, ss.valueText, activate=true)
 
     if ui.textFieldState.state == tfsDefault:
