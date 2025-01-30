@@ -416,9 +416,9 @@ type
     tabActivationState: TabActivationStateVars
 
 
-  DrawOffset = object
+  DrawOffset* = object
     # Origin offset, used for relative coordinate handling (e.g., in dialogs)
-    ox, oy: float
+    ox*, oy*: float
 
   AutoLayoutParams* = object
     itemsPerRow*:       Natural
@@ -936,7 +936,7 @@ proc popDrawOffset*() =
 
 # }}}
 # {{{ drawOffset*()
-proc drawOffset(): DrawOffset =
+proc drawOffset*(): DrawOffset =
   g_uiState.drawOffsetStack[^1]
 
 # }}}
