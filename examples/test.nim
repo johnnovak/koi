@@ -460,6 +460,7 @@ proc renderUI() =
 
 
 proc renderFrame(win: Window, res: tuple[w, h: int32] = (0,0)) =
+  if win.iconified: return
   renderUI()
   glfw.swapBuffers(win)
 
