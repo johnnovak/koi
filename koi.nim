@@ -2302,7 +2302,6 @@ type ButtonStyle* = ref object
   fillColorHover*:      Color
   fillColorDown*:       Color
   fillColorDisabled*:   Color
-  labelOnly*:           bool
   label*:               LabelStyle
 
 var DefaultButtonStyle = ButtonStyle(
@@ -2316,7 +2315,6 @@ var DefaultButtonStyle = ButtonStyle(
   fillColorHover:      gray(0.7),
   fillColorDown:       HighlightColor,
   fillColorDisabled:   gray(0.6).withAlpha(0.5),
-  labelOnly:           false,
   label:               getDefaultLabelStyle()
 )
 
@@ -2363,15 +2361,14 @@ let DefaultButtonDrawProc: ButtonDrawProc =
       of wsDisabled:
         (s.fillColorDisabled, s.strokeColorDisabled)
 
-    if not s.labelOnly:
-      vg.fillColor(fillColor)
-      vg.strokeColor(strokeColor)
-      vg.strokeWidth(sw)
+    vg.fillColor(fillColor)
+    vg.strokeColor(strokeColor)
+    vg.strokeWidth(sw)
 
-      vg.beginPath()
-      vg.roundedRect(x, y, w, h, s.cornerRadius)
-      vg.fill()
-      vg.stroke()
+    vg.beginPath()
+    vg.roundedRect(x, y, w, h, s.cornerRadius)
+    vg.fill()
+    vg.stroke()
 
     vg.drawLabel(x, y, w, h, label, state, s.label)
 
@@ -2448,6 +2445,212 @@ template button*(label:    string,
 
   autoLayoutPost()
   res
+
+# }}}
+
+# }}}
+# {{{ ToggleButton
+
+# {{{ ToggleButton style
+
+type ToggleButtonStyle* = ref object
+  cornerRadius*:           float
+  strokeWidth*:            float
+  strokeColor*:            Color
+  strokeColorHover*:       Color
+  strokeColorDown*:        Color
+  strokeColorActive*:      Color
+  strokeColorActiveHover*: Color
+  strokeColorDisabled*:    Color
+  fillColor*:              Color
+  fillColorHover*:         Color
+  fillColorDown*:          Color
+  fillColorActive*:        Color
+  fillColorActiveHover*:   Color
+  fillColorDisabled*:      Color
+  label*:                  LabelStyle
+  labelActive*:            LabelStyle
+
+var DefaultToggleButtonStyle = ToggleButtonStyle(
+  cornerRadius:           5.0,
+  strokeWidth:            0.0,
+  strokeColor:            black(),
+  strokeColorHover:       black(),
+  strokeColorDown:        black(),
+  strokeColorActive:      black(),
+  strokeColorActiveHover: black(),
+  strokeColorDisabled:    black(),
+  fillColor:              gray(0.6),
+  fillColorHover:         gray(0.7),
+  fillColorDown:          gray(0.35),
+  fillColorActive:        gray(0.25),
+  fillColorActiveHover:   gray(0.27),
+  fillColorDisabled:      gray(0.6).withAlpha(0.5),
+  label:                  getDefaultLabelStyle(),
+  labelActive:            getDefaultLabelStyle()
+)
+
+with DefaultToggleButtonStyle.label:
+  align         = haCenter
+  padHoriz      = 8.0
+  color         = gray(0.25)
+  colorHover    = gray(0.25)
+  colorDown     = gray(0.25)
+  colorDisabled = gray(0.25).withAlpha(0.7)
+
+with DefaultToggleButtonStyle.labelActive:
+  align         = haCenter
+  padHoriz      = 8.0
+  color         = gray(1.00)
+  colorHover    = gray(1.00)
+  colorDown     = gray(1.00)
+  colorDisabled = gray(1.00).withAlpha(0.7)
+
+
+proc getDefaultToggleButtonStyle*(): ToggleButtonStyle =
+  DefaultToggleButtonStyle.deepCopy
+
+proc setDefaultToggleButtonStyle*(style: ToggleButtonStyle) =
+  DefaultToggleButtonStyle = style.deepCopy
+
+# }}}
+# {{{ ToggleButtonDrawProc*
+type
+  ToggleButtonDrawProc* = proc (vg: NVGContext,
+                                id: ItemId, x, y, w, h: float, label: string,
+                                state: WidgetState, style: ToggleButtonStyle)
+
+
+let DefaultToggleButtonDrawProc: ToggleButtonDrawProc =
+  proc (vg: NVGContext,
+        id: ItemId, x, y, w, h: float, label: string,
+        state: WidgetState, style: ToggleButtonStyle) =
+
+    alias(s, style)
+
+    var (fillColor, strokeColor) = case state
+      of wsNormal:
+        (s.fillColor, s.strokeColor)
+      of wsHover:
+        (s.fillColorHover, s.strokeColorHover)
+      of wsDown, wsActiveDown:
+        (s.fillColorDown, s.strokeColorDown)
+      of wsActive:
+        (s.fillColorActive, s.strokeColorActive)
+      of wsActiveHover:
+        (s.fillColorActiveHover, s.strokeColorActiveHover)
+      of wsDisabled:
+        (s.fillColorDisabled, s.strokeColorDisabled)
+
+    let sw = s.strokeWidth
+    let (x, y, w, h) = snapToGrid(x, y, w, h, sw)
+
+    vg.fillColor(fillColor)
+    vg.strokeColor(strokeColor)
+    vg.strokeWidth(sw)
+    vg.beginPath()
+    vg.roundedRect(x, y, w, h, s.cornerRadius)
+    vg.fill()
+    vg.stroke()
+
+    var labelStyle = case state
+      of wsActive, wsActiveHover, wsActiveDown: s.labelActive
+      else: s.label
+
+    vg.drawLabel(x, y, w, h, label, state, labelStyle)
+
+# }}}
+# {{{ toggleButton()
+proc toggleButton(
+  id:          ItemId,
+  x, y, w, h:  float,
+  active_out:  var bool,
+  label:       string,
+  labelActive: string = "",
+  tooltip:     string,
+  disabled:    bool = false,
+  drawProc:    Option[ToggleButtonDrawProc] = ToggleButtonDrawProc.none,
+  style:       ToggleButtonStyle = DefaultToggleButtonStyle) =
+
+  var active = active_out
+
+  alias(ui, g_uiState)
+
+  let (x, y) = addDrawOffset(x, y)
+
+  # Hit testing
+  if isHit(x, y, w, h):
+    setHot(id)
+    if not disabled and ui.mbLeftDown and hasNoActiveItem():
+      setActive(id)
+
+  # LMB released over active widget means it was clicked
+  active = if not ui.mbLeftDown and isHot(id) and isActive(id): not active
+           else: active
+
+  active_out = active
+
+  addDrawLayer(ui.currentLayer, vg):
+    let state = if disabled: wsDisabled
+                elif isHot(id) and hasNoActiveItem():
+                  if active: wsActiveHover else: wsHover
+                elif isHot(id) and isActive(id): wsDown
+                else:
+                  if active: wsActive else: wsNormal
+
+    let drawProc = if drawProc.isSome: drawProc.get
+                   else: DefaultToggleButtonDrawProc
+
+    let displayLabel = if active and labelActive != "": labelActive
+                       else: label
+
+    drawProc(vg, id, x, y, w, h, displayLabel, state, style)
+
+
+  if isHot(id):
+    handleTooltip(id, tooltip)
+
+# }}}
+# {{{ ToggleButton templates
+
+template toggleButton*(
+  x, y, w, h:  float,
+  active_out:  var bool,
+  label:       string,
+  labelActive: string = "",
+  tooltip:     string = "",
+  disabled:    bool = false,
+  drawProc:    Option[ToggleButtonDrawProc] = ToggleButtonDrawProc.none,
+  style:       ToggleButtonStyle = DefaultToggleButtonStyle) =
+
+  let i = instantiationInfo(fullPaths=true)
+  let id = getNextId(i.filename, i.line)
+
+  toggleButton(id, x, y, w, h, active_out, label, labelActive, tooltip,
+               disabled, drawProc, style)
+
+
+template toggleButton*(
+  active_out:  var bool,
+  label:       string,
+  labelActive: string = "",
+  tooltip:     string = "",
+  disabled:    bool = false,
+  drawProc:    Option[ToggleButtonDrawProc] = ToggleButtonDrawProc.none,
+  style:       ToggleButtonStyle = DefaultToggleButtonStyle) =
+
+  let i = instantiationInfo(fullPaths=true)
+  let id = getNextId(i.filename, i.line)
+
+  autoLayoutPre()
+
+  toggleButton(id,
+               g_uiState.autoLayoutState.x, autoLayoutNextY(),
+               autoLayoutNextItemWidth(), autoLayoutNextItemHeight(),
+               active_out, label, labelActive, tooltip, disabled, drawProc,
+               style)
+
+  autoLayoutPost()
 
 # }}}
 
