@@ -4015,7 +4015,7 @@ var DefaultDropDownStyle = DropDownStyle(
   buttonFillColor:           gray(0.6),
   buttonFillColorHover:      gray(0.7),
   buttonFillColorDown:       gray(0.6),
-  buttonFillColorDisabled:   gray(0.25),
+  buttonFillColorDisabled:   gray(0.23),
 
   label:                     getDefaultLabelStyle(),
 
@@ -4756,7 +4756,7 @@ var DefaultTextFieldStyle = TextFieldStyle(
   bgFillColor:            gray(0.6),
   bgFillColorHover:       gray(0.7),
   bgFillColorActive:      gray(0.25),
-  bgFillColorDisabled:    gray(0.25),
+  bgFillColorDisabled:    gray(0.23),
 
   # TODO use labelstyle?
   textPadHoriz:           8.0,
@@ -5388,7 +5388,7 @@ var DefaultTextAreaStyle = TextAreaStyle(
   bgFillColor:            gray(0.6),
   bgFillColorHover:       gray(0.7),
   bgFillColorActive:      gray(0.25),
-  bgFillColorDisabled:    gray(0.25),
+  bgFillColorDisabled:    gray(0.23),
 
   # TODO use labelStyle?
   textPadHoriz:      8.0,
