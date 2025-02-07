@@ -4765,7 +4765,7 @@ var DefaultTextFieldStyle = TextFieldStyle(
   textColor:              gray(0.25),
   textColorHover:         gray(0.25), # TODO
   textColorActive:        gray(0.7),
-  textColorDisabled:      gray(0.7),
+  textColorDisabled:      gray(0.7, 0.5),
 
   cursorColor:            rgb(255, 190, 0),
   cursorWidth:            1.0,
