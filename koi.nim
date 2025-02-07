@@ -601,8 +601,8 @@ proc winHeight*(): float = g_uiState.winHeight
 proc mx*(): float = g_uiState.mx
 proc my*(): float = g_uiState.my
 
-proc lastmx*(): float = g_uiState.lastmx
-proc lastmy*(): float = g_uiState.lastmy
+proc lastMx*(): float = g_uiState.lastmx
+proc lastMy*(): float = g_uiState.lastmy
 
 
 proc hasEvent*(): bool =
