@@ -2689,21 +2689,22 @@ var DefaultCheckBoxStyle = CheckBoxStyle(
   strokeColorDisabled:    black(),
   fillColor:              gray(0.6),
   fillColorHover:         gray(0.7),
-  fillColorDown:          gray(0.35),
-  fillColorActive:        gray(0.25),
-  fillColorActiveHover:   gray(0.27),
-  fillColorDisabled:      gray(0.6).withAlpha(0.5),
+  fillColorDown:          gray(0.5),
+  fillColorActive:        gray(0.6),
+  fillColorActiveHover:   gray(0.7),
+  fillColorDisabled:      gray(0.23),
   icon:                   getDefaultLabelStyle(),
   iconActive:             "",
   iconInactive:           ""
 )
 
 with DefaultCheckBoxStyle.icon:
-  align         = haCenter
-  color         = gray(0.25)
-  colorHover    = gray(0.25)
-  colorDown     = gray(0.7)
-  colorDisabled = gray(0.25)
+  align            = haCenter
+  color            = gray(0.25)
+  colorHover       = gray(0.25)
+  colorDown        = gray(0.25)
+  colorActive      = gray(0.25)
+  colorActiveHover = gray(0.25)
 
 proc getDefaultCheckBoxStyle*(): CheckBoxStyle =
   DefaultCheckBoxStyle.deepCopy
