@@ -14,7 +14,7 @@ Support is currently *alpha level*, meaning that the API or the functionality mi
 
 ## Dependencies
 
-Nim 2.0.2 or later and the following two libraries are required:
+Nim 2.2.4 or later and the following two libraries are required:
 
 - [nim-glfw](https://github.com/johnnovak/nim-glfw)
 - [nim-nanovg](https://github.com/johnnovak/nim-nanovg)
@@ -30,22 +30,22 @@ nimble install glfw nanovg
 To build the examples (the dependencies will be auto-installed if needed):
 
 ```
-nimble test
-nimble paneltest
+nim test
+nim paneltest
 ```
 
 or
 
 ```
-nimble testRelease
-nimble paneltestRelease
+nim testRelease
+nim paneltestRelease
 ```
 
 See [config.nims](/config.nims) on how to link statically **koi** and **GLFW** to your program.
 
 ## License
 
-Copyright © 2019-2024 John Novak <<john@johnnovak.net>>
+Copyright © 2019-2025 John Novak <<john@johnnovak.net>>
 
 This work is free. You can redistribute it and/or modify it under the terms of
 the [Do What The Fuck You Want To Public License, Version 2](http://www.wtfpl.net/), as published
